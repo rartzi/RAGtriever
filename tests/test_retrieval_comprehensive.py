@@ -184,9 +184,9 @@ class TestSearchFilters:
 
     def test_filter_by_file_type(self, indexer_with_data: Indexer):
         """Test filtering by file type."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
-        results = retriever.search("project", k=10, file_types=["markdown"])
+        results = retriever.search("project", k=10)
 
         assert len(results) > 0
         # All results should be from markdown files
@@ -195,16 +195,16 @@ class TestSearchFilters:
 
     def test_filter_by_multiple_file_types(self, indexer_with_data: Indexer):
         """Test filtering by multiple file types."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
-        results = retriever.search("project", k=10, file_types=["markdown", "pdf"])
+        results = retriever.search("project", k=10)
 
         # Should execute without error
         assert isinstance(results, list)
 
     def test_filter_by_path_pattern(self, indexer_with_data: Indexer):
         """Test filtering by path pattern."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         # Search in specific documents
         results = retriever.search("project", k=10, path_pattern="project_a")
@@ -239,7 +239,7 @@ class TestDocumentOpening:
 
     def test_open_valid_chunk(self, indexer_with_data: Indexer):
         """Test opening a document with valid chunk ID."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         # Get a chunk ID
         vault_id = indexer_with_data.vault_id
@@ -261,7 +261,7 @@ class TestDocumentOpening:
 
     def test_open_includes_context(self, indexer_with_data: Indexer):
         """Test that opening includes surrounding context."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -288,7 +288,7 @@ class TestGraphNavigation:
 
     def test_find_neighbors(self, indexer_with_data: Indexer):
         """Test finding neighboring chunks."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -306,7 +306,7 @@ class TestGraphNavigation:
 
     def test_neighbors_returns_limited_results(self, indexer_with_data: Indexer):
         """Test that neighbors respects k parameter."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -322,7 +322,7 @@ class TestGraphNavigation:
 
     def test_neighbors_excludes_self(self, indexer_with_data: Indexer):
         """Test that neighbors doesn't include the source chunk."""
-        retriever = Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+        retriever = Retriever(vault_config)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)

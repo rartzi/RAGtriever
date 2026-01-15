@@ -107,7 +107,7 @@ class TestDocumentStorage:
             text_hash="hash",
         )
         embedding = np.random.randn(384).astype(np.float32)
-        store.upsert_chunks([chunk], [embedding])
+        store.upsert_chunks([chunk])
         # Should succeed with updated document
 
     def test_delete_document(self, store: LibSqlStore):
@@ -163,7 +163,7 @@ class TestChunkStorage:
         )
 
         embedding = np.random.randn(384).astype(np.float32)
-        store.upsert_chunks([chunk], [embedding])
+        store.upsert_chunks([chunk])
         # Should not raise
 
     def test_insert_multiple_chunks(self, store: LibSqlStore):
@@ -202,7 +202,7 @@ class TestChunkStorage:
         ]
         embeddings = [np.random.randn(384).astype(np.float32) for _ in chunks_to_insert]
 
-        store.upsert_chunks(chunks_to_insert, embeddings)
+        store.upsert_chunks(chunks_to_insert)
         # Should not raise
 
 
@@ -234,7 +234,7 @@ class TestLexicalSearch:
         )
         embedding = np.random.randn(384).astype(np.float32)
 
-        store.upsert_chunks([chunk], [embedding])
+        store.upsert_chunks([chunk])
 
         results = store.lexical_search("cloud", k=10, filters={"vault_id": "vault1"})
 
@@ -288,7 +288,7 @@ class TestLexicalSearch:
         ]
         embeddings = [np.random.randn(384).astype(np.float32) for _ in chunks]
 
-        store.upsert_chunks(chunks, embeddings)
+        store.upsert_chunks(chunks)
 
         results = store.lexical_search("database", k=10, filters={"vault_id": "vault1"})
 
@@ -322,7 +322,7 @@ class TestLexicalSearch:
         ]
         embeddings = [np.random.randn(384).astype(np.float32) for _ in chunks]
 
-        store.upsert_chunks(chunks, embeddings)
+        store.upsert_chunks(chunks)
 
         results = store.lexical_search("test", k=5, filters={"vault_id": "vault1"})
 
@@ -353,7 +353,7 @@ class TestLexicalSearch:
         )
         embedding = np.random.randn(384).astype(np.float32)
 
-        store.upsert_chunks([chunk], [embedding])
+        store.upsert_chunks([chunk])
 
         results = store.lexical_search("xyz123", k=10, filters={"vault_id": "vault1"})
 
@@ -388,7 +388,7 @@ class TestVectorSearch:
         )
         embedding = np.ones(384, dtype=np.float32) * 0.1
 
-        store.upsert_chunks([chunk], [embedding])
+        store.upsert_chunks([chunk])
 
         # Search with similar embedding
         query_embedding = np.ones(384, dtype=np.float32) * 0.1
@@ -424,7 +424,7 @@ class TestVectorSearch:
         ]
         embeddings = [np.random.randn(384).astype(np.float32) for _ in chunks]
 
-        store.upsert_chunks(chunks, embeddings)
+        store.upsert_chunks(chunks)
 
         query_embedding = np.random.randn(384).astype(np.float32)
         results = store.vector_search(query_embedding, k=5, filters={"vault_id": "vault1"})
@@ -481,7 +481,7 @@ class TestMultipleVaults:
         )
 
         embeddings = [np.random.randn(384).astype(np.float32) for _ in [chunk1, chunk2]]
-        store.upsert_chunks([chunk1, chunk2], embeddings)
+        store.upsert_chunks([chunk1, chunk2])
 
         vault1_results = store.lexical_search("vault1", k=10, filters={"vault_id": "vault1"})
         vault2_results = store.lexical_search("vault2", k=10, filters={"vault_id": "vault2"})

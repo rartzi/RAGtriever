@@ -67,8 +67,8 @@ class TestEndToEndMarkdownIndexing:
         # Run full scan
         indexer.scan(full=True)
 
-        # Verify that documents were indexed by searching
-        results = indexer.store.lexical_search("", k=100, filters={"vault_id": indexer.vault_id})
+        # Verify that documents were indexed by searching for common term
+        results = indexer.store.lexical_search("note", k=100, filters={"vault_id": indexer.vault_id})
 
         assert len(results) > 0, "No documents indexed"
 
