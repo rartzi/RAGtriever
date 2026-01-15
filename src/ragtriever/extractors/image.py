@@ -291,6 +291,8 @@ class VertexAIImageExtractor:
 
     def _analyze_with_vertex_ai(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
         """Call Vertex AI API to analyze the image using service account credentials."""
+        logger.info(f"Starting Vertex AI analysis (image size: {len(image_bytes)} bytes)")
+
         if not self.project_id:
             logger.warning(
                 "No Google Cloud project ID found. Set project_id in config or GOOGLE_CLOUD_PROJECT environment variable. "
@@ -316,18 +318,21 @@ class VertexAIImageExtractor:
             return {}
 
         try:
+            logger.info(f"Loading credentials from: {self.credentials_file}")
             # Load credentials from JSON file
             credentials = service_account.Credentials.from_service_account_file(
                 self.credentials_file,
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
 
+            logger.info(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
             # Initialize Vertex AI
             vertexai.init(
                 project=self.project_id,
                 location=self.location,
                 credentials=credentials
             )
+            logger.info("Vertex AI initialized successfully")
 
             # Determine mime type
             mime_map = {
@@ -351,16 +356,21 @@ class VertexAIImageExtractor:
 Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
             # Create model instance
+            logger.info(f"Creating model instance: {self.model}")
             model = GenerativeModel(self.model)
 
             # Create image part
+            logger.info(f"Creating image part with mime type: {mime_type}")
             image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
 
             # Generate content
+            logger.info("Sending request to Vertex AI...")
             response = model.generate_content([image_part, prompt])
+            logger.info("Received response from Vertex AI")
 
             # Parse the JSON response
             response_text = response.text.strip()
+            logger.info(f"Response text length: {len(response_text)}")
             # Remove markdown code block if present
             if response_text.startswith("```"):
                 lines = response_text.split("\n")
