@@ -29,6 +29,7 @@ class VaultConfig:
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_batch_size: int = 32
     embedding_device: str = "cpu"  # cpu|cuda|mps
+    offline_mode: bool = True  # Set HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE
 
     # Image analysis
     image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|off
@@ -64,6 +65,19 @@ class VaultConfig:
         vault_root = Path(_expand(vault["root"])).resolve()
         index_dir = Path(_expand(index["dir"])).resolve()
 
+        # Parse offline_mode from config or environment variable
+        # Environment variable takes precedence if explicitly set
+        offline_mode_env = os.environ.get("HF_OFFLINE_MODE")
+        if offline_mode_env is not None:
+            offline_mode = offline_mode_env.lower() in ("1", "true", "yes")
+        else:
+            offline_mode = emb.get("offline_mode", True)
+
+        # Set HuggingFace offline environment variables based on config
+        if offline_mode:
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
         return VaultConfig(
             vault_root=vault_root,
             index_dir=index_dir,
@@ -74,6 +88,7 @@ class VaultConfig:
             embedding_model=emb.get("model", "BAAI/bge-small-en-v1.5"),
             embedding_batch_size=int(emb.get("batch_size", 32)),
             embedding_device=emb.get("device", "cpu"),
+            offline_mode=offline_mode,
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
