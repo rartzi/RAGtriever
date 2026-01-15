@@ -23,9 +23,9 @@ gemini_model = "gemini-2.0-flash"
 # Vertex AI configuration (for provider = "vertex_ai")
 [vertex_ai]
 # project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT env var
-# location = "us-central1"
+# location = "global"  # or us-central1, us-east4, etc. depending on model availability
 # credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS env var
-# model = "gemini-2.0-flash-exp"  # or gemini-3-pro-image-preview
+# model = "gemini-2.0-flash-exp"  # available models depend on region
 
 [retrieval]
 k_vec = 40

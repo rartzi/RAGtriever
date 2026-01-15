@@ -37,7 +37,7 @@ class VaultConfig:
 
     # Vertex AI (for image_analysis_provider="vertex_ai")
     vertex_ai_project_id: str | None = None
-    vertex_ai_location: str = "us-central1"
+    vertex_ai_location: str = "global"
     vertex_ai_credentials_file: str | None = None
     vertex_ai_model: str = "gemini-2.0-flash-exp"
 

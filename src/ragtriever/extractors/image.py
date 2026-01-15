@@ -369,7 +369,22 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
             logger.info("Received response from Vertex AI")
 
             # Parse the JSON response
-            response_text = response.text.strip()
+            # Handle both single-part and multi-part responses
+            try:
+                response_text = response.text.strip()
+            except ValueError:
+                # Multi-part response (e.g., from gemini-3-pro-image-preview)
+                logger.info("Multi-part response detected, concatenating non-thought parts...")
+                parts = []
+                for candidate in response.candidates:
+                    for part in candidate.content.parts:
+                        # Skip thought parts - only use actual response
+                        if hasattr(part, 'thought') and part.thought:
+                            continue
+                        if hasattr(part, 'text') and part.text:
+                            parts.append(part.text)
+                response_text = "".join(parts).strip()  # Use empty string join to avoid adding newlines
+
             logger.info(f"Response text length: {len(response_text)}")
             # Remove markdown code block if present
             if response_text.startswith("```"):
@@ -383,7 +398,7 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse Vertex AI response as JSON: {e}")
             # Try to extract what we can from non-JSON response
-            return {"description": response.text[:500] if 'response' in dir() else ""}
+            return {"description": response_text[:500] if response_text else ""}
         except Exception as e:
             logger.warning(f"Vertex AI analysis failed: {e}")
             return {}
