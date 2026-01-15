@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Sequence
+import numpy as np
+
+from .base import Embedder
+
+@dataclass
+class SentenceTransformersEmbedder:
+    model_id: str
+    device: str = "cpu"
+    batch_size: int = 32
+
+    def __post_init__(self) -> None:
+        from sentence_transformers import SentenceTransformer  # type: ignore
+        self._model = SentenceTransformer(self.model_id, device=self.device)
+        # Determine dims from a small encode
+        v = self._model.encode(["dimension_probe"], batch_size=1, convert_to_numpy=True, normalize_embeddings=True)
+        self.dims = int(v.shape[1])
+
+    def embed_texts(self, texts: Sequence[str]) -> np.ndarray:
+        return self._model.encode(list(texts), batch_size=self.batch_size, convert_to_numpy=True, normalize_embeddings=True)
+
+    def embed_query(self, query: str) -> np.ndarray:
+        return self._model.encode([query], batch_size=1, convert_to_numpy=True, normalize_embeddings=True)[0]

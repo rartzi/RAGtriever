@@ -1,0 +1,227 @@
+{
+  "protocol": "mcp",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "vault.search",
+      "description": "Hybrid search over the vault index (semantic + lexical + optional graph boosts). Returns chunk hits with citations.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "k": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "vault_id": {
+                "type": "string"
+              },
+              "path_prefix": {
+                "type": "string"
+              },
+              "file_types": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mtime_after": {
+                "type": "integer"
+              },
+              "mtime_before": {
+                "type": "integer"
+              }
+            }
+          },
+          "include_snippet_chars": {
+            "type": "integer",
+            "default": 600
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "chunk_id": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "snippet": {
+                  "type": "string"
+                },
+                "source_ref": {
+                  "$ref": "#/definitions/source_ref"
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "chunk_id",
+                "score",
+                "snippet",
+                "source_ref"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "vault.open",
+      "description": "Open a cited source reference (section/page/slide/sheet) and return full content for that anchor.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "source_ref": {
+            "$ref": "#/definitions/source_ref"
+          }
+        },
+        "required": [
+          "source_ref"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "source_ref": {
+            "$ref": "#/definitions/source_ref"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "content",
+          "source_ref"
+        ]
+      }
+    },
+    {
+      "name": "vault.neighbors",
+      "description": "Return outlinks/backlinks for a note (Obsidian-aware wikilinks).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path_or_doc_id": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 3
+          }
+        },
+        "required": [
+          "path_or_doc_id"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "outlinks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backlinks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "vault.status",
+      "description": "Return indexing status (counts, last scan, errors).",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "vault_id": {
+            "type": "string"
+          },
+          "indexed_files": {
+            "type": "integer"
+          },
+          "indexed_chunks": {
+            "type": "integer"
+          },
+          "last_scan_at": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "source_ref": {
+      "type": "object",
+      "properties": {
+        "vault_id": {
+          "type": "string"
+        },
+        "rel_path": {
+          "type": "string"
+        },
+        "file_type": {
+          "type": "string"
+        },
+        "anchor_type": {
+          "type": "string"
+        },
+        "anchor_ref": {
+          "type": "string"
+        },
+        "locator": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "rel_path",
+        "file_type",
+        "anchor_type",
+        "anchor_ref"
+      ]
+    }
+  }
+}

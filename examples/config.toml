@@ -1,0 +1,30 @@
+[vault]
+root = "/path/to/vault"
+ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
+
+[index]
+dir = "~/.vaultrag/indexes/myvault"
+extractor_version = "v1"
+chunker_version = "v1"
+
+[embeddings]
+provider = "sentence_transformers"
+model = "BAAI/bge-small-en-v1.5"
+batch_size = 32
+device = "cpu"  # cpu|cuda|mps
+
+[image_analysis]
+provider = "tesseract"  # tesseract|gemini|off
+# For tesseract: requires pytesseract and tesseract-ocr installed on system
+# For gemini: set GEMINI_API_KEY env var or gemini_api_key below
+# gemini_api_key = ""
+gemini_model = "gemini-2.0-flash"
+
+[retrieval]
+k_vec = 40
+k_lex = 40
+top_k = 10
+use_rerank = false
+
+[mcp]
+transport = "stdio"
