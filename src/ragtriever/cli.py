@@ -34,6 +34,9 @@ provider = "sentence_transformers"
 model = "BAAI/bge-small-en-v1.5"
 batch_size = 32
 device = "cpu"
+# Set to true to use cached models only (no HuggingFace downloads)
+# Can also be controlled via HF_OFFLINE_MODE environment variable
+offline_mode = true
 
 [ocr]
 mode = "off"

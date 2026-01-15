@@ -69,16 +69,22 @@ The codebase uses Python Protocol classes for pluggable adapters:
 3. Merge + dedupe with configurable weights
 4. Optional graph boost (backlinks) and rerank
 
+### Query Handling
+Search queries are automatically escaped for FTS5 to handle special characters (hyphens, slashes, etc.) in technical and medical terms. Queries are treated as phrase searches wrapped in double quotes, ensuring terms like "T-DXd", "CDK4/6i", or "HR+/HER2-low" work correctly without FTS5 syntax errors.
+
 ## Configuration
 
 TOML-based config (see `examples/config.toml.example`):
 - `[vault]`: root path, ignore patterns
 - `[index]`: index directory, extractor/chunker versions
-- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size
+- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true)
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
 - `[mcp]`: transport (stdio)
+
+### Offline Mode
+Set `offline_mode = true` in `[embeddings]` to use cached models only (no HuggingFace downloads). This is useful in corporate environments with restricted internet access. Can be overridden with the `HF_OFFLINE_MODE` environment variable.
 
 ### Image Analysis Options
 - **tesseract**: Local OCR using pytesseract (requires tesseract-ocr installed)

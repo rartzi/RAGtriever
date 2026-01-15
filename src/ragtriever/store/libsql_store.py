@@ -10,6 +10,19 @@ import numpy as np
 from ..models import Document, Chunk, SearchResult, SourceRef, OpenResult
 
 
+def _escape_fts5_query(query: str) -> str:
+    """Escape special characters in FTS5 queries.
+
+    FTS5 has special syntax for operators like -, /, AND, OR, NOT, etc.
+    To search for literal text containing these characters, we wrap the
+    query in double quotes and escape any quotes within.
+    """
+    # Escape double quotes by doubling them (SQLite convention)
+    escaped = query.replace('"', '""')
+    # Wrap in double quotes to treat as phrase query
+    return f'"{escaped}"'
+
+
 class _JSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles datetime and date objects."""
     def default(self, obj: Any) -> Any:
@@ -209,7 +222,9 @@ class LibSqlStore:
         ORDER BY rank
         LIMIT ?
         """
-        params2 = params + [query, k]
+        # Escape special characters in query for FTS5
+        escaped_query = _escape_fts5_query(query)
+        params2 = params + [escaped_query, k]
         rows = self._conn.execute(sql, params2).fetchall()
 
         results: list[SearchResult] = []
