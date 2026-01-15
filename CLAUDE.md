@@ -30,10 +30,11 @@ pytest tests/test_markdown_parsing.py              # single file
 pytest tests/test_markdown_parsing.py::test_parse_wikilinks  # single test
 
 # CLI (after creating config.toml)
-cortex init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
-cortex scan --full
-cortex query "search term" --k 10
-cortex mcp                    # MCP server over stdio
+ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
+ragtriever scan --full
+ragtriever query "search term" --k 10
+ragtriever watch              # watch mode for continuous indexing
+ragtriever mcp                # MCP server over stdio
 ```
 
 ## Architecture
@@ -56,10 +57,11 @@ The codebase uses Python Protocol classes for pluggable adapters:
 - **chunk_id**: `blake2b("{doc_id}:{anchor_type}:{anchor_ref}:{text_hash}")[:32]`
 
 ### Key Entry Points
-- `src/ragtriever/cli.py`: Typer CLI (`cortex` command)
+- `src/ragtriever/cli.py`: Typer CLI (`ragtriever` command) with commands: init, scan, query, watch, open, mcp
 - `src/ragtriever/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
-- `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search
+- `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
 - `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
+- `src/ragtriever/store/libsql_store.py`: SQLite-based storage implementation (`vaultrag.sqlite` database file)
 
 ### Hybrid Retrieval Strategy
 1. Lexical candidates via SQLite FTS5
@@ -69,12 +71,20 @@ The codebase uses Python Protocol classes for pluggable adapters:
 
 ## Configuration
 
-TOML-based config (see `examples/config.toml`):
+TOML-based config (see `examples/config.toml.example`):
 - `[vault]`: root path, ignore patterns
 - `[index]`: index directory, extractor/chunker versions
-- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps)
+- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size
+- `[image_analysis]`: provider (tesseract/gemini/vertex_ai/off), gemini_model for Gemini API
+- `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
 - `[mcp]`: transport (stdio)
+
+### Image Analysis Options
+- **tesseract**: Local OCR using pytesseract (requires tesseract-ocr installed)
+- **gemini**: Google Gemini API with API key authentication (set GEMINI_API_KEY)
+- **vertex_ai**: Google Vertex AI with service account JSON credentials (requires google-cloud-aiplatform)
+- **off**: Disable image analysis
 
 ## Implementation Priorities
 

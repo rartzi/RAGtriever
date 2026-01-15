@@ -31,9 +31,15 @@ class VaultConfig:
     embedding_device: str = "cpu"  # cpu|cuda|mps
 
     # Image analysis
-    image_analysis_provider: str = "tesseract"  # tesseract|gemini|off
+    image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|off
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
+
+    # Vertex AI (for image_analysis_provider="vertex_ai")
+    vertex_ai_project_id: str | None = None
+    vertex_ai_location: str = "us-central1"
+    vertex_ai_credentials_file: str | None = None
+    vertex_ai_model: str = "gemini-2.0-flash-exp"
 
     # Retrieval
     k_vec: int = 40
@@ -51,6 +57,7 @@ class VaultConfig:
         index = data.get("index", {})
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
+        vertex = data.get("vertex_ai", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
 
@@ -70,6 +77,10 @@ class VaultConfig:
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
+            vertex_ai_project_id=vertex.get("project_id"),
+            vertex_ai_location=vertex.get("location", "us-central1"),
+            vertex_ai_credentials_file=vertex.get("credentials_file"),
+            vertex_ai_model=vertex.get("model", "gemini-2.0-flash-exp"),
             k_vec=int(ret.get("k_vec", 40)),
             k_lex=int(ret.get("k_lex", 40)),
             top_k=int(ret.get("top_k", 10)),

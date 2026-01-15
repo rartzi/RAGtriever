@@ -13,7 +13,7 @@ from ..extractors.markdown import MarkdownExtractor
 from ..extractors.pdf import PdfExtractor
 from ..extractors.pptx import PptxExtractor
 from ..extractors.xlsx import XlsxExtractor
-from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor
+from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor, VertexAIImageExtractor
 from ..chunking.base import ChunkerRegistry
 from ..chunking.markdown_chunker import MarkdownChunker
 from ..chunking.boundary_chunker import BoundaryMarkerChunker
@@ -45,6 +45,13 @@ class Indexer:
             self.extractors.register(GeminiImageExtractor(
                 api_key=self.cfg.gemini_api_key,
                 model=self.cfg.gemini_model,
+            ))
+        elif self.cfg.image_analysis_provider == "vertex_ai":
+            self.extractors.register(VertexAIImageExtractor(
+                project_id=self.cfg.vertex_ai_project_id,
+                location=self.cfg.vertex_ai_location,
+                credentials_file=self.cfg.vertex_ai_credentials_file,
+                model=self.cfg.vertex_ai_model,
             ))
         # If "off", no image extractor is registered
 
