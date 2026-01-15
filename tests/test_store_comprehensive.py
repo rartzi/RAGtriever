@@ -239,7 +239,7 @@ class TestLexicalSearch:
         results = store.lexical_search("cloud", k=10, filters={"vault_id": "vault1"})
 
         assert len(results) > 0
-        assert results[0].chunk.chunk_id == "chunk1"
+        assert results[0].chunk_id == "chunk1"
 
     def test_lexical_search_multiple_matches(self, store: LibSqlStore):
         """Test lexical search with multiple matching chunks."""
@@ -389,6 +389,7 @@ class TestVectorSearch:
         embedding = np.ones(384, dtype=np.float32) * 0.1
 
         store.upsert_chunks([chunk])
+        store.upsert_embeddings([chunk.chunk_id], "test_model", np.array([embedding]))
 
         # Search with similar embedding
         query_embedding = np.ones(384, dtype=np.float32) * 0.1
@@ -488,6 +489,6 @@ class TestMultipleVaults:
 
         # Results should be from respective vaults
         if len(vault1_results) > 0:
-            assert vault1_results[0].chunk.vault_id == "vault1"
+            assert vault1_results[0].source_ref.vault_id == "vault1"
         if len(vault2_results) > 0:
-            assert vault2_results[0].chunk.vault_id == "vault2"
+            assert vault2_results[0].source_ref.vault_id == "vault2"

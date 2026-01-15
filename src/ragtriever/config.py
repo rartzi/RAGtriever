@@ -21,6 +21,15 @@ class VaultConfig:
 
     ignore: list[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        """Convert string paths to Path objects and expand ~ and environment variables."""
+        # Convert vault_root to Path if it's a string
+        if isinstance(self.vault_root, str):
+            object.__setattr__(self, 'vault_root', Path(_expand(self.vault_root)))
+        # Convert index_dir to Path if it's a string
+        if isinstance(self.index_dir, str):
+            object.__setattr__(self, 'index_dir', Path(_expand(self.index_dir)))
+
     extractor_version: str = "v1"
     chunker_version: str = "v1"
 

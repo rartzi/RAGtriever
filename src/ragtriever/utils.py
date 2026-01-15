@@ -12,8 +12,11 @@ def parse_wikilinks(text: str) -> list[str]:
 def parse_tags(text: str) -> list[str]:
     return [m.group(1) for m in TAG_RE.finditer(text)]
 
-def safe_read_text(path: Path, max_bytes: int = 10_000_000) -> str:
-    b = path.read_bytes()
+def safe_read_text(path: Path, max_bytes: int = 10_000_000) -> str | None:
+    try:
+        b = path.read_bytes()
+    except FileNotFoundError:
+        return None
     if len(b) > max_bytes:
         raise ValueError(f"File too large for text read: {path} ({len(b)} bytes)")
     # naive decode; agent may improve with chardet, etc.
