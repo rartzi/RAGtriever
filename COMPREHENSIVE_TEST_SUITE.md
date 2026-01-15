@@ -1,8 +1,8 @@
-# Comprehensive Test Suite for CortexIndex Local
+# Comprehensive Test Suite for RAGtriever Local
 
 ## Overview
 
-A complete, end-to-end test suite covering all major components of CortexIndex, including extraction, chunking, embedding, storage, retrieval, and incremental indexing.
+A complete, end-to-end test suite covering all major components of RAGtriever, including extraction, chunking, embedding, storage, retrieval, and incremental indexing.
 
 ## Test Files Created
 
@@ -209,7 +209,7 @@ pytest tests/test_extractors_comprehensive.py -v
 pytest tests/test_e2e_integration.py::TestEndToEndMarkdownIndexing -v
 
 # Run with coverage
-pytest tests/ --cov=src/cortexindex --cov-report=html
+pytest tests/ --cov=src/ragtriever --cov-report=html
 
 # Run only fast tests (skip slow integration tests)
 pytest tests/ -m "not slow" -v

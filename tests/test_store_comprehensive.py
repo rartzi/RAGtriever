@@ -7,8 +7,8 @@ import pytest
 from pathlib import Path
 import numpy as np
 
-from cortexindex.models import Document, Chunk
-from cortexindex.store.libsql_store import LibSqlStore
+from ragtriever.models import Document, Chunk
+from ragtriever.store.libsql_store import LibSqlStore
 
 
 @pytest.fixture

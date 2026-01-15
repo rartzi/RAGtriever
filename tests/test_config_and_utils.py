@@ -6,10 +6,10 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from cortexindex.config import VaultConfig
-from cortexindex.hashing import blake2b_hex, hash_file
-from cortexindex.paths import relpath
-from cortexindex.models import Document, Chunk, SearchResult
+from ragtriever.config import VaultConfig
+from ragtriever.hashing import blake2b_hex, hash_file
+from ragtriever.paths import relpath
+from ragtriever.models import Document, Chunk, SearchResult
 
 
 class TestVaultConfig:
@@ -291,7 +291,7 @@ class TestUtilityFunctions:
 
     def test_safe_read_text_valid_file(self, tmp_path: Path):
         """Test reading valid file."""
-        from cortexindex.utils import safe_read_text
+        from ragtriever.utils import safe_read_text
 
         test_file = tmp_path / "test.txt"
         test_file.write_text("test content")
@@ -302,7 +302,7 @@ class TestUtilityFunctions:
 
     def test_safe_read_text_missing_file(self):
         """Test reading missing file returns None."""
-        from cortexindex.utils import safe_read_text
+        from ragtriever.utils import safe_read_text
 
         result = safe_read_text(Path("/nonexistent/file.txt"))
 
@@ -310,7 +310,7 @@ class TestUtilityFunctions:
 
     def test_safe_read_text_encoding(self, tmp_path: Path):
         """Test reading file with different encoding."""
-        from cortexindex.utils import safe_read_text
+        from ragtriever.utils import safe_read_text
 
         test_file = tmp_path / "test.txt"
         test_content = "UTF-8 content: café, naïve"
@@ -380,7 +380,7 @@ class TestHashingConsistency:
         vault = tmp_path / "vault"
         vault.mkdir()
 
-        from cortexindex.hashing import blake2b_hex
+        from ragtriever.hashing import blake2b_hex
 
         vault_id1 = blake2b_hex(str(vault).encode("utf-8"))[:12]
         vault_id2 = blake2b_hex(str(vault).encode("utf-8"))[:12]
@@ -389,7 +389,7 @@ class TestHashingConsistency:
 
     def test_doc_id_deterministic(self, tmp_path: Path):
         """Test that document IDs are deterministic."""
-        from cortexindex.hashing import blake2b_hex
+        from ragtriever.hashing import blake2b_hex
 
         vault_id = "vault123"
         rel_path = "path/to/file.md"
@@ -401,7 +401,7 @@ class TestHashingConsistency:
 
     def test_chunk_id_deterministic(self):
         """Test that chunk IDs are deterministic."""
-        from cortexindex.hashing import blake2b_hex
+        from ragtriever.hashing import blake2b_hex
 
         doc_id = "doc123"
         anchor_type = "heading"

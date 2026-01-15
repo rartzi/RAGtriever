@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/hero.jpg" alt="CortexIndex - Local Knowledge Retrieval" width="800"/>
+  <img src="assets/hero.jpg" alt="RAGtriever - Retrieval-Augmented Generation for Your Vault" width="800"/>
 </p>
 
-<h1 align="center">CortexIndex</h1>
+<h1 align="center">RAGtriever</h1>
 
 <p align="center">
-  <strong>Local-first hybrid retrieval system for your second brain</strong>
+  <strong>Retrieval-Augmented Generation system for your Obsidian vault</strong>
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 ---
 
-CortexIndex indexes your Obsidian-compatible vault into a powerful hybrid search system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness**. All data stays local on your machine.
+RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retrieval system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness** for retrieval-augmented generation. All data stays local on your machine.
 
 ## Features
 
@@ -45,8 +45,8 @@ CortexIndex indexes your Obsidian-compatible vault into a powerful hybrid search
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cortexindex.git
-cd cortexindex
+git clone https://github.com/yourusername/ragtriever.git
+cd ragtriever
 
 # Create virtual environment
 python3 -m venv .venv
@@ -85,7 +85,7 @@ root = "/path/to/your/obsidian/vault"    # Your vault location
 ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
 
 [index]
-dir = "~/.cortexindex/indexes/myvault"       # Where to store the index
+dir = "~/.ragtriever/indexes/myvault"       # Where to store the index
 
 [embeddings]
 provider = "sentence_transformers"

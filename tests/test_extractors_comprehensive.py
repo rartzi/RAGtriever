@@ -7,11 +7,11 @@ import pytest
 from pathlib import Path
 from io import BytesIO
 
-from cortexindex.extractors.markdown import MarkdownExtractor
-from cortexindex.extractors.pdf import PdfExtractor
-from cortexindex.extractors.pptx import PptxExtractor
-from cortexindex.extractors.xlsx import XlsxExtractor
-from cortexindex.extractors.image import TesseractImageExtractor
+from ragtriever.extractors.markdown import MarkdownExtractor
+from ragtriever.extractors.pdf import PdfExtractor
+from ragtriever.extractors.pptx import PptxExtractor
+from ragtriever.extractors.xlsx import XlsxExtractor
+from ragtriever.extractors.image import TesseractImageExtractor
 
 
 class TestMarkdownExtractor:
@@ -324,7 +324,7 @@ class TestExtractorRegistry:
 
     def test_registry_selects_correct_extractor(self, tmp_path: Path):
         """Test that correct extractor is selected by file type."""
-        from cortexindex.extractors.base import ExtractorRegistry
+        from ragtriever.extractors.base import ExtractorRegistry
 
         registry = ExtractorRegistry()
         registry.register(MarkdownExtractor())
@@ -338,7 +338,7 @@ class TestExtractorRegistry:
 
     def test_registry_returns_none_for_unsupported_type(self, tmp_path: Path):
         """Test that registry returns None for unsupported types."""
-        from cortexindex.extractors.base import ExtractorRegistry
+        from ragtriever.extractors.base import ExtractorRegistry
 
         registry = ExtractorRegistry()
 
