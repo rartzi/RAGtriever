@@ -321,6 +321,35 @@ The MCP server accepts JSON-RPC requests. Here are example tool calls:
 
 ---
 
+## Claude Code Skill (Optional)
+
+For users of [Claude Code](https://claude.ai/code), RAGtriever includes a workflow skill to assist with setup, configuration, and troubleshooting.
+
+### Installation
+
+```bash
+# Option 1: Symlink from repository (recommended)
+ln -s $(pwd)/skills/RAGtrieval ~/.claude/skills/RAGtrieval
+
+# Option 2: Copy skill
+cp -r skills/RAGtrieval ~/.claude/skills/RAGtrieval
+```
+
+### Usage
+
+The `RAGtrieval` skill provides:
+- Setup and configuration guidance
+- Common command workflows
+- Troubleshooting assistance
+- Pre-flight checks and checklists
+- Architecture and key file references
+
+Once installed, Claude Code will automatically use this skill when helping you with RAGtriever tasks.
+
+**Note:** The skill is optional - RAGtriever works independently without it. The skill simply helps Claude Code assist you better.
+
+---
+
 ## Architecture
 
 ```
@@ -386,11 +415,12 @@ mypy src/
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [PRD](docs/PRD.md) - Product requirements
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) - Development roadmap
+- [Architecture](docs/architecture.md) - Complete system architecture and components
+- [Vertex AI Setup](docs/vertex_ai_setup.md) - Google Cloud Vertex AI configuration
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- [Improvements](IMPROVEMENTS.md) - Planned enhancements (Gemini 3, error handling, etc.)
+- [RAGtrieval Skill](skills/RAGtrieval/skill.md) - Claude Code workflow skill
 - [MCP Tool Spec](docs/MCP_TOOL_SPEC.json) - MCP protocol specification
-- [Planned Tasks](docs/PLANNED_TASKS.md) - TODO items
 
 ---
 
