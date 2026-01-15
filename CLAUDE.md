@@ -92,6 +92,32 @@ Set `offline_mode = true` in `[embeddings]` to use cached models only (no Huggin
 - **vertex_ai**: Google Vertex AI with service account JSON credentials (requires google-cloud-aiplatform)
 - **off**: Disable image analysis
 
+## Security
+
+### Credentials Management
+- **Never commit** `config.toml` or credential files to version control
+- Store service account JSON files outside the repository (e.g., `~/.config/gcloud/`)
+- Use environment variables for sensitive values when possible
+- The `.gitignore` file protects: `config.toml`, `.env`, `*.key`, `secrets/`, `credentials/`, and API key patterns
+
+### Configuration Validation
+Config loading performs security validations:
+- Credentials file path: Validates existence, file type, and read permissions
+- Numeric values: Validates ranges (batch_size: 1-10000, k_vec/k_lex/top_k: 1-1000)
+- Device: Validates against allowed values (cpu, cuda, mps)
+- Path traversal protection: Resolves paths to absolute before validation
+
+### Logging
+- Sensitive information (credentials paths, project IDs) logged at DEBUG level only
+- Use INFO level for normal operations to avoid exposing sensitive data in production logs
+- Enable DEBUG logging only in development environments
+
+### Side Effects
+⚠️ **Important**: Configuration loading has side effects:
+- Sets `HF_HUB_OFFLINE` and `TRANSFORMERS_OFFLINE` environment variables globally if `offline_mode=true`
+- This affects the entire Python process
+- Config should be loaded once at application startup
+
 ## Implementation Priorities
 
 See `PLANNED_TASKS.md` for current priorities and Definition of Done.

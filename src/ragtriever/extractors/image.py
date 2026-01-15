@@ -318,14 +318,18 @@ class VertexAIImageExtractor:
             return {}
 
         try:
-            logger.info(f"Loading credentials from: {self.credentials_file}")
+            # Security: Log at debug level to avoid exposing credentials path
+            logger.debug(f"Loading credentials from: {self.credentials_file}")
+            logger.info("Loading Vertex AI credentials from configured file")
             # Load credentials from JSON file
             credentials = service_account.Credentials.from_service_account_file(
                 self.credentials_file,
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
 
-            logger.info(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
+            # Security: Log at debug level to avoid exposing project ID
+            logger.debug(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
+            logger.info(f"Initializing Vertex AI in region: {self.location}")
             # Initialize Vertex AI
             vertexai.init(
                 project=self.project_id,
@@ -399,6 +403,15 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
             logger.warning(f"Failed to parse Vertex AI response as JSON: {e}")
             # Try to extract what we can from non-JSON response
             return {"description": response_text[:500] if response_text else ""}
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error(f"Credentials file error: {type(e).__name__}")
+            logger.debug(f"Credentials file error details: {e}")
+            return {}
+        except ImportError as e:
+            logger.error(f"Missing required library: {e}")
+            return {}
         except Exception as e:
-            logger.warning(f"Vertex AI analysis failed: {e}")
+            # Catch-all for unexpected errors, but log the type for debugging
+            logger.error(f"Vertex AI analysis failed: {type(e).__name__}")
+            logger.debug(f"Vertex AI analysis error details: {e}")
             return {}
