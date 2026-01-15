@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 import os
 
-from vaultrag.extractors.image import TesseractImageExtractor, GeminiImageExtractor
+from cortexindex.extractors.image import TesseractImageExtractor, GeminiImageExtractor
 
 def create_test_image() -> BytesIO:
     """Create a simple test image in memory."""

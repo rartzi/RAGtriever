@@ -1,7 +1,7 @@
 # Tasks for coding agent (Codex / Claude Code / Gemini)
 
 ## Objective
-Implement VaultRAG Local as specified in docs/PRD.md with a working local-only indexer + retriever and MCP server.
+Implement CortexIndex Local as specified in docs/PRD.md with a working local-only indexer + retriever and MCP server.
 
 ## Priorities
 1) Markdown end-to-end MVP (scan, query, open) with citations
@@ -12,11 +12,11 @@ Implement VaultRAG Local as specified in docs/PRD.md with a working local-only i
 6) Hardening: migrations, rebuild, tests
 
 ## Definition of Done (v1)
-- `vaultrag scan --full` indexes a test vault
-- `vaultrag query "..."` returns relevant results
-- `vaultrag open` returns the full anchored section/page/slide/sheet
-- `vaultrag watch` updates index on edit/rename/delete
-- `vaultrag mcp` exposes tools: vault.search, vault.open, vault.status, vault.neighbors
+- `cortex scan --full` indexes a test vault
+- `cortex query "..."` returns relevant results
+- `cortex open` returns the full anchored section/page/slide/sheet
+- `cortex watch` updates index on edit/rename/delete
+- `cortex mcp` exposes tools: vault.search, vault.open, vault.status, vault.neighbors
 - All data stays local; no network calls by default
 
 ## Implementation notes

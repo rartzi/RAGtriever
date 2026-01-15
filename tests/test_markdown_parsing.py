@@ -1,4 +1,4 @@
-from vaultrag.utils import parse_wikilinks, parse_tags
+from cortexindex.utils import parse_wikilinks, parse_tags
 
 def test_parse_wikilinks():
     s = "See [[Note A]] and [[Folder/Note B#Section]]."

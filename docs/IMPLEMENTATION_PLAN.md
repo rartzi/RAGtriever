@@ -1,4 +1,4 @@
-# Implementation plan — VaultRAG Local
+# Implementation plan — CortexIndex Local
 
 ## Phase 1: Markdown MVP
 - Config + CLI skeleton

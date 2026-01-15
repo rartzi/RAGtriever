@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VaultRAG Local is a local-first vault indexer + hybrid retrieval system with MCP interface. It indexes Obsidian-compatible vaults (Markdown + attachments) into a hybrid search system (semantic + lexical + link-graph) and serves results via CLI, Python API, and MCP tools.
+CortexIndex Local is a local-first vault indexer + hybrid retrieval system with MCP interface. It indexes Obsidian-compatible vaults (Markdown + attachments) into a hybrid search system (semantic + lexical + link-graph) and serves results via CLI, Python API, and MCP tools.
 
 **Key design principles:**
 - Local-only: no data leaves the machine
@@ -30,10 +30,10 @@ pytest tests/test_markdown_parsing.py              # single file
 pytest tests/test_markdown_parsing.py::test_parse_wikilinks  # single test
 
 # CLI (after creating config.toml)
-vaultrag init --vault "/path/to/vault" --index "~/.vaultrag/indexes/myvault"
-vaultrag scan --full
-vaultrag query "search term" --k 10
-vaultrag mcp                    # MCP server over stdio
+cortex init --vault "/path/to/vault" --index "~/.cortexindex/indexes/myvault"
+cortex scan --full
+cortex query "search term" --k 10
+cortex mcp                    # MCP server over stdio
 ```
 
 ## Architecture
@@ -56,10 +56,10 @@ The codebase uses Python Protocol classes for pluggable adapters:
 - **chunk_id**: `blake2b("{doc_id}:{anchor_type}:{anchor_ref}:{text_hash}")[:32]`
 
 ### Key Entry Points
-- `src/vaultrag/cli.py`: Typer CLI (`vaultrag` command)
-- `src/vaultrag/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
-- `src/vaultrag/retrieval/retriever.py`: `Retriever` class for hybrid search
-- `src/vaultrag/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
+- `src/cortexindex/cli.py`: Typer CLI (`cortex` command)
+- `src/cortexindex/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
+- `src/cortexindex/retrieval/retriever.py`: `Retriever` class for hybrid search
+- `src/cortexindex/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
 
 ### Hybrid Retrieval Strategy
 1. Lexical candidates via SQLite FTS5

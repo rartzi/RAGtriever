@@ -3,7 +3,7 @@ root = "/path/to/vault"
 ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
 
 [index]
-dir = "~/.vaultrag/indexes/myvault"
+dir = "~/.cortexindex/indexes/myvault"
 extractor_version = "v1"
 chunker_version = "v1"
 

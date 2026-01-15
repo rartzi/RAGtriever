@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/hero.jpg" alt="VaultRAG - Local Knowledge Retrieval" width="800"/>
+  <img src="assets/hero.jpg" alt="CortexIndex - Local Knowledge Retrieval" width="800"/>
 </p>
 
-<h1 align="center">VaultRAG</h1>
+<h1 align="center">CortexIndex</h1>
 
 <p align="center">
   <strong>Local-first hybrid retrieval system for your second brain</strong>
@@ -25,7 +25,7 @@
 
 ---
 
-VaultRAG indexes your Obsidian-compatible vault into a powerful hybrid search system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness**. All data stays local on your machine.
+CortexIndex indexes your Obsidian-compatible vault into a powerful hybrid search system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness**. All data stays local on your machine.
 
 ## Features
 
@@ -45,8 +45,8 @@ VaultRAG indexes your Obsidian-compatible vault into a powerful hybrid search sy
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/vaultrag.git
-cd vaultrag
+git clone https://github.com/yourusername/cortexindex.git
+cd cortexindex
 
 # Create virtual environment
 python3 -m venv .venv
@@ -85,7 +85,7 @@ root = "/path/to/your/obsidian/vault"    # Your vault location
 ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
 
 [index]
-dir = "~/.vaultrag/indexes/myvault"       # Where to store the index
+dir = "~/.cortexindex/indexes/myvault"       # Where to store the index
 
 [embeddings]
 provider = "sentence_transformers"
@@ -106,55 +106,55 @@ top_k = 10
 
 ```bash
 # Index your vault
-vaultrag scan --full
+cortex scan --full
 
 # Search your knowledge
-vaultrag query "machine learning concepts"
+cortex query "machine learning concepts"
 
 # Watch for changes (continuous indexing)
-vaultrag watch
+cortex watch
 ```
 
 ---
 
 ## Usage
 
-VaultRAG can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
+CortexIndex can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
 
 ### CLI Usage
 
 ```bash
 # Initialize a new config file
-vaultrag init --vault "/path/to/vault" --index "~/.vaultrag/indexes/myvault"
+cortex init --vault "/path/to/vault" --index "~/.cortexindex/indexes/myvault"
 
 # Full index scan
-vaultrag scan --full
+cortex scan --full
 
 # Incremental scan (only changed files)
-vaultrag scan
+cortex scan
 
 # Search your vault
-vaultrag query "project planning" --k 10
+cortex query "project planning" --k 10
 
 # Search with path filter
-vaultrag query "meeting notes" --path "Work/Meetings/"
+cortex query "meeting notes" --path "Work/Meetings/"
 
 # Watch mode - continuously index changes
-vaultrag watch
+cortex watch
 
 # Open a specific chunk by ID
-vaultrag open <chunk_id>
+cortex open <chunk_id>
 
 # Start MCP server
-vaultrag mcp
+cortex mcp
 ```
 
 ### Python API Usage
 
 ```python
-from vaultrag.config import VaultConfig
-from vaultrag.indexer.indexer import Indexer
-from vaultrag.retrieval.retriever import Retriever
+from cortexindex.config import VaultConfig
+from cortexindex.indexer.indexer import Indexer
+from cortexindex.retrieval.retriever import Retriever
 
 # Load configuration
 cfg = VaultConfig.from_toml("config.toml")
@@ -200,10 +200,10 @@ results = retriever.search(
 #### Advanced: Direct Store Access
 
 ```python
-from vaultrag.store.libsql_store import LibSqlStore
+from cortexindex.store.libsql_store import LibSqlStore
 
 # Direct access to the store
-store = LibSqlStore(cfg.index_dir / "vaultrag.sqlite")
+store = LibSqlStore(cfg.index_dir / "cortexindex.sqlite")
 
 # Get index status
 status = store.status(vault_id="your_vault_id")
@@ -223,7 +223,7 @@ vector_results = store.vector_search(query_vector, k=20, filters={})
 
 ## MCP Integration
 
-VaultRAG exposes your vault to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
+CortexIndex exposes your vault to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
 ### Available MCP Tools
 
@@ -238,7 +238,7 @@ VaultRAG exposes your vault to AI agents via the [Model Context Protocol](https:
 
 ```bash
 # Start the MCP server (stdio transport)
-vaultrag mcp
+cortex mcp
 ```
 
 ### Claude Desktop Integration
@@ -248,10 +248,10 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "vaultrag": {
-      "command": "/absolute/path/to/vaultrag/.venv/bin/vaultrag",
+    "cortexindex": {
+      "command": "/absolute/path/to/cortexindex/.venv/bin/cortex",
       "args": ["mcp"],
-      "cwd": "/absolute/path/to/vaultrag"
+      "cwd": "/absolute/path/to/cortexindex"
     }
   }
 }

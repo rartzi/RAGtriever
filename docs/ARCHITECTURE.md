@@ -1,4 +1,4 @@
-# Architecture — VaultRAG Local
+# Architecture — CortexIndex Local
 
 ## High-level diagram
 

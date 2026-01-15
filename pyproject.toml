@@ -3,12 +3,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vaultrag"
+name = "cortexindex"
 version = "0.1.0"
 description = "Local-only vault indexer + hybrid retrieval with MCP interface (skeleton)."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{name="VaultRAG Local (spec)"}]
+authors = [{name="CortexIndex Local (spec)"}]
 dependencies = [
   "typer>=0.12",
   "python-frontmatter>=1.1.0",
@@ -32,4 +32,4 @@ dev = [
 ]
 
 [project.scripts]
-vaultrag = "vaultrag.cli:app"
+cortex = "cortexindex.cli:app"

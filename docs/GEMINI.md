@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project, `vaultrag`, is a local-only vault indexer and retriever. It's designed to be a Python package that can be used to index a local vault of files (like an Obsidian vault) and then retrieve information from it using a hybrid search (vector and lexical). The project is intended to be used by coding agents like Gemini, Claude, or Codex.
+This project, `cortexindex`, is a local-only vault indexer and retriever. It's designed to be a Python package that can be used to index a local vault of files (like an Obsidian vault) and then retrieve information from it using a hybrid search (vector and lexical). The project is intended to be used by coding agents like Gemini, Claude, or Codex.
 
 The project is built with Python and uses the following key technologies:
 
@@ -34,19 +34,19 @@ To get started with this project, you need to have Python 3.11+ installed.
 3.  **Initialize the configuration:**
 
     ```bash
-    vaultrag init --vault "/path/to/your/vault" --index "~/.vaultrag/indexes/myvault"
+    cortex init --vault "/path/to/your/vault" --index "~/.cortex/indexes/myvault"
     ```
 
 4.  **Scan and index your vault:**
 
     ```bash
-    vaultrag scan --full
+    cortex scan --full
     ```
 
 5.  **Query your vault:**
 
     ```bash
-    vaultrag query "your query"
+    cortex query "your query"
     ```
 
 ### Running Tests

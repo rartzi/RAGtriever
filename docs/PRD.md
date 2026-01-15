@@ -1,7 +1,7 @@
-# PRD — VaultRAG Local
+# PRD — CortexIndex Local
 
 ## 1) Product summary
-**VaultRAG Local** is a local-first daemon + library that continuously indexes a changing filesystem “vault” (Obsidian-compatible Markdown + attachments) into a hybrid retrieval system (semantic + keyword + link-graph) and serves results to coding agents via MCP and Python.
+**CortexIndex Local** is a local-first daemon + library that continuously indexes a changing filesystem "vault" (Obsidian-compatible Markdown + attachments) into a hybrid retrieval system (semantic + keyword + link-graph) and serves results to coding agents via MCP and Python.
 
 ## 2) Goals
 - Local-only (no outbound data by default)
