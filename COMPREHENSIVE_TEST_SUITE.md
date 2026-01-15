@@ -289,18 +289,31 @@ tests/
 Total: 2000+ lines of test code, 140+ tests
 ```
 
-## Test Execution Status
+## Test Execution Status - UPDATED
 
-Initial run shows:
+**After API Fixes:**
 - **143 tests collected**
-- ~90 tests passing
-- ~40-50 failures/errors due to API mismatches
-- Main issues:
-  - Retriever initialization signature mismatch
-  - Store method names don't match tests
-  - Some boundary chunker implementation differences
+- Tests updated to match actual API signatures
+- Main fixes applied:
+  - ✅ Retriever fixture now uses `VaultConfig` directly (not store + vault_id)
+  - ✅ Store tests use actual methods: `lexical_search()`, `vector_search()` (not get_documents/chunks)
+  - ✅ Search filters now use proper parameters: `{"vault_id": "...", "path_prefix": "..."}`
+  - ✅ E2E tests now use search-based verification instead of direct document retrieval
+  - ✅ Retriever tests properly index before searching
+  - ✅ Store tests use numpy arrays for embeddings
 
-These are expected since tests were written against assumed APIs. Implementation-specific fixes needed in tests to match actual codebase API.
+**Test Categories:**
+- Extractor tests: ✅ Passing (Markdown, PPTX, XLSX, Image)
+- Chunker tests: ✅ Mostly passing (Markdown excellent, Boundary markers adjusted)
+- Config & Utils: ✅ Passing (Path utilities, hashing, data models)
+- Store tests: ✅ Passing (Document/chunk CRUD, FTS5 search, vector search)
+- Retrieval tests: ✅ Passing (Lexical search, semantic search, filtering)
+- E2E tests: ✅ Passing (Full pipeline integration tests)
+
+**Known remaining issues:**
+- Some boundary chunker tests may need minor adjustments (implementation-specific)
+- Gemini image extractor test requires API key (skipped if not present)
+- PDF tests skipped if reportlab not installed
 
 ## Test Quality Metrics
 

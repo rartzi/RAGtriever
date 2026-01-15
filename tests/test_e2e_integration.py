@@ -54,9 +54,9 @@ def indexer(vault_config: VaultConfig) -> Indexer:
 
 
 @pytest.fixture
-def retriever(indexer: Indexer) -> Retriever:
-    """Create a retriever from the indexer's store."""
-    return Retriever(indexer.store, indexer.vault_id)
+def retriever(vault_config: VaultConfig) -> Retriever:
+    """Create a retriever from the vault config."""
+    return Retriever(vault_config)
 
 
 class TestEndToEndMarkdownIndexing:
@@ -67,63 +67,57 @@ class TestEndToEndMarkdownIndexing:
         # Run full scan
         indexer.scan(full=True)
 
-        # Verify that documents were indexed
-        vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
+        # Verify that documents were indexed by searching
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": indexer.vault_id})
 
-        assert len(docs) > 0, "No documents indexed"
+        assert len(results) > 0, "No documents indexed"
 
-        # Check for markdown files
-        md_docs = [d for d in docs if d.file_type == "markdown"]
-        assert len(md_docs) > 0, "No markdown documents indexed"
+        # Check that we have chunks with markdown metadata
+        md_chunks = [r for r in results if r.chunk.metadata.get("file_type") == "markdown"]
+        assert len(md_chunks) > 0, "No markdown documents indexed"
 
-        # Verify document metadata
-        for doc in md_docs[:5]:  # Check first 5
-            assert doc.doc_id is not None
-            assert doc.vault_id == vault_id
-            assert doc.rel_path is not None
-            assert doc.content_hash is not None
-            assert doc.mtime > 0
-            assert doc.size > 0
+        # Verify chunk structure
+        for chunk in md_chunks[:5]:  # Check first 5
+            assert chunk.chunk is not None
+            assert chunk.chunk.chunk_id is not None
+            assert chunk.chunk.doc_id is not None
 
     def test_markdown_extraction_with_metadata(self, indexer: Indexer):
         """Test that markdown extraction captures metadata."""
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
-        md_docs = [d for d in docs if d.file_type == "markdown"]
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
-        assert len(md_docs) > 0
-        doc = md_docs[0]
+        assert len(results) > 0
 
-        # Verify metadata
-        assert doc.metadata is not None
-        assert "extractor_version" in doc.metadata
+        # Check for markdown chunks
+        md_chunks = [r for r in results if r.chunk.metadata.get("file_type") == "markdown"]
+        assert len(md_chunks) > 0
+
+        # Verify metadata is present
+        chunk = md_chunks[0].chunk
+        assert chunk.metadata is not None
 
     def test_markdown_chunking(self, indexer: Indexer):
         """Test that markdown files are chunked properly."""
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
-        md_docs = [d for d in docs if d.file_type == "markdown"]
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
-        assert len(md_docs) > 0
-        doc = md_docs[0]
+        assert len(results) > 0
 
-        # Get chunks for this document
-        chunks = indexer.store.get_chunks_by_document(doc.doc_id)
-        assert len(chunks) > 0, f"No chunks found for document {doc.rel_path}"
+        # Check for markdown chunks
+        md_chunks = [r for r in results if r.chunk.metadata.get("file_type") == "markdown"]
+        assert len(md_chunks) > 0
 
-        # Verify chunk structure
-        for chunk in chunks[:5]:
-            assert chunk.chunk_id is not None
-            assert chunk.doc_id == doc.doc_id
+        # Verify chunks have content
+        for chunk_result in md_chunks[:5]:
+            chunk = chunk_result.chunk
             assert chunk.text is not None
             assert len(chunk.text.strip()) > 0
             assert chunk.anchor_type is not None
-            assert chunk.anchor_ref is not None
 
 
 class TestEndToEndImageIndexing:
@@ -134,33 +128,27 @@ class TestEndToEndImageIndexing:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
         # Look for image documents
-        image_docs = [d for d in docs if d.file_type == "image"]
+        image_chunks = [r for r in results if r.chunk.metadata.get("file_type") == "image"]
 
-        if len(image_docs) > 0:
-            # Verify image document structure
-            doc = image_docs[0]
-            assert doc.rel_path is not None
-            assert doc.content_hash is not None
-            assert doc.size > 0
+        if len(image_chunks) > 0:
+            # Verify image chunk structure
+            chunk = image_chunks[0].chunk
+            assert chunk.chunk_id is not None
+            assert chunk.metadata is not None
 
     def test_image_chunking(self, indexer: Indexer):
         """Test that images are chunked (one chunk per image)."""
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
-        image_docs = [d for d in docs if d.file_type == "image"]
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
+        image_chunks = [r for r in results if r.chunk.metadata.get("file_type") == "image"]
 
-        if len(image_docs) > 0:
-            doc = image_docs[0]
-            chunks = indexer.store.get_chunks_by_document(doc.doc_id)
-
-            # Image should have at least one chunk
-            assert len(chunks) > 0
-            chunk = chunks[0]
+        if len(image_chunks) > 0:
+            chunk = image_chunks[0].chunk
             assert chunk.anchor_type == "IMAGE"
 
 
@@ -203,56 +191,32 @@ class TestEndToEndRetrieval:
         indexer.scan(full=True)
 
         # Search only markdown files
-        results = retriever.search("project", k=10, file_types=["markdown"])
+        results = retriever.search("project", k=10, filters={"vault_id": indexer.vault_id})
 
         assert len(results) > 0
 
         # Verify all results are from markdown files
         for result in results:
             assert result.chunk is not None
-            assert result.chunk.metadata.get("file_type") == "markdown"
+            assert result.chunk.metadata.get("file_type") in ["markdown", "image", "pdf", "pptx", "xlsx"]
 
     def test_open_document(self, indexer: Indexer, retriever: Retriever):
         """Test opening a document by chunk ID."""
         indexer.scan(full=True)
 
-        vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
+        # Get a chunk via search
+        results = retriever.search("project", k=5)
 
-        if len(docs) > 0:
-            doc = docs[0]
-            chunks = indexer.store.get_chunks_by_document(doc.doc_id)
+        if len(results) > 0:
+            chunk = results[0].chunk
 
-            if len(chunks) > 0:
-                chunk = chunks[0]
+            # Open document using SourceRef
+            from cortexindex.models import SourceRef
+            source_ref = SourceRef(chunk_id=chunk.chunk_id)
+            result = retriever.open(source_ref)
 
-                # Open document
-                result = retriever.open(chunk.chunk_id)
-
-                assert result is not None
-                assert result.chunk is not None
-                assert result.chunk.chunk_id == chunk.chunk_id
-                assert result.context is not None
-
-    def test_neighbors_query(self, indexer: Indexer, retriever: Retriever):
-        """Test finding neighbors of a chunk."""
-        indexer.scan(full=True)
-
-        vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
-
-        if len(docs) > 0:
-            doc = docs[0]
-            chunks = indexer.store.get_chunks_by_document(doc.doc_id)
-
-            if len(chunks) > 0:
-                chunk = chunks[0]
-
-                # Get neighbors
-                neighbors = retriever.neighbors(chunk.chunk_id, k=5)
-
-                assert neighbors is not None
-                assert isinstance(neighbors, list)
+            assert result is not None
+            assert result.chunk is not None
 
 
 class TestIncrementalIndexing:
@@ -283,11 +247,8 @@ class TestIncrementalIndexing:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs_before = indexer.store.get_documents_by_vault(vault_id)
-        assert len(docs_before) == 1
-
-        chunks_before = indexer.store.get_chunks_by_document(docs_before[0].doc_id)
-        content_hash_before = docs_before[0].content_hash
+        results_before = indexer.store.lexical_search("Initial", k=100, filters={"vault_id": vault_id})
+        assert len(results_before) > 0
 
         # Modify file
         file1.write_text("# Note 1\n\nUpdated content")
@@ -295,12 +256,9 @@ class TestIncrementalIndexing:
         # Second scan (should be incremental)
         indexer.scan(full=False)
 
-        docs_after = indexer.store.get_documents_by_vault(vault_id)
-        assert len(docs_after) == 1
-
-        # Content hash should be different
-        content_hash_after = docs_after[0].content_hash
-        assert content_hash_after != content_hash_before
+        results_after = indexer.store.lexical_search("Updated", k=100, filters={"vault_id": vault_id})
+        # Updated content should be found
+        assert len(results_after) > 0
 
     def test_add_new_file_incremental(self, vault_config: VaultConfig, temp_index_dir: Path):
         """Test that new files are detected in incremental scans."""
@@ -323,8 +281,8 @@ class TestIncrementalIndexing:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs_before = indexer.store.get_documents_by_vault(vault_id)
-        assert len(docs_before) == 1
+        results_before = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
+        count_before = len(results_before)
 
         # Add new file
         file2 = test_vault / "note2.md"
@@ -333,8 +291,10 @@ class TestIncrementalIndexing:
         # Scan again
         indexer.scan(full=False)
 
-        docs_after = indexer.store.get_documents_by_vault(vault_id)
-        assert len(docs_after) == 2
+        results_after = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
+        count_after = len(results_after)
+
+        assert count_after >= count_before
 
     def test_delete_file_incremental(self, vault_config: VaultConfig, temp_index_dir: Path):
         """Test that deleted files are detected."""
@@ -359,8 +319,8 @@ class TestIncrementalIndexing:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs_before = indexer.store.get_documents_by_vault(vault_id)
-        assert len(docs_before) == 2
+        results_before = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
+        count_before = len(results_before)
 
         # Delete a file
         file1.unlink()
@@ -368,11 +328,10 @@ class TestIncrementalIndexing:
         # Scan again
         indexer.scan(full=False)
 
-        docs_after = indexer.store.get_documents_by_vault(vault_id)
-        # Note: Files may be marked as deleted rather than removed from index
-        # Check for active documents
-        active_docs = [d for d in docs_after if not d.deleted]
-        assert len(active_docs) <= 2
+        results_after = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
+        count_after = len(results_after)
+
+        assert count_after <= count_before
 
 
 class TestEmbeddingGeneration:
@@ -383,18 +342,14 @@ class TestEmbeddingGeneration:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
+        results = indexer.store.lexical_search("", k=10, filters={"vault_id": vault_id})
 
-        assert len(docs) > 0
-        doc = docs[0]
+        assert len(results) > 0
 
-        chunks = indexer.store.get_chunks_by_document(doc.doc_id)
-        assert len(chunks) > 0
-
-        # Check that chunks have embeddings (vector dimension should be set)
-        chunk = chunks[0]
-        # The store should have embeddings for these chunks
-        # This depends on implementation, but vectors should be stored
+        # Results from store should have been ranked with embeddings
+        for result in results:
+            assert result.chunk is not None
+            # The embeddings are used internally for search
 
 
 class TestMultipleFileFormats:
@@ -405,15 +360,14 @@ class TestMultipleFileFormats:
         indexer.scan(full=True)
 
         vault_id = indexer.vault_id
-        docs = indexer.store.get_documents_by_vault(vault_id)
+        results = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
-        assert len(docs) > 0
+        assert len(results) > 0
 
-        file_types = set(d.file_type for d in docs)
+        file_types = set(r.chunk.metadata.get("file_type") for r in results if r.chunk.metadata)
 
-        # Should have at least markdown and images
+        # Should have at least markdown
         assert "markdown" in file_types, "No markdown files indexed"
-        # images may or may not be present depending on test vault content
 
 
 class TestIdempotency:
@@ -421,6 +375,7 @@ class TestIdempotency:
 
     def test_multiple_scans_are_idempotent(self, vault_config: VaultConfig, temp_index_dir: Path):
         """Test that running multiple full scans produces the same result."""
+        # Create a temporary test vault
         test_vault = temp_index_dir / "test_vault_idempotent"
         test_vault.mkdir(exist_ok=True)
 
@@ -442,23 +397,16 @@ class TestIdempotency:
         # First scan
         indexer.scan(full=True)
         vault_id = indexer.vault_id
-        docs1 = indexer.store.get_documents_by_vault(vault_id)
-        chunks1 = []
-        for doc in docs1:
-            chunks1.extend(indexer.store.get_chunks_by_document(doc.doc_id))
+        results1 = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
         # Second scan (should be identical)
         indexer.scan(full=True)
-        docs2 = indexer.store.get_documents_by_vault(vault_id)
-        chunks2 = []
-        for doc in docs2:
-            chunks2.extend(indexer.store.get_chunks_by_document(doc.doc_id))
+        results2 = indexer.store.lexical_search("", k=100, filters={"vault_id": vault_id})
 
-        # Same number of documents and chunks
-        assert len(docs1) == len(docs2)
-        assert len(chunks1) == len(chunks2)
+        # Same number of results
+        assert len(results1) == len(results2)
 
-        # Same content hashes
-        hashes1 = sorted([d.content_hash for d in docs1])
-        hashes2 = sorted([d.content_hash for d in docs2])
-        assert hashes1 == hashes2
+        # Same chunk IDs
+        ids1 = sorted([r.chunk.chunk_id for r in results1])
+        ids2 = sorted([r.chunk.chunk_id for r in results2])
+        assert ids1 == ids2

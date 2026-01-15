@@ -12,9 +12,8 @@ from cortexindex.retrieval.retriever import Retriever
 
 
 @pytest.fixture
-def indexer_with_data(tmp_path: Path) -> Indexer:
-    """Create an indexer with test data."""
-    # Create test vault
+def vault_config(tmp_path: Path) -> VaultConfig:
+    """Create vault config with test data."""
     vault = tmp_path / "test_vault"
     vault.mkdir()
 
@@ -73,8 +72,8 @@ Including code review and testing strategies.
 """
     )
 
-    # Create indexer
-    config = VaultConfig(
+    # Create and return config
+    return VaultConfig(
         vault_root=vault,
         index_dir=tmp_path / "index",
         embedding_provider="sentence_transformers",
@@ -83,15 +82,19 @@ Including code review and testing strategies.
         image_analysis_provider="off",
     )
 
-    indexer = Indexer(config)
+
+@pytest.fixture
+def indexer_with_data(vault_config: VaultConfig) -> Indexer:
+    """Create an indexer with test data."""
+    indexer = Indexer(vault_config)
     indexer.scan(full=True)
     return indexer
 
 
 @pytest.fixture
-def retriever(indexer_with_data: Indexer) -> Retriever:
-    """Create a retriever from indexed data."""
-    return Retriever(indexer_with_data.store, indexer_with_data.vault_id)
+def retriever(vault_config: VaultConfig) -> Retriever:
+    """Create a retriever from vault config."""
+    return Retriever(vault_config)
 
 
 class TestLexicalSearch:
