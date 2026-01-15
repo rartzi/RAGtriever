@@ -9,7 +9,7 @@ import tempfile
 from ragtriever.config import VaultConfig
 from ragtriever.hashing import blake2b_hex, hash_file
 from ragtriever.paths import relpath
-from ragtriever.models import Document, Chunk, SearchResult
+from ragtriever.models import Document, Chunk, SearchResult, SourceRef
 
 
 class TestVaultConfig:
@@ -124,8 +124,8 @@ class TestHashing:
         # Should be hexadecimal
         assert isinstance(result, str)
         assert all(c in "0123456789abcdef" for c in result)
-        # Blake2b produces 64 hex characters for 32 bytes
-        assert len(result) == 128
+        # Blake2b produces 64 hex characters for 32 bytes (default digest_size)
+        assert len(result) == 64
 
     def test_blake2b_hex_can_truncate(self):
         """Test that hash can be truncated."""
@@ -261,14 +261,23 @@ class TestDataModels:
         )
 
         result = SearchResult(
-            chunk=chunk,
+            chunk_id=chunk.chunk_id,
             score=0.95,
-            context={"before": "context before", "after": "context after"},
+            snippet="test snippet",
+            source_ref=SourceRef(
+                vault_id=chunk.vault_id,
+                rel_path="test/file.md",
+                file_type="markdown",
+                anchor_type="chunk",
+                anchor_ref=chunk.chunk_id,
+                locator={}
+            ),
+            metadata={"before": "context before", "after": "context after"},
         )
 
-        assert result.chunk == chunk
+        assert result.chunk_id == chunk.chunk_id
         assert result.score == 0.95
-        assert "before" in result.context
+        assert "before" in result.metadata
 
     def test_document_with_no_metadata(self):
         """Test Document without metadata."""
