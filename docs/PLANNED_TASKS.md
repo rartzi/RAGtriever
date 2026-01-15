@@ -1,7 +1,7 @@
 # Tasks for coding agent (Codex / Claude Code / Gemini)
 
 ## Objective
-Implement CortexIndex Local as specified in docs/PRD.md with a working local-only indexer + retriever and MCP server.
+Implement RAGtriever Local as specified in docs/PRD.md with a working local-only indexer + retriever and MCP server.
 
 ## Priorities
 1) Markdown end-to-end MVP (scan, query, open) with citations

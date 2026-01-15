@@ -6,9 +6,9 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from cortexindex.config import VaultConfig
-from cortexindex.indexer.indexer import Indexer
-from cortexindex.retrieval.retriever import Retriever
+from ragtriever.config import VaultConfig
+from ragtriever.indexer.indexer import Indexer
+from ragtriever.retrieval.retriever import Retriever
 
 
 @pytest.fixture

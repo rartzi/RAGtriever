@@ -1,4 +1,4 @@
-# CortexIndex Comprehensive Test Suite - Report
+# RAGtriever Comprehensive Test Suite - Report
 
 **Generated:** January 15, 2026
 **Branch:** feature/comprehensive-test-suite
@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-A comprehensive test suite has been created for CortexIndex Local with **143 test cases** across **6 new test files** totaling **2000+ lines of code**.
+A comprehensive test suite has been created for RAGtriever Local with **143 test cases** across **6 new test files** totaling **2000+ lines of code**.
 
 ### Current Test Results
 ```
@@ -283,7 +283,7 @@ Total Test Cases: 143
 
 ## Commit History
 
-- `c1d6e40` - Add comprehensive test suite for CortexIndex (Initial commit)
+- `c1d6e40` - Add comprehensive test suite for RAGtriever (Initial commit)
 - `1da1b22` - Fix API mismatches in comprehensive test suite (API fixes)
 - `f854ace` - Fix remaining API mismatches in test suite (Additional fixes)
 
@@ -300,7 +300,7 @@ pytest tests/test_e2e_integration.py -v
 pytest tests/test_e2e_integration.py::TestEndToEndMarkdownIndexing -v
 
 # Run with coverage
-pytest tests/ --cov=src/cortexindex --cov-report=html
+pytest tests/ --cov=src/ragtriever --cov-report=html
 
 # Run only passing tests (skip known failures)
 pytest tests/ -v -k "not (test_search_finds_exact_match or test_lexical_search_basic)"
@@ -308,7 +308,7 @@ pytest tests/ -v -k "not (test_search_finds_exact_match or test_lexical_search_b
 
 ## Conclusion
 
-The comprehensive test suite provides excellent coverage of CortexIndex Local's functionality with **90 passing tests** (63% of all tests). The remaining 43 failures are primarily due to minor API format adjustments needed between the test assumptions and actual implementation, which are straightforward to fix.
+The comprehensive test suite provides excellent coverage of RAGtriever Local's functionality with **90 passing tests** (63% of all tests). The remaining 43 failures are primarily due to minor API format adjustments needed between the test assumptions and actual implementation, which are straightforward to fix.
 
 **Status: ✅ READY FOR INTEGRATION AND REFINEMENT**
 

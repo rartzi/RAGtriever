@@ -1,4 +1,4 @@
-# Architecture — CortexIndex Local
+# Architecture — RAGtriever Local
 
 ## High-level diagram
 

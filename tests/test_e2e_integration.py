@@ -11,9 +11,9 @@ import shutil
 from pathlib import Path
 from io import BytesIO
 
-from cortexindex.config import VaultConfig
-from cortexindex.indexer.indexer import Indexer
-from cortexindex.retrieval.retriever import Retriever
+from ragtriever.config import VaultConfig
+from ragtriever.indexer.indexer import Indexer
+from ragtriever.retrieval.retriever import Retriever
 
 
 @pytest.fixture
@@ -211,7 +211,7 @@ class TestEndToEndRetrieval:
             chunk = results[0].chunk
 
             # Open document using SourceRef
-            from cortexindex.models import SourceRef
+            from ragtriever.models import SourceRef
             source_ref = SourceRef(chunk_id=chunk.chunk_id)
             result = retriever.open(source_ref)
 

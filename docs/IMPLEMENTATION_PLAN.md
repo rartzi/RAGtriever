@@ -1,4 +1,4 @@
-# Implementation plan — CortexIndex Local
+# Implementation plan — RAGtriever Local
 
 ## Phase 1: Markdown MVP
 - Config + CLI skeleton

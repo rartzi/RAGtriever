@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project, `cortexindex`, is a local-only vault indexer and retriever. It's designed to be a Python package that can be used to index a local vault of files (like an Obsidian vault) and then retrieve information from it using a hybrid search (vector and lexical). The project is intended to be used by coding agents like Gemini, Claude, or Codex.
+This project, `ragtriever`, is a local-only vault indexer and retriever. It's designed to be a Python package that can be used to index a local vault of files (like an Obsidian vault) and then retrieve information from it using a hybrid search (vector and lexical). The project is intended to be used by coding agents like Gemini, Claude, or Codex.
 
 The project is built with Python and uses the following key technologies:
 
