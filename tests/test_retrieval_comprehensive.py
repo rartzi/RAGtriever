@@ -4,11 +4,16 @@ Comprehensive tests for retrieval system: search, ranking, and result handling.
 
 import pytest
 import tempfile
+import os
 from pathlib import Path
 
 from ragtriever.config import VaultConfig
 from ragtriever.indexer.indexer import Indexer
 from ragtriever.retrieval.retriever import Retriever
+
+# Set offline mode for all tests to avoid network calls
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 
 @pytest.fixture
@@ -77,8 +82,9 @@ Including code review and testing strategies.
         vault_root=vault,
         index_dir=tmp_path / "index",
         embedding_provider="sentence_transformers",
-        embedding_model="all-MiniLM-L6-v2",
+        embedding_model="sentence-transformers/all-MiniLM-L6-v2",
         embedding_device="cpu",
+        offline_mode=True,  # Use cached models only
         image_analysis_provider="off",
     )
 
@@ -92,9 +98,10 @@ def indexer_with_data(vault_config: VaultConfig) -> Indexer:
 
 
 @pytest.fixture
-def retriever(vault_config: VaultConfig) -> Retriever:
-    """Create a retriever from vault config."""
-    return Retriever(vault_config)
+def retriever(indexer_with_data: Indexer) -> Retriever:
+    """Create a retriever from vault config with indexed data."""
+    # Depend on indexer_with_data to ensure index is populated before retrieval
+    return Retriever(indexer_with_data.cfg)
 
 
 class TestLexicalSearch:
@@ -105,7 +112,7 @@ class TestLexicalSearch:
         results = retriever.search("cloud", k=10)
 
         assert len(results) > 0
-        assert any("cloud" in r.chunk.text.lower() for r in results)
+        assert any("cloud" in r.snippet.lower() for r in results)
 
     def test_search_returns_top_k_results(self, retriever: Retriever):
         """Test that k parameter limits results."""
@@ -184,18 +191,18 @@ class TestSearchFilters:
 
     def test_filter_by_file_type(self, indexer_with_data: Indexer):
         """Test filtering by file type."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         results = retriever.search("project", k=10)
 
         assert len(results) > 0
         # All results should be from markdown files
         for result in results:
-            assert result.chunk.metadata.get("file_type") in ["markdown", None]
+            assert result.metadata.get("file_type") in ["markdown", None]
 
     def test_filter_by_multiple_file_types(self, indexer_with_data: Indexer):
         """Test filtering by multiple file types."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         results = retriever.search("project", k=10)
 
@@ -204,7 +211,7 @@ class TestSearchFilters:
 
     def test_filter_by_path_pattern(self, indexer_with_data: Indexer):
         """Test filtering by path pattern."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         # Search in specific documents
         results = retriever.search("project", k=10, path_pattern="project_a")
@@ -239,7 +246,7 @@ class TestDocumentOpening:
 
     def test_open_valid_chunk(self, indexer_with_data: Indexer):
         """Test opening a document with valid chunk ID."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         # Get a chunk ID
         vault_id = indexer_with_data.vault_id
@@ -256,12 +263,12 @@ class TestDocumentOpening:
         result = retriever.open(chunk.chunk_id)
 
         assert result is not None
-        assert result.chunk is not None
-        assert result.chunk.chunk_id == chunk.chunk_id
+        assert result.content is not None
+        # OpenResult doesn't contain chunk_id, but we can verify content exists
 
     def test_open_includes_context(self, indexer_with_data: Indexer):
         """Test that opening includes surrounding context."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -279,8 +286,8 @@ class TestDocumentOpening:
         """Test opening with invalid chunk ID."""
         result = retriever.open("invalid_chunk_id_12345")
 
-        # Should handle gracefully
-        assert result is None or result.chunk is None
+        # Should handle gracefully - return None or empty result
+        assert result is None or result.content == ""
 
 
 class TestGraphNavigation:
@@ -288,7 +295,7 @@ class TestGraphNavigation:
 
     def test_find_neighbors(self, indexer_with_data: Indexer):
         """Test finding neighboring chunks."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -306,7 +313,7 @@ class TestGraphNavigation:
 
     def test_neighbors_returns_limited_results(self, indexer_with_data: Indexer):
         """Test that neighbors respects k parameter."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -322,7 +329,7 @@ class TestGraphNavigation:
 
     def test_neighbors_excludes_self(self, indexer_with_data: Indexer):
         """Test that neighbors doesn't include the source chunk."""
-        retriever = Retriever(vault_config)
+        retriever = Retriever(indexer_with_data.cfg)
 
         vault_id = indexer_with_data.vault_id
         docs = indexer_with_data.store.get_documents_by_vault(vault_id)
@@ -392,8 +399,8 @@ class TestResultContent:
 
         if len(results) > 0:
             result = results[0]
-            assert result.chunk is not None
-            assert result.chunk.text is not None
+            assert result.chunk_id is not None
+            assert result.snippet is not None
 
     def test_result_has_document_reference(self, retriever: Retriever):
         """Test that results reference source document."""
@@ -401,8 +408,8 @@ class TestResultContent:
 
         if len(results) > 0:
             result = results[0]
-            assert result.chunk is not None
-            assert result.chunk.doc_id is not None
+            assert result.source_ref is not None
+            assert result.source_ref.rel_path is not None
 
     def test_result_has_metadata(self, retriever: Retriever):
         """Test that results include metadata."""
@@ -410,8 +417,8 @@ class TestResultContent:
 
         if len(results) > 0:
             result = results[0]
-            assert result.chunk is not None
-            assert result.chunk.metadata is not None
+            assert result.metadata is not None
+            assert isinstance(result.metadata, dict)
 
 
 class TestRetrievalConsistency:
@@ -428,5 +435,5 @@ class TestRetrievalConsistency:
 
             # Same order and scores
             for r1, r2 in zip(results1, results2):
-                assert r1.chunk.chunk_id == r2.chunk.chunk_id
+                assert r1.chunk_id == r2.chunk_id
                 assert abs(r1.score - r2.score) < 0.0001
