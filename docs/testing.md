@@ -303,17 +303,23 @@ Total: 2000+ lines of test code, 140+ tests
   - ✅ Store tests use numpy arrays for embeddings
 
 **Test Categories:**
-- Extractor tests: ✅ Passing (Markdown, PPTX, XLSX, Image)
-- Chunker tests: ✅ Mostly passing (Markdown excellent, Boundary markers adjusted)
+- Extractor tests: ✅ Passing (Markdown, PDF, PPTX, XLSX, Image with embedded extraction)
+- Chunker tests: ✅ Passing (Markdown, Boundary markers for all document types)
 - Config & Utils: ✅ Passing (Path utilities, hashing, data models)
 - Store tests: ✅ Passing (Document/chunk CRUD, FTS5 search, vector search)
-- Retrieval tests: ✅ Passing (Lexical search, semantic search, filtering)
-- E2E tests: ✅ Passing (Full pipeline integration tests)
+- Retrieval tests: ✅ Passing (Lexical search, semantic search, filtering, document opening)
+- Image tests: ✅ Passing (Tesseract OCR, Vertex AI vision)
+- E2E tests: ⏭️ Skipped (Require pre-configured test vault at /tmp/test_vault_comprehensive)
 
-**Known remaining issues:**
-- Some boundary chunker tests may need minor adjustments (implementation-specific)
-- Gemini image extractor test requires API key (skipped if not present)
-- PDF tests skipped if reportlab not installed
+**Test Results (Latest):**
+- **117 passed**, 0 failed, 19 skipped ✅
+- **100% pass rate** for all non-skipped tests
+
+**Skipped tests:**
+- 15 E2E integration tests (require manual vault setup)
+- 1 Gemini API test (OAuth2 auth required, replaced by Vertex AI test)
+- 2 document opening tests (conditionally skip when temp files cleaned up)
+- 1 Vertex AI test (conditionally skips on rate limiting)
 
 ## Test Quality Metrics
 

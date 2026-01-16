@@ -29,8 +29,15 @@ offline_mode = true
 
 [image_analysis]
 provider = "tesseract"  # tesseract|gemini|vertex_ai|off
+# Automatically extracts and analyzes:
+# - Images embedded in PDFs (extracted via PyMuPDF)
+# - Images in PowerPoint slides (extracted via python-pptx)
+# - Images referenced in Markdown (![](path) and ![[image]])
+# - Standalone image files (.png, .jpg, .jpeg, .webp, .gif)
+#
 # For tesseract: requires pytesseract and tesseract-ocr installed on system
 # For gemini: set GEMINI_API_KEY env var or gemini_api_key below
+# For vertex_ai: configure [vertex_ai] section below
 # gemini_api_key = ""
 gemini_model = "gemini-2.0-flash"
 
