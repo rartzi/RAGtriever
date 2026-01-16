@@ -22,6 +22,7 @@ pip install -e ".[dev]"
 # Linting and type checking
 ruff check src/ tests/
 ruff check --fix src/ tests/    # autofix
+ruff format src/ tests/         # formatting
 mypy src/
 
 # Testing
@@ -167,6 +168,12 @@ OSError: We couldn't connect to 'https://huggingface.co' to load the files
 find /path/to/vault -name "~$*"  # Check what matches
 ```
 
-## Implementation Priorities
+## Testing During Development
 
-See `PLANNED_TASKS.md` for current priorities and Definition of Done.
+To test changes against a real vault, create a `test_config.toml` (already in `.gitignore`):
+
+```bash
+ragtriever init --vault "/path/to/test/vault" --index "~/.ragtriever/indexes/test" --out test_config.toml
+ragtriever scan --config test_config.toml --full
+ragtriever query --config test_config.toml "test query"
+```
