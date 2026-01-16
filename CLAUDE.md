@@ -22,6 +22,7 @@ pip install -e ".[dev]"
 # Linting and type checking
 ruff check src/ tests/
 ruff check --fix src/ tests/    # autofix
+ruff format src/ tests/         # formatting
 mypy src/
 
 # Testing
@@ -118,6 +119,61 @@ Config loading performs security validations:
 - This affects the entire Python process
 - Config should be loaded once at application startup
 
-## Implementation Priorities
+## Common Issues and Troubleshooting
 
-See `PLANNED_TASKS.md` for current priorities and Definition of Done.
+### Office Temp Files
+**Problem:** PowerPoint/Word/Excel creates lock files (e.g., `~$document.pptx`) when documents are open. These are not valid Office files and will cause extraction errors.
+
+**Solution:**
+- Close all Office applications before scanning
+- The default ignore patterns now exclude these: `**/~$*`, `**/.~lock.*`
+
+**Error message:**
+```
+PackageNotFoundError: Package not found at '.../~$document.pptx'
+```
+
+### Offline Mode with Uncached Models
+**Problem:** Config has `offline_mode = true` but the embedding model isn't downloaded locally.
+
+**Solution:**
+1. First run with `offline_mode = false` to download the model:
+   ```toml
+   offline_mode = false
+   ```
+2. Run scan to download model
+3. Switch back to `offline_mode = true`
+4. Alternative: Use environment variable: `HF_OFFLINE_MODE=0 ragtriever scan`
+
+**Check cached models:**
+```bash
+ls ~/.cache/huggingface/hub/
+```
+
+**Error message:**
+```
+OSError: We couldn't connect to 'https://huggingface.co' to load the files
+```
+
+### Ignore Pattern Syntax
+**Problem:** Glob patterns not matching files correctly.
+
+**Correct patterns:**
+- `**/~$*` - Office temp files in any subdirectory (correct)
+- `**~$*` - Won't match properly (incorrect)
+- `**/.DS_Store` - macOS metadata files (correct)
+
+**Test patterns:**
+```bash
+find /path/to/vault -name "~$*"  # Check what matches
+```
+
+## Testing During Development
+
+To test changes against a real vault, create a `test_config.toml` (already in `.gitignore`):
+
+```bash
+ragtriever init --vault "/path/to/test/vault" --index "~/.ragtriever/indexes/test" --out test_config.toml
+ragtriever scan --config test_config.toml --full
+ragtriever query --config test_config.toml "test query"
+```

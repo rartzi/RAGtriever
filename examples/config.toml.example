@@ -1,9 +1,18 @@
 [vault]
 root = "/path/to/vault"
-ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
+ignore = [
+    ".git/**",
+    ".obsidian/cache/**",
+    "**/.DS_Store",
+    "**/~$*",           # Office temp files (Word, Excel, PowerPoint)
+    "**/.~lock.*",      # LibreOffice lock files
+    "**/~*.tmp",        # Generic temp files
+    "**/*.swp",         # Vim swap files
+    "**/*.bak"          # Backup files
+]
 
 [index]
-dir = "~/.cortexindex/indexes/myvault"
+dir = "~/.ragtriever/indexes/myvault"
 extractor_version = "v1"
 chunker_version = "v1"
 
@@ -14,6 +23,8 @@ batch_size = 32
 device = "cpu"  # cpu|cuda|mps
 # Set to true to use cached models only (no HuggingFace downloads)
 # Can also be controlled via HF_OFFLINE_MODE environment variable
+# IMPORTANT: Run once with offline_mode=false to download the model first,
+# then switch to offline_mode=true. Check cached models: ls ~/.cache/huggingface/hub/
 offline_mode = true
 
 [image_analysis]
