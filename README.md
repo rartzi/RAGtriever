@@ -32,10 +32,11 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 - **Hybrid Retrieval** - Combines vector embeddings with full-text search for superior results
 - **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
 - **Multi-Format Support** - Index Markdown, PDF, PPTX, XLSX, and images
-- **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR or Gemini Vision
+- **Embedded Image Extraction** - Automatically extracts and analyzes images from PDFs, PowerPoints, and Markdown
+- **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR, Gemini Vision, or Vertex AI
 - **Watch Mode** - Continuously index changes as you edit your vault
 - **MCP Server** - Expose your vault to AI agents via the Model Context Protocol
-- **100% Local** - Your data never leaves your machine
+- **100% Local** - Your data never leaves your machine (when using local embeddings + Tesseract)
 
 ---
 
@@ -93,8 +94,14 @@ model = "BAAI/bge-small-en-v1.5"
 device = "cpu"  # cpu | cuda | mps (Apple Silicon)
 
 [image_analysis]
-provider = "gemini"  # tesseract | gemini | off
-gemini_model = "gemini-2.0-flash"
+provider = "vertex_ai"  # tesseract | gemini | vertex_ai | off
+
+# For Vertex AI (recommended for production)
+[vertex_ai]
+project_id = "your-gcp-project"
+location = "global"
+credentials_file = "~/.config/gcloud/service-account-key.json"
+model = "gemini-2.0-flash-exp"
 
 [retrieval]
 top_k = 10
@@ -386,11 +393,17 @@ Vault (filesystem)
 | `[embeddings]` | `provider` | `sentence_transformers` or `ollama` | `sentence_transformers` |
 | `[embeddings]` | `model` | Embedding model name | `BAAI/bge-small-en-v1.5` |
 | `[embeddings]` | `device` | `cpu`, `cuda`, or `mps` | `cpu` |
-| `[image_analysis]` | `provider` | `tesseract`, `gemini`, or `off` | `tesseract` |
-| `[image_analysis]` | `gemini_model` | Gemini model for vision | `gemini-2.0-flash` |
+| `[embeddings]` | `offline_mode` | Use cached models only | `true` |
+| `[image_analysis]` | `provider` | `tesseract`, `gemini`, `vertex_ai`, or `off` | `tesseract` |
+| `[vertex_ai]` | `project_id` | Google Cloud project ID | - |
+| `[vertex_ai]` | `location` | GCP region | `us-central1` |
+| `[vertex_ai]` | `credentials_file` | Service account JSON path | - |
+| `[vertex_ai]` | `model` | Vertex AI model name | `gemini-2.0-flash-exp` |
 | `[retrieval]` | `top_k` | Default number of results | `10` |
 | `[retrieval]` | `k_vec` | Vector search candidates | `40` |
 | `[retrieval]` | `k_lex` | Lexical search candidates | `40` |
+
+**Note**: RAGtriever automatically extracts and analyzes images embedded in PDFs and PowerPoint presentations, as well as images referenced in Markdown files (`![](image.png)` and `![[image.png]]`). These are indexed as separate chunks linked to their parent documents.
 
 ---
 
