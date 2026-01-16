@@ -74,15 +74,19 @@ KEY FLOWS:
 ```
 vault/
 ├── notes/
-│   ├── project.md           # Markdown with [[wikilinks]]
+│   ├── project.md           # Markdown with [[wikilinks]] and ![](images)
 │   └── meeting-notes.md
 ├── attachments/
-│   ├── diagram.png          # Images for vision analysis
-│   └── whitepaper.pdf       # PDFs for text extraction
+│   ├── diagram.png          # Standalone images for vision analysis
+│   ├── whitepaper.pdf       # PDFs with embedded charts/diagrams
+│   └── presentation.pptx    # PowerPoint with slide images
 └── .obsidian/              # Ignored by default
 ```
 
-**Key Point:** RAGtriever reads from vault but never modifies it.
+**Key Points:**
+- RAGtriever reads from vault but never modifies it
+- Automatically extracts images embedded in PDFs and PowerPoints
+- Analyzes images referenced in Markdown (`![](path)` and `![[image]]`)
 
 ### 2. Indexer (Processing Pipeline)
 
@@ -93,16 +97,36 @@ vault/
 **Pipeline:**
 ```python
 for file in vault:
-    1. Extract  → text + metadata  (MarkdownExtractor, PDFExtractor, ImageExtractor)
-    2. Chunk    → segments          (MarkdownChunker, BoundaryMarkerChunker)
-    3. Embed    → vectors           (SentenceTransformers, Ollama)
-    4. Store    → SQLite + FTS5     (LibSqlStore)
+    1. Extract  → text + metadata + images  (MarkdownExtractor, PDFExtractor, ImageExtractor)
+       ├─ Text content from document
+       ├─ Metadata (frontmatter, page count, etc.)
+       └─ Embedded images (PDFs, PPTX) or image references (Markdown)
+
+    2. Chunk    → segments                  (MarkdownChunker, BoundaryMarkerChunker)
+       └─ Text chunks with anchor types
+
+    3. Process embedded images              (ImageExtractor via temp files)
+       ├─ Extract image bytes from PDFs (PyMuPDF)
+       ├─ Extract image bytes from PPTX slides (python-pptx)
+       ├─ Resolve Markdown image references
+       └─ Analyze with Tesseract/Gemini/Vertex AI
+
+    4. Embed    → vectors                   (SentenceTransformers, Ollama)
+       ├─ Text chunks → embeddings
+       └─ Image analysis text → embeddings
+
+    5. Store    → SQLite + FTS5             (LibSqlStore)
+       ├─ Text chunks linked to documents
+       └─ Image chunks linked to parent documents
 ```
 
 **Pluggable via Protocol classes:**
 - **Extractors:** One per file type (`.md`, `.pdf`, `.pptx`, `.png`)
+  - Extract text, metadata, and embedded images
+  - PDF/PPTX extractors store image metadata for post-processing
 - **Chunkers:** Split text semantically (by heading, by page, etc.)
 - **Embedders:** Generate vector representations (local or API)
+- **Image Analyzers:** Process images via Tesseract OCR, Gemini, or Vertex AI
 
 ### 3. Store (Persistence Layer)
 
@@ -115,8 +139,9 @@ for file in vault:
 -- File metadata
 documents(doc_id, vault_id, rel_path, file_type, mtime, content_hash, ...)
 
--- Semantic segments
+-- Semantic segments (text + image analysis)
 chunks(chunk_id, doc_id, anchor_type, anchor_ref, text, ...)
+-- anchor_type examples: md_heading, page, slide, pdf_image, pptx_image, markdown_image
 
 -- Full-text search index
 fts_chunks USING fts5(chunk_id, vault_id, rel_path, text)
@@ -347,12 +372,12 @@ for result in results:
       │ Files to process
       ▼
 ┌──────────────┐
-│ Extractor    │ MarkdownExtractor (frontmatter, wikilinks, tags)
-│ (by type)    │ PDFExtractor (pdfplumber)
-│              │ PPTXExtractor (python-pptx)
+│ Extractor    │ MarkdownExtractor (frontmatter, wikilinks, tags, image refs)
+│ (by type)    │ PDFExtractor (pdfplumber + image metadata)
+│              │ PPTXExtractor (python-pptx + image bytes)
 │              │ ImageExtractor (Tesseract/Gemini/Vertex AI)
 └─────┬────────┘
-      │ Extracted(text, metadata)
+      │ Extracted(text, metadata{embedded_images, image_references})
       ▼
 ┌──────────────┐
 │ Chunker      │ MarkdownChunker (by heading)
@@ -371,6 +396,18 @@ for result in results:
 │ (SQLite)     │ upsert_chunks()
 │              │ upsert_embeddings()
 │              │ Update FTS5 index
+└──────────────┘
+      │
+      ▼
+┌──────────────┐
+│ Process      │ For each embedded image:
+│ Embedded     │ 1. Extract bytes (PyMuPDF for PDF, direct for PPTX)
+│ Images       │ 2. Save to temp file
+│              │ 3. Pass to ImageExtractor (Tesseract/Gemini/Vertex AI)
+│              │ 4. Create separate chunk (anchor_type: pdf_image/pptx_image/markdown_image)
+│              │ 5. Link to parent document via doc_id
+│              │ 6. Embed image analysis text
+│              │ 7. Store as searchable chunk
 └──────────────┘
 ```
 
@@ -734,9 +771,16 @@ config.toml
     │
     ├── [image_analysis]
     │   └── provider ──────────▶ Extractor selection:
-    │       ├── tesseract ─────▶ TesseractImageExtractor
-    │       ├── gemini ────────▶ GeminiImageExtractor
-    │       └── vertex_ai ─────▶ VertexAIImageExtractor
+    │       ├── tesseract ─────▶ TesseractImageExtractor (local OCR)
+    │       ├── gemini ────────▶ GeminiImageExtractor (API, OAuth2)
+    │       └── vertex_ai ─────▶ VertexAIImageExtractor (service account)
+    │
+    │   Note: Automatically processes:
+    │   • Images embedded in PDFs (extracted via PyMuPDF)
+    │   • Images on PowerPoint slides (extracted via python-pptx)
+    │   • Images referenced in Markdown (![](path), ![[image]])
+    │   • Standalone image files (.png, .jpg, .jpeg, .webp, .gif)
+    │   Creates separate searchable chunks linked to parent documents.
     │
     ├── [vertex_ai]           (if provider = vertex_ai)
     │   ├── project_id
