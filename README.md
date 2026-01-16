@@ -415,10 +415,11 @@ mypy src/
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) - Complete system architecture and components
-- [Vertex AI Setup](docs/vertex_ai_setup.md) - Google Cloud Vertex AI configuration
+- [Architecture](docs/ARCHITECTURE.md) - Complete system architecture and components
+- [Testing Guide](docs/testing.md) - Comprehensive test suite documentation
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-- [Improvements](IMPROVEMENTS.md) - Planned enhancements (Gemini 3, error handling, etc.)
+- [Vertex AI Setup](docs/vertex_ai_setup.md) - Google Cloud Vertex AI configuration
+- [Improvements](IMPROVEMENTS.md) - Planned enhancements and roadmap
 - [RAGtrieval Skill](skills/RAGtrieval/skill.md) - Claude Code workflow skill
 - [MCP Tool Spec](docs/MCP_TOOL_SPEC.json) - MCP protocol specification
 
