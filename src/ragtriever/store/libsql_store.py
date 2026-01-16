@@ -147,6 +147,9 @@ class LibSqlStore:
         # FAISS setup
         self.use_faiss = use_faiss
         self.faiss_index: Optional[FAISSIndex] = None
+        self.faiss_index_type = faiss_index_type
+        self.faiss_nlist = faiss_nlist
+        self.faiss_nprobe = faiss_nprobe
 
         if use_faiss:
             if not FAISS_AVAILABLE:
@@ -154,37 +157,49 @@ class LibSqlStore:
                     "FAISS requested but not installed. Install with: pip install faiss-cpu or pip install faiss-gpu"
                 )
 
-            # Determine embedding dimension from existing embeddings
-            cursor = self._conn.execute("SELECT dims FROM embeddings LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                embedding_dim = row["dims"]
-                self.faiss_index = FAISSIndex(
-                    embedding_dim=embedding_dim,
-                    index_type=faiss_index_type,
-                    nlist=faiss_nlist,
-                    nprobe=faiss_nprobe,
-                    metric="cosine",
-                )
-
-                # Try to load existing FAISS index
-                faiss_path = self.db_path.parent / "faiss"
-                if (faiss_path / "faiss.index").exists():
-                    try:
-                        self.faiss_index.load(faiss_path)
-                        print(f"Loaded FAISS index with {self.faiss_index.size()} vectors")
-                    except Exception as e:
-                        print(f"Warning: Failed to load FAISS index: {e}")
-                        print("Building new FAISS index from embeddings...")
-                        self._build_faiss_index()
-                else:
-                    # Build index from existing embeddings
-                    print("Building FAISS index from embeddings...")
-                    self._build_faiss_index()
+            # FAISS index will be initialized lazily after tables exist
+            # See _initialize_faiss() called from init() or after first embedding
 
     def init(self) -> None:
         self._conn.executescript(SCHEMA_SQL)
         self._conn.commit()
+
+        # Initialize FAISS index if enabled
+        if self.use_faiss:
+            self._initialize_faiss()
+
+    def _initialize_faiss(self) -> None:
+        """Initialize FAISS index from existing embeddings (if any)."""
+        if not self.use_faiss or self.faiss_index is not None:
+            return
+
+        # Check if we have any embeddings to determine dimensions
+        cursor = self._conn.execute("SELECT dims FROM embeddings LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            embedding_dim = row["dims"]
+            self.faiss_index = FAISSIndex(
+                embedding_dim=embedding_dim,
+                index_type=self.faiss_index_type,
+                nlist=self.faiss_nlist,
+                nprobe=self.faiss_nprobe,
+                metric="cosine",
+            )
+
+            # Try to load existing FAISS index
+            faiss_path = self.db_path.parent / "faiss"
+            if (faiss_path / "faiss.index").exists():
+                try:
+                    self.faiss_index.load(faiss_path)
+                    print(f"Loaded FAISS index with {self.faiss_index.size()} vectors")
+                except Exception as e:
+                    print(f"Warning: Failed to load FAISS index: {e}")
+                    print("Building new FAISS index from embeddings...")
+                    self._build_faiss_index()
+            else:
+                # Build index from existing embeddings
+                print("Building FAISS index from embeddings...")
+                self._build_faiss_index()
 
     def _build_faiss_index(self) -> None:
         """Build FAISS index from all embeddings in database."""
@@ -279,20 +294,28 @@ class LibSqlStore:
             )
         self._conn.commit()
 
+        # Initialize FAISS index if needed (on first embeddings)
+        if self.use_faiss and self.faiss_index is None and len(chunk_ids) > 0:
+            # Get embedding dimension from first vector
+            embedding_dim = vectors.shape[1]
+            self.faiss_index = FAISSIndex(
+                embedding_dim=embedding_dim,
+                index_type=self.faiss_index_type,
+                nlist=self.faiss_nlist,
+                nprobe=self.faiss_nprobe,
+                metric="cosine",
+            )
+            print(f"Initialized FAISS {self.faiss_index_type} index (dim={embedding_dim})")
+
         # Add to FAISS index if enabled
-        if self.use_faiss and self.faiss_index:
-            # Initialize FAISS index if not yet created (first batch of embeddings)
-            if self.faiss_index.size() == 0 and len(chunk_ids) > 0:
-                # Index is empty, add these vectors
-                self.faiss_index.add(list(chunk_ids), vectors)
-            elif len(chunk_ids) > 0:
-                # Index exists, add new vectors
-                self.faiss_index.add(list(chunk_ids), vectors)
+        if self.use_faiss and self.faiss_index and len(chunk_ids) > 0:
+            self.faiss_index.add(list(chunk_ids), vectors)
 
             # Periodically save FAISS index (every 100 vectors)
             if self.faiss_index.size() % 100 == 0:
                 faiss_path = self.db_path.parent / "faiss"
                 self.faiss_index.save(faiss_path)
+                print(f"FAISS index saved ({self.faiss_index.size()} vectors)")
 
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         vault_id = filters.get("vault_id")

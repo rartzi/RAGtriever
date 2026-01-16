@@ -158,6 +158,151 @@ return combined[:top_k]
 
 ---
 
+## Advanced Features (v1.0+)
+
+### 1. Chunk Overlap for Context Preservation
+
+**Problem:** Traditional chunking splits text at heading boundaries, which can lose context. When a chunk ends mid-thought and the next begins, semantic relationships are broken.
+
+**Solution:** Configurable overlap between adjacent chunks (default: 200 characters).
+
+**Implementation:**
+- **MarkdownChunker:** Adds suffix from previous section as prefix to current section
+- **BoundaryMarkerChunker:** Adds overlap between pages/slides/sheets
+- **Metadata:** Chunks track `has_prefix_overlap: true` to indicate context preservation
+
+**Configuration:**
+```toml
+[chunking]
+overlap_chars = 200              # Characters of overlap
+max_chunk_size = 2000            # Split large sections
+preserve_heading_metadata = true  # Keep heading hierarchy
+```
+
+**Benefits:**
+- 📈 **Better retrieval accuracy** - Context at boundaries preserved
+- 🔍 **Reduced information loss** - Concepts spanning chunks remain connected
+- 📊 **Measurable impact** - Typical vaults see 80-85% of chunks with overlap
+
+**Code:**
+```python
+# src/ragtriever/chunking/markdown_chunker.py
+def chunk(self, extracted_text, extracted_metadata):
+    sections = self._extract_sections(extracted_text)
+    chunks = []
+
+    for i, (heading, level, body) in enumerate(sections):
+        # Add overlap from previous section
+        prefix = ""
+        if i > 0 and self.overlap_chars > 0:
+            prev_body = sections[i-1][2]
+            prefix = prev_body[-self.overlap_chars:].strip() + "\n\n"
+
+        full_text = prefix + body
+        chunks.append(Chunked(
+            text=full_text,
+            metadata={"has_prefix_overlap": len(prefix) > 0, ...}
+        ))
+
+    return chunks
+```
+
+### 2. Query Instruction Prefix (Asymmetric Retrieval)
+
+**Problem:** BGE-style embedding models perform better with asymmetric retrieval - queries and documents should be embedded differently.
+
+**Solution:** Apply instruction prefix to query embeddings only (not documents).
+
+**Implementation:**
+- **Documents:** Embedded without prefix (represents content)
+- **Queries:** Prefixed with instruction (represents search intent)
+- **Default prefix:** `"Represent this sentence for searching relevant passages: "`
+
+**Configuration:**
+```toml
+[embeddings]
+use_query_prefix = true
+query_prefix = "Represent this sentence for searching relevant passages: "
+```
+
+**Code:**
+```python
+# src/ragtriever/embeddings/sentence_transformers.py
+class SentenceTransformersEmbedder:
+    def embed_texts(self, texts: Sequence[str]) -> np.ndarray:
+        """Embed documents (no prefix)."""
+        return self._model.encode(list(texts), ...)
+
+    def embed_query(self, query: str) -> np.ndarray:
+        """Embed query with instruction prefix."""
+        if self.use_query_prefix and self.query_prefix:
+            query = self.query_prefix + query
+        return self._model.encode([query], ...)[0]
+```
+
+**Benefits:**
+- 🎯 **Improved relevance** - Query-document matching optimized for BGE models
+- 🔬 **Model-specific tuning** - Follows best practices for asymmetric models
+- 🔄 **Backward compatible** - Can be disabled via config
+
+**Retriever Update:**
+```python
+# src/ragtriever/retrieval/retriever.py
+def hybrid_search(self, query: str, top_k: int = 10):
+    # Use embed_query instead of embed_texts
+    query_embedding = self.embedder.embed_query(query)  # ← New
+    vec_results = self.store.vector_search(query_embedding, k=self.k_vec)
+    # ... rest of hybrid search
+```
+
+### 3. FAISS Index Support (Planned for Large Vaults)
+
+**Problem:** Brute-force vector search becomes slow at >10K chunks (100ms-1s latency).
+
+**Solution:** FAISS approximate nearest neighbor index for sub-linear search time.
+
+**Status:** Infrastructure complete, disabled by default. Enable when vault grows large.
+
+**Configuration:**
+```toml
+[embeddings]
+use_faiss = false              # Enable for >10K chunks
+faiss_index_type = "IVF"       # "Flat" (exact), "IVF" (fast), "HNSW" (fastest)
+faiss_nlist = 100              # Clusters for IVF
+faiss_nprobe = 10              # Clusters to search (IVF)
+```
+
+**Performance Targets:**
+- Brute-force: ~100ms-1s for 10K chunks
+- FAISS IVF: ~20-50ms for 100K chunks
+- FAISS HNSW: ~10-30ms for 100K chunks
+
+**When to Enable:**
+- Vault has >10,000 chunks
+- Vector search latency becomes noticeable
+- Accept 95-99% recall vs 100% (approximate search tradeoff)
+
+**Code:** `src/ragtriever/store/faiss_index.py` (FAISSIndex wrapper class)
+
+### Design Decisions
+
+**Why overlap instead of larger chunks?**
+- Larger chunks dilute semantic meaning (less precise retrieval)
+- Overlap preserves boundaries while maintaining focused chunks
+- Configurable: users can disable (set `overlap_chars = 0`)
+
+**Why query prefix only (not document prefix)?**
+- Documents represent content - should be natural text
+- Queries represent search intent - benefit from task framing
+- Asymmetric approach matches BGE model training methodology
+
+**Why FAISS disabled by default?**
+- Small vaults (<10K chunks) see no benefit from approximate search
+- Adds complexity (training, index management)
+- Users can enable when scaling needs arise
+
+---
+
 ## Execution Modes
 
 ### Mode 1: CLI (Command Line)

@@ -14,7 +14,7 @@ ignore = [
 [index]
 dir = "~/.ragtriever/indexes/myvault"
 extractor_version = "v1"
-chunker_version = "v1"
+chunker_version = "v2"  # v2: adds chunk overlap support
 
 [chunking]
 # Overlap between adjacent chunks (in characters) for context preservation

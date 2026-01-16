@@ -30,11 +30,14 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 ## Features
 
 - **Hybrid Retrieval** - Combines vector embeddings with full-text search for superior results
+- **Chunk Overlap (v1.0+)** - Context preservation with configurable 200-char overlap between chunks
+- **Query Instruction Prefix (v1.0+)** - Asymmetric retrieval for better BGE model performance
 - **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
 - **Multi-Format Support** - Index Markdown, PDF, PPTX, XLSX, and images
 - **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR or Gemini Vision
 - **Watch Mode** - Continuously index changes as you edit your vault
 - **MCP Server** - Expose your vault to AI agents via the Model Context Protocol
+- **FAISS Scaling** - Optional approximate nearest neighbor search for large vaults (10K+ chunks)
 - **100% Local** - Your data never leaves your machine
 
 ---
