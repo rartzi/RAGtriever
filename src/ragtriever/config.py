@@ -33,12 +33,19 @@ class VaultConfig:
     extractor_version: str = "v1"
     chunker_version: str = "v1"
 
+    # Chunking
+    overlap_chars: int = 200
+    max_chunk_size: int = 2000
+    preserve_heading_metadata: bool = True
+
     # Embeddings
     embedding_provider: str = "sentence_transformers"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_batch_size: int = 32
     embedding_device: str = "cpu"  # cpu|cuda|mps
     offline_mode: bool = True  # Set HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE
+    use_query_prefix: bool = True  # Asymmetric retrieval (BGE pattern)
+    query_prefix: str = "Represent this sentence for searching relevant passages: "
 
     # Image analysis
     image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|off
@@ -65,6 +72,7 @@ class VaultConfig:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
         vault = data.get("vault", {})
         index = data.get("index", {})
+        chunking = data.get("chunking", {})
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
         vertex = data.get("vertex_ai", {})
@@ -126,17 +134,32 @@ class VaultConfig:
             os.environ.setdefault("HF_HUB_OFFLINE", "1")
             os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+        # Parse and validate chunking parameters
+        overlap_chars = int(chunking.get("overlap_chars", 200))
+        max_chunk_size = int(chunking.get("max_chunk_size", 2000))
+        preserve_heading_metadata = bool(chunking.get("preserve_heading_metadata", True))
+
+        if overlap_chars < 0 or overlap_chars > 5000:
+            raise ValueError(f"Invalid overlap_chars: {overlap_chars}. Must be between 0 and 5000.")
+        if max_chunk_size < 100 or max_chunk_size > 50000:
+            raise ValueError(f"Invalid max_chunk_size: {max_chunk_size}. Must be between 100 and 50000.")
+
         return VaultConfig(
             vault_root=vault_root,
             index_dir=index_dir,
             ignore=list(vault.get("ignore", [])),
             extractor_version=index.get("extractor_version", "v1"),
             chunker_version=index.get("chunker_version", "v1"),
+            overlap_chars=overlap_chars,
+            max_chunk_size=max_chunk_size,
+            preserve_heading_metadata=preserve_heading_metadata,
             embedding_provider=emb.get("provider", "sentence_transformers"),
             embedding_model=emb.get("model", "BAAI/bge-small-en-v1.5"),
             embedding_batch_size=batch_size,
             embedding_device=device,
             offline_mode=offline_mode,
+            use_query_prefix=bool(emb.get("use_query_prefix", True)),
+            query_prefix=emb.get("query_prefix", "Represent this sentence for searching relevant passages: "),
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
