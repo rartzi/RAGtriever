@@ -16,35 +16,43 @@ Complete system architecture explaining all components and how they interact.
 
 RAGtriever is a **local-first hybrid retrieval system** for Obsidian-compatible vaults.
 
+### High-Level Architecture (Bidirectional)
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        RAGtriever                           │
-│                                                             │
-│  ┌──────────────┐      ┌──────────────┐   ┌─────────────┐ │
-│  │   Vault      │──────▶│   Indexer    │──▶│   Store     │ │
-│  │ (Filesystem) │      │  (Pipeline)  │   │  (SQLite)   │ │
-│  └──────────────┘      └──────────────┘   └─────────────┘ │
-│         │                      │                   │        │
-│         │                      ▼                   ▼        │
-│         │              ┌──────────────┐   ┌─────────────┐  │
-│         │              │  Embeddings  │   │  FTS5 Index │  │
-│         │              │   (Vectors)  │   │  (Lexical)  │  │
-│         │              └──────────────┘   └─────────────┘  │
-│         │                      │                   │        │
-│         │                      └───────┬───────────┘        │
-│         │                              ▼                    │
-│         │                      ┌──────────────┐            │
-│         │                      │  Retriever   │            │
-│         │                      │  (Hybrid)    │            │
-│         │                      └──────────────┘            │
-│         │                              │                    │
-│         │              ┌───────────────┼───────────────┐   │
-│         │              ▼               ▼               ▼   │
-│         │         ┌─────────┐   ┌──────────┐   ┌────────┐│
-│         └────────▶│   CLI   │   │  Python  │   │  MCP   ││
-│                   │         │   │   API    │   │ Server ││
-│                   └─────────┘   └──────────┘   └────────┘│
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                           RAGtriever                                │
+│                                                                     │
+│  ┌──────────────┐      ┌──────────────┐      ┌─────────────────┐  │
+│  │   Vault      │──────▶│   Indexer    │─────▶│   Store         │  │
+│  │ (Filesystem) │      │  (Pipeline)  │      │   (SQLite)      │  │
+│  │ Source of    │      │  Extract     │      │  ┌────────────┐ │  │
+│  │ Truth        │      │  Chunk       │      │  │ documents  │ │  │
+│  └──────────────┘      │  Embed       │      │  │ chunks     │ │  │
+│                        │  Store       │      │  │ fts_chunks │ │  │
+│                        └──────────────┘      │  │ embeddings │ │  │
+│                                              │  │ links      │ │  │
+│                                              │  └────────────┘ │  │
+│                                              └────────┬────────┘  │
+│                                                       │           │
+│                                                       │           │
+│                                              ┌────────▼────────┐  │
+│                                              │   Retriever     │  │
+│   User Interfaces                            │   (Hybrid)      │  │
+│   ┌─────────┐   ┌──────────┐   ┌────────┐  │  • Lexical FTS5 │  │
+│   │   CLI   │   │  Python  │   │  MCP   │  │  • Vector cosine│  │
+│   │ ragtriever  │   API    │   │ Server │  │  • RRF merge    │  │
+│   └────┬────┘   └────┬─────┘   └───┬────┘  └────────┬────────┘  │
+│        │             │             │                  │           │
+│        │   Query     │    Query    │     Query        │           │
+│        └─────────────┴─────────────┴──────────────────┘           │
+│        ┌─────────────┬─────────────┬──────────────────┐           │
+│        │   Results   │   Results   │     Results      │           │
+│        ▼             ▼             ▼                  ▼           │
+└─────────────────────────────────────────────────────────────────────┘
+
+KEY FLOWS:
+  ──▶  Indexing: Vault → Indexer → Store (write path)
+  ◀── Retrieval: User Interface → Retriever → Store → Results (read path)
 ```
 
 **Design Principles:**
@@ -402,6 +410,234 @@ for result in results:
         │ Results      │ with snippets and metadata
         └──────────────┘
 ```
+
+---
+
+## Detailed Sequence Diagrams
+
+### Indexing Flow (Scan → Embed → Store)
+
+This shows the complete sequence when a file is indexed:
+
+```
+Filesystem   Indexer      Extractor    Chunker    Embedder      Store (SQLite)
+    │            │            │           │           │              │
+    │  file.md   │            │           │           │              │
+    ├───────────▶│            │           │           │              │
+    │            │            │           │           │              │
+    │            │ extract()  │           │           │              │
+    │            ├───────────▶│           │           │              │
+    │            │            │ Parse MD  │           │              │
+    │            │            │ wikilinks │           │              │
+    │            │            │ tags      │           │              │
+    │            │◀───────────┤           │           │              │
+    │            │ Extracted  │           │           │              │
+    │            │ (text,     │           │           │              │
+    │            │  metadata) │           │           │              │
+    │            │            │           │           │              │
+    │            │ chunk()    │           │           │              │
+    │            ├────────────┴──────────▶│           │              │
+    │            │            │ Split by  │           │              │
+    │            │            │ headings  │           │              │
+    │            │◀───────────────────────┤           │              │
+    │            │ List[Chunked]          │           │              │
+    │            │ (anchor_type, text)    │           │              │
+    │            │            │           │           │              │
+    │            │ embed()    │           │           │              │
+    │            ├────────────┴───────────┴──────────▶│              │
+    │            │            │           │ Model     │              │
+    │            │            │           │ inference │              │
+    │            │◀───────────────────────────────────┤              │
+    │            │ np.ndarray (N × embedding_dim)     │              │
+    │            │            │           │           │              │
+    │            │ upsert_document()      │           │              │
+    │            ├────────────┴───────────┴───────────┴─────────────▶│
+    │            │            │           │           │  INSERT INTO │
+    │            │            │           │           │  documents   │
+    │            │            │           │           │              │
+    │            │ upsert_chunks()        │           │              │
+    │            ├────────────┴───────────┴───────────┴─────────────▶│
+    │            │            │           │           │  INSERT INTO │
+    │            │            │           │           │  chunks      │
+    │            │            │           │           │  INSERT INTO │
+    │            │            │           │           │  fts_chunks  │
+    │            │            │           │           │  (FTS5)      │
+    │            │            │           │           │              │
+    │            │ upsert_embeddings()    │           │              │
+    │            ├────────────┴───────────┴───────────┴─────────────▶│
+    │            │            │           │           │  INSERT INTO │
+    │            │            │           │           │  embeddings  │
+    │            │            │           │           │  (BLOB)      │
+    │            │◀───────────────────────────────────────────────────┤
+    │            │            │           │           │  Committed   │
+    │◀───────────┤            │           │           │              │
+    │  indexed   │            │           │           │              │
+```
+
+**Key Steps:**
+1. **Extract** - File-type specific parsing (Markdown/PDF/PPTX/Image)
+2. **Chunk** - Semantic segmentation (by heading, page, slide)
+3. **Embed** - Vector generation using embedding model
+4. **Store** - Write to THREE SQLite locations:
+   - `documents` table (metadata)
+   - `chunks` table + `fts_chunks` FTS5 (text + lexical index)
+   - `embeddings` table (vectors as BLOBs)
+
+### Retrieval Flow (Query → Hybrid Search → Results)
+
+This shows the bidirectional query flow from user interface back to results:
+
+```
+CLI/API/MCP   Retriever   Embedder    Store (SQLite)
+    │            │           │              │
+    │  query     │           │              │
+    │ "k8s"      │           │              │
+    ├───────────▶│           │              │
+    │            │           │              │
+    │            ├─────── Parallel Search ───────┐
+    │            │           │              │    │
+    │            │ embed_query()            │    │
+    │            ├──────────▶│              │    │
+    │            │           │ Model        │    │
+    │            │◀──────────┤              │    │
+    │            │ query_vec │              │    │
+    │            │           │              │    │
+    │            │ vector_search(query_vec) │    │
+    │            ├──────────┴─────────────▶│    │
+    │            │           │  SELECT e.chunk_id, e.vector, c.text
+    │            │           │  FROM embeddings e
+    │            │           │  JOIN chunks c ON c.chunk_id=e.chunk_id
+    │            │           │  WHERE c.vault_id=?
+    │            │           │              │    │
+    │            │           │  • Load vectors from BLOB
+    │            │           │  • Cosine similarity: dot(q,v)/(||q||*||v||)
+    │            │           │  • Sort by similarity
+    │            │◀──────────────────────────┤    │
+    │            │ vec_results (k_vec=40)   │    │
+    │            │ [SearchResult]           │    │
+    │            │           │              │    │
+    │            │ lexical_search(query)    │    │
+    │            ├──────────┴─────────────▶│    │
+    │            │           │  SELECT chunk_id, bm25(fts_chunks) AS rank
+    │            │           │  FROM fts_chunks
+    │            │           │  WHERE fts_chunks MATCH "k8s"
+    │            │           │  ORDER BY rank LIMIT 40
+    │            │           │              │    │
+    │            │◀──────────────────────────┤    │
+    │            │ lex_results (k_lex=40)   │    │
+    │            │ [SearchResult]           │    │
+    │            │           │              │    │
+    │            └────────── Merge Results ──────┘
+    │            │           │              │
+    │            │ HybridRanker.merge()    │
+    │            │ • Reciprocal Rank Fusion │
+    │            │ • Deduplicate            │
+    │            │ • Normalize scores       │
+    │            │ • Return top_k=10        │
+    │            │           │              │
+    │◀───────────┤           │              │
+    │  results   │           │              │
+    │  [10 items]│           │              │
+```
+
+**Key Steps:**
+1. **Embed Query** - Convert search string to vector
+2. **Parallel Search** - Two simultaneous queries:
+   - **Vector Search**: Cosine similarity on `embeddings` table (semantic)
+   - **Lexical Search**: BM25 on `fts_chunks` FTS5 index (keyword)
+3. **Merge** - Hybrid ranking using Reciprocal Rank Fusion (RRF)
+4. **Return** - Top K results flow back through interfaces
+
+### SQLite: Vector vs Non-Vector Storage
+
+SQLite serves as a **hybrid database** storing both traditional relational data and vector embeddings:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SQLite Database Schema                       │
+│                    (vaultrag.sqlite)                            │
+│                                                                 │
+│  NON-VECTOR STORAGE (Traditional SQL)                          │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                                                           │ │
+│  │  documents table                                          │ │
+│  │  ├─ doc_id, vault_id, rel_path                            │ │
+│  │  ├─ file_type, mtime, size                                │ │
+│  │  └─ content_hash, metadata_json                           │ │
+│  │                                                           │ │
+│  │  chunks table                                             │ │
+│  │  ├─ chunk_id, doc_id, vault_id                            │ │
+│  │  ├─ anchor_type, anchor_ref                               │ │
+│  │  └─ text, text_hash, metadata_json                        │ │
+│  │                                                           │ │
+│  │  links table                                              │ │
+│  │  ├─ vault_id, src_rel_path, dst_target                    │ │
+│  │  └─ link_type (wikilink, embed)                           │ │
+│  │                                                           │ │
+│  │  manifest table                                           │ │
+│  │  └─ Tracks indexing status, errors                        │ │
+│  │                                                           │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  LEXICAL SEARCH (FTS5 Virtual Table)                           │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                                                           │ │
+│  │  fts_chunks USING fts5                                    │ │
+│  │  ├─ chunk_id (UNINDEXED)                                  │ │
+│  │  ├─ vault_id (UNINDEXED)                                  │ │
+│  │  ├─ rel_path (UNINDEXED)                                  │ │
+│  │  └─ text (INDEXED for full-text search)                   │ │
+│  │                                                           │ │
+│  │  • BM25 ranking algorithm                                 │ │
+│  │  • Tokenized with unicode61                               │ │
+│  │  • Query: SELECT bm25(fts_chunks) AS rank FROM fts_chunks │ │
+│  │           WHERE fts_chunks MATCH "search term"            │ │
+│  │                                                           │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  VECTOR STORAGE (Embeddings as BLOBs)                          │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                                                           │ │
+│  │  embeddings table                                         │ │
+│  │  ├─ chunk_id (FK to chunks)                               │ │
+│  │  ├─ model_id (e.g., "BAAI/bge-small-en-v1.5")            │ │
+│  │  ├─ dims (embedding dimension, e.g., 384)                 │ │
+│  │  └─ vector BLOB (numpy float32 array serialized)          │ │
+│  │                                                           │ │
+│  │  • Storage: np.asarray(vec, dtype=np.float32).tobytes()  │ │
+│  │  • Retrieval: np.frombuffer(blob, dtype=np.float32)      │ │
+│  │  • Search: Brute-force cosine similarity (currently)      │ │
+│  │  • Future: FAISS index for approximate NN                 │ │
+│  │                                                           │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Storage Breakdown:**
+
+| Data Type | SQLite Storage | Purpose | Query Method |
+|-----------|---------------|---------|--------------|
+| **Metadata** | `documents`, `chunks`, `links` tables | File info, chunk text, wikilink graph | Standard SQL queries |
+| **Lexical Index** | `fts_chunks` FTS5 virtual table | Full-text search with BM25 | `MATCH` operator, BM25 ranking |
+| **Vector Embeddings** | `embeddings.vector` BLOB column | Semantic search vectors | Load all, compute cosine similarity |
+
+**Why this hybrid approach?**
+
+1. **Single database file** - Simplifies deployment and backup
+2. **Transaction safety** - All writes are atomic within SQLite
+3. **No external dependencies** - Works everywhere SQLite works
+4. **Future-proof** - Can add vector index extensions (e.g., libSQL vector search)
+
+**Current limitation:** Vector search is brute-force O(N) - loads all embeddings and computes cosine similarity in Python. For >10K chunks, consider:
+- FAISS index (approximate nearest neighbors)
+- libSQL vector extensions (when available)
+- Separate vector store (Qdrant, Milvus)
+
+**Performance characteristics:**
+- **FTS5 lexical search**: Very fast (indexed), ~1-10ms for typical queries
+- **Vector search**: Slower (brute-force), ~100ms-1s for 10K chunks
+- **Hybrid merge**: Fast (RRF on small result sets), ~1-5ms
 
 ---
 
