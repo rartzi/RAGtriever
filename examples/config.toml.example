@@ -12,13 +12,23 @@ provider = "sentence_transformers"
 model = "BAAI/bge-small-en-v1.5"
 batch_size = 32
 device = "cpu"  # cpu|cuda|mps
+# Set to true to use cached models only (no HuggingFace downloads)
+# Can also be controlled via HF_OFFLINE_MODE environment variable
+offline_mode = true
 
 [image_analysis]
-provider = "tesseract"  # tesseract|gemini|off
+provider = "tesseract"  # tesseract|gemini|vertex_ai|off
 # For tesseract: requires pytesseract and tesseract-ocr installed on system
 # For gemini: set GEMINI_API_KEY env var or gemini_api_key below
 # gemini_api_key = ""
 gemini_model = "gemini-2.0-flash"
+
+# Vertex AI configuration (for provider = "vertex_ai")
+[vertex_ai]
+# project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT env var
+# location = "global"  # or us-central1, us-east4, etc. depending on model availability
+# credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS env var
+# model = "gemini-2.0-flash-exp"  # available models depend on region
 
 [retrieval]
 k_vec = 40

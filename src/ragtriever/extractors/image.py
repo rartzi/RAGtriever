@@ -213,3 +213,205 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
         except Exception as e:
             logger.warning(f"Gemini analysis failed: {e}")
             return {}
+
+
+@dataclass
+class VertexAIImageExtractor:
+    """Image extractor using Google Vertex AI vision model with service account authentication.
+
+    Uses Vertex AI with JSON credential files to analyze images and extract:
+    - Detailed description of the image content
+    - Any text visible in the image (OCR)
+    - Key topics/themes
+    - Entities mentioned (people, organizations, products)
+    - Image type classification (screenshot, diagram, photo, etc.)
+    """
+    supported_suffixes = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+    project_id: str | None = None
+    location: str = "us-central1"
+    credentials_file: str | None = None
+    model: str = "gemini-2.0-flash-exp"
+
+    def __post_init__(self) -> None:
+        # Try to get values from environment if not provided
+        if self.project_id is None:
+            self.project_id = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
+        if self.credentials_file is None:
+            self.credentials_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+    def extract(self, path: Path) -> Extracted:
+        """Extract image content using Vertex AI vision model."""
+        try:
+            from PIL import Image  # type: ignore
+        except ImportError:
+            raise RuntimeError("Pillow required for image extraction")
+
+        # Get basic image info
+        with Image.open(path) as img:
+            w, h = img.size
+            img_format = img.format or path.suffix.lstrip(".").upper()
+
+        # Read image bytes for Vertex AI
+        image_bytes = path.read_bytes()
+
+        # Analyze with Vertex AI
+        analysis = self._analyze_with_vertex_ai(image_bytes, path.suffix)
+
+        # Build the text content for indexing
+        text_parts = []
+
+        if analysis.get("description"):
+            text_parts.append(f"Description: {analysis['description']}")
+
+        if analysis.get("visible_text"):
+            text_parts.append(f"Visible text: {analysis['visible_text']}")
+
+        if analysis.get("topics"):
+            text_parts.append(f"Topics: {', '.join(analysis['topics'])}")
+
+        if analysis.get("entities"):
+            text_parts.append(f"Entities: {', '.join(analysis['entities'])}")
+
+        text = "\n\n".join(text_parts)
+
+        meta: dict[str, Any] = {
+            "width": w,
+            "height": h,
+            "format": img_format,
+            "image_type": analysis.get("image_type", "unknown"),
+            "description": analysis.get("description", ""),
+            "visible_text": analysis.get("visible_text", ""),
+            "topics": analysis.get("topics", []),
+            "entities": analysis.get("entities", []),
+            "analysis_model": self.model,
+            "analysis_provider": "vertex_ai",
+        }
+
+        return Extracted(text=text, metadata=meta)
+
+    def _analyze_with_vertex_ai(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Call Vertex AI API to analyze the image using service account credentials."""
+        logger.info(f"Starting Vertex AI analysis (image size: {len(image_bytes)} bytes)")
+
+        if not self.project_id:
+            logger.warning(
+                "No Google Cloud project ID found. Set project_id in config or GOOGLE_CLOUD_PROJECT environment variable. "
+                "Returning empty analysis."
+            )
+            return {}
+
+        if not self.credentials_file:
+            logger.warning(
+                "No credentials file found. Set credentials_file in config or GOOGLE_APPLICATION_CREDENTIALS environment variable. "
+                "Returning empty analysis."
+            )
+            return {}
+
+        try:
+            import vertexai  # type: ignore
+            from vertexai.generative_models import GenerativeModel, Part  # type: ignore
+            from google.oauth2 import service_account  # type: ignore
+        except ImportError:
+            logger.warning(
+                "vertexai or google-auth not installed. Install with: pip install google-cloud-aiplatform google-auth"
+            )
+            return {}
+
+        try:
+            # Security: Log at debug level to avoid exposing credentials path
+            logger.debug(f"Loading credentials from: {self.credentials_file}")
+            logger.info("Loading Vertex AI credentials from configured file")
+            # Load credentials from JSON file
+            credentials = service_account.Credentials.from_service_account_file(
+                self.credentials_file,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+
+            # Security: Log at debug level to avoid exposing project ID
+            logger.debug(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
+            logger.info(f"Initializing Vertex AI in region: {self.location}")
+            # Initialize Vertex AI
+            vertexai.init(
+                project=self.project_id,
+                location=self.location,
+                credentials=credentials
+            )
+            logger.info("Vertex AI initialized successfully")
+
+            # Determine mime type
+            mime_map = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+                ".gif": "image/gif",
+            }
+            mime_type = mime_map.get(suffix.lower(), "image/png")
+
+            # Create the prompt for structured analysis
+            prompt = """Analyze this image and provide a structured response in JSON format with these fields:
+
+1. "description": A detailed description of what the image shows (2-3 sentences)
+2. "visible_text": Any text visible in the image, transcribed accurately
+3. "image_type": One of: screenshot, diagram, flowchart, photo, presentation_slide, document, chart, infographic, logo, ui_mockup, other
+4. "topics": List of 3-5 key topics or themes in the image
+5. "entities": List of any named entities (people, companies, products, technologies) mentioned or shown
+
+Respond ONLY with valid JSON, no markdown formatting or extra text."""
+
+            # Create model instance
+            logger.info(f"Creating model instance: {self.model}")
+            model = GenerativeModel(self.model)
+
+            # Create image part
+            logger.info(f"Creating image part with mime type: {mime_type}")
+            image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
+
+            # Generate content
+            logger.info("Sending request to Vertex AI...")
+            response = model.generate_content([image_part, prompt])
+            logger.info("Received response from Vertex AI")
+
+            # Parse the JSON response
+            # Handle both single-part and multi-part responses
+            try:
+                response_text = response.text.strip()
+            except ValueError:
+                # Multi-part response (e.g., from gemini-3-pro-image-preview)
+                logger.info("Multi-part response detected, concatenating non-thought parts...")
+                parts = []
+                for candidate in response.candidates:
+                    for part in candidate.content.parts:
+                        # Skip thought parts - only use actual response
+                        if hasattr(part, 'thought') and part.thought:
+                            continue
+                        if hasattr(part, 'text') and part.text:
+                            parts.append(part.text)
+                response_text = "".join(parts).strip()  # Use empty string join to avoid adding newlines
+
+            logger.info(f"Response text length: {len(response_text)}")
+            # Remove markdown code block if present
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                # Remove first line (```json) and last line (```)
+                response_text = "\n".join(lines[1:-1])
+
+            result = json.loads(response_text)
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse Vertex AI response as JSON: {e}")
+            # Try to extract what we can from non-JSON response
+            return {"description": response_text[:500] if response_text else ""}
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error(f"Credentials file error: {type(e).__name__}")
+            logger.debug(f"Credentials file error details: {e}")
+            return {}
+        except ImportError as e:
+            logger.error(f"Missing required library: {e}")
+            return {}
+        except Exception as e:
+            # Catch-all for unexpected errors, but log the type for debugging
+            logger.error(f"Vertex AI analysis failed: {type(e).__name__}")
+            logger.debug(f"Vertex AI analysis error details: {e}")
+            return {}

@@ -54,7 +54,7 @@ More content."""
 
         assert len(chunks) > 0
         # Check for heading anchors
-        heading_chunks = [c for c in chunks if c.anchor_type == "heading"]
+        heading_chunks = [c for c in chunks if c.anchor_type == "md_heading"]
         assert len(heading_chunks) > 0
 
     def test_chunk_simple_text(self):
@@ -213,14 +213,14 @@ class TestBoundaryMarkerChunker:
         """Test chunking with PAGE boundary markers."""
         chunker = BoundaryMarkerChunker("PAGE")
 
-        text = """PAGE
+        text = """[[[PAGE 1]]]
 Content for page 1.
 More content.
 
-PAGE
+[[[PAGE 2]]]
 Content for page 2.
 
-PAGE
+[[[PAGE 3]]]
 Page 3 content."""
 
         chunks = chunker.chunk(text, {})
@@ -231,17 +231,17 @@ Page 3 content."""
         """Test chunking with SLIDE boundary markers."""
         chunker = BoundaryMarkerChunker("SLIDE")
 
-        text = """SLIDE
+        text = """[[[SLIDE 1]]]
 Slide 1 Title
 - Bullet 1
 - Bullet 2
 
-SLIDE
+[[[SLIDE 2]]]
 Slide 2 Title
 - Point A
 - Point B
 
-SLIDE
+[[[SLIDE 3]]]
 Slide 3"""
 
         chunks = chunker.chunk(text, {})
@@ -252,12 +252,12 @@ Slide 3"""
         """Test chunking with SHEET boundary markers."""
         chunker = BoundaryMarkerChunker("SHEET")
 
-        text = """SHEET
+        text = """[[[SHEET 1]]]
 Sheet 1 Data
 Column A, Column B
 Data 1, Data 2
 
-SHEET
+[[[SHEET 2]]]
 Sheet 2 Data
 Column X, Column Y
 Value 1, Value 2"""
@@ -270,11 +270,11 @@ Value 1, Value 2"""
         """Test chunking with IMAGE boundary markers."""
         chunker = BoundaryMarkerChunker("IMAGE")
 
-        text = """IMAGE
+        text = """[[[IMAGE 1]]]
 Image description 1.
 Some metadata.
 
-IMAGE
+[[[IMAGE 2]]]
 Image description 2.
 Different metadata."""
 
@@ -286,16 +286,16 @@ Different metadata."""
         """Test that boundary chunks have proper anchors."""
         chunker = BoundaryMarkerChunker("PAGE")
 
-        text = """PAGE
+        text = """[[[PAGE 1]]]
 Content
 
-PAGE
+[[[PAGE 2]]]
 More content"""
 
         chunks = chunker.chunk(text, {})
 
         for chunk in chunks:
-            assert chunk.anchor_type == "boundary"
+            assert chunk.anchor_type == "page"  # marker_prefix.lower()
             assert chunk.anchor_ref is not None
 
     def test_chunk_handles_content_between_boundaries(self):
