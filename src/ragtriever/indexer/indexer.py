@@ -30,7 +30,13 @@ class Indexer:
 
     def __post_init__(self) -> None:
         self.vault_id = blake2b_hex(str(self.cfg.vault_root).encode("utf-8"))[:12]
-        self.store = LibSqlStore(self.cfg.index_dir / "vaultrag.sqlite")
+        self.store = LibSqlStore(
+            self.cfg.index_dir / "vaultrag.sqlite",
+            use_faiss=self.cfg.use_faiss,
+            faiss_index_type=self.cfg.faiss_index_type,
+            faiss_nlist=self.cfg.faiss_nlist,
+            faiss_nprobe=self.cfg.faiss_nprobe,
+        )
         self.store.init()
 
         # Extractors

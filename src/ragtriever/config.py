@@ -47,6 +47,12 @@ class VaultConfig:
     use_query_prefix: bool = True  # Asymmetric retrieval (BGE pattern)
     query_prefix: str = "Represent this sentence for searching relevant passages: "
 
+    # FAISS (for large-scale vector search)
+    use_faiss: bool = False  # Enable for vaults >10K chunks
+    faiss_index_type: str = "IVF"  # "Flat" (exact), "IVF" (fast), "HNSW" (fastest)
+    faiss_nlist: int = 100  # Number of clusters for IVF
+    faiss_nprobe: int = 10  # Number of clusters to search (IVF)
+
     # Image analysis
     image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|off
     gemini_api_key: str | None = None
@@ -144,6 +150,19 @@ class VaultConfig:
         if max_chunk_size < 100 or max_chunk_size > 50000:
             raise ValueError(f"Invalid max_chunk_size: {max_chunk_size}. Must be between 100 and 50000.")
 
+        # Parse and validate FAISS parameters
+        use_faiss = bool(emb.get("use_faiss", False))
+        faiss_index_type = emb.get("faiss_index_type", "IVF")
+        faiss_nlist = int(emb.get("faiss_nlist", 100))
+        faiss_nprobe = int(emb.get("faiss_nprobe", 10))
+
+        if faiss_index_type not in ("Flat", "IVF", "HNSW"):
+            raise ValueError(f"Invalid faiss_index_type: {faiss_index_type}. Must be one of: Flat, IVF, HNSW.")
+        if faiss_nlist < 1 or faiss_nlist > 10000:
+            raise ValueError(f"Invalid faiss_nlist: {faiss_nlist}. Must be between 1 and 10000.")
+        if faiss_nprobe < 1 or faiss_nprobe > 1000:
+            raise ValueError(f"Invalid faiss_nprobe: {faiss_nprobe}. Must be between 1 and 1000.")
+
         return VaultConfig(
             vault_root=vault_root,
             index_dir=index_dir,
@@ -160,6 +179,10 @@ class VaultConfig:
             offline_mode=offline_mode,
             use_query_prefix=bool(emb.get("use_query_prefix", True)),
             query_prefix=emb.get("query_prefix", "Represent this sentence for searching relevant passages: "),
+            use_faiss=use_faiss,
+            faiss_index_type=faiss_index_type,
+            faiss_nlist=faiss_nlist,
+            faiss_nprobe=faiss_nprobe,
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
