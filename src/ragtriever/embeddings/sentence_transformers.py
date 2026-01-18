@@ -15,6 +15,10 @@ class SentenceTransformersEmbedder:
     query_prefix: str = "Represent this sentence for searching relevant passages: "
 
     def __post_init__(self) -> None:
+        # Suppress harmless multiprocessing resource tracker warnings on macOS
+        import warnings
+        warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
+
         from sentence_transformers import SentenceTransformer  # type: ignore
         self._model = SentenceTransformer(self.model_id, device=self.device)
         # Determine dims from a small encode

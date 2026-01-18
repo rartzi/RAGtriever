@@ -69,6 +69,9 @@ class VaultConfig:
     k_lex: int = 40
     top_k: int = 10
     use_rerank: bool = False
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_device: str = "cpu"  # cpu|cuda|mps
+    rerank_top_k: int = 10
 
     # MCP
     mcp_transport: str = "stdio"
@@ -110,6 +113,16 @@ class VaultConfig:
             raise ValueError(f"Invalid k_lex: {k_lex}. Must be between 1 and 1000.")
         if top_k <= 0 or top_k > 1000:
             raise ValueError(f"Invalid top_k: {top_k}. Must be between 1 and 1000.")
+
+        # Validate reranking parameters
+        rerank_model = ret.get("rerank_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+        rerank_device = ret.get("rerank_device", "cpu")
+        rerank_top_k = int(ret.get("rerank_top_k", 10))
+
+        if rerank_device not in ("cpu", "cuda", "mps"):
+            raise ValueError(f"Invalid rerank_device: {rerank_device}. Must be one of: cpu, cuda, mps.")
+        if rerank_top_k < 1 or rerank_top_k > 1000:
+            raise ValueError(f"Invalid rerank_top_k: {rerank_top_k}. Must be between 1 and 1000.")
 
         # Validate and resolve Vertex AI credentials file if specified
         vertex_ai_credentials_file = None
@@ -194,5 +207,8 @@ class VaultConfig:
             k_lex=k_lex,
             top_k=top_k,
             use_rerank=bool(ret.get("use_rerank", False)),
+            rerank_model=rerank_model,
+            rerank_device=rerank_device,
+            rerank_top_k=rerank_top_k,
             mcp_transport=mcp.get("transport", "stdio"),
         )

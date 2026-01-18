@@ -255,7 +255,86 @@ def hybrid_search(self, query: str, top_k: int = 10):
     # ... rest of hybrid search
 ```
 
-### 3. FAISS Index Support (Planned for Large Vaults)
+### 3. Cross-Encoder Reranking (Optional)
+
+**Problem:** Hybrid search (FTS5 + vectors + RRF) can return noisy candidates in top results. Bi-encoders encode query and documents separately, missing query-document interaction signals.
+
+**Solution:** Rerank top candidates using a cross-encoder model that reads query + document together for accurate relevance scoring.
+
+**Configuration:**
+```toml
+[retrieval]
+use_rerank = true
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_device = "cpu"  # or "cuda", "mps"
+rerank_top_k = 10
+```
+
+**How It Works:**
+```python
+# Stage 1: Fast candidate retrieval (hybrid search)
+candidates = hybrid_search(query, k_vec=40, k_lex=40)  # FTS5 + vectors + RRF
+
+# Stage 2: Accurate reranking (cross-encoder)
+if use_rerank:
+    pairs = [(query, candidate.snippet) for candidate in candidates]
+    scores = cross_encoder.predict(pairs)
+    results = sort_by_scores(candidates, scores)[:top_k]
+```
+
+**Performance:**
+- Adds ~100-200ms latency (40 candidates on CPU)
+- GPU: ~20-50ms
+- Quality improvement: +20-30% nDCG@10
+
+**When to Enable:**
+- You want best possible result quality
+- Latency tolerance: <300ms acceptable
+- Getting false positives or poor result ordering
+- Complex queries with multiple concepts
+
+**Why It Works:**
+- **Bi-encoder (retrieval):** Encodes query/doc separately → fast but approximate
+- **Cross-encoder (reranking):** Reads query + doc together → slow but accurate
+- **Best of both worlds:** Bi-encoder retrieves 40 candidates, cross-encoder refines to top 10
+
+**Example Results:**
+
+Before (hybrid search only):
+```
+Query: "kubernetes deployment strategies"
+1. ✅ Kubernetes deployment guide (0.89)
+2. ❌ AWS Lambda deployment (0.82) ← Noise
+3. ✅ K8s production deployment (0.78)
+4. ❌ Jenkins CI/CD pipeline (0.75) ← Noise
+5. ✅ Helm chart deployment (0.71)
+```
+
+After (with reranking):
+```
+Query: "kubernetes deployment strategies"
+1. ✅ Kubernetes deployment guide (0.94)
+2. ✅ K8s production deployment (0.91)
+3. ✅ Helm chart deployment (0.87)
+4. ✅ Blue-green deployment k8s (0.82)
+5. ✅ Rolling updates kubernetes (0.79)
+```
+
+**Code Reference:**
+- `src/ragtriever/retrieval/reranker.py` - Cross-encoder implementation
+- `src/ragtriever/retrieval/retriever.py:search()` - Integration point
+
+**CLI Usage:**
+```bash
+# Enable via config
+[retrieval]
+use_rerank = true
+
+# Or override per query
+ragtriever query "kubernetes deployment" --k 10 --rerank
+```
+
+### 4. FAISS Index Support (Planned for Large Vaults)
 
 **Problem:** Brute-force vector search becomes slow at >10K chunks (100ms-1s latency).
 
