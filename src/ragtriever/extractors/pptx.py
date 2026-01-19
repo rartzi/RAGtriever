@@ -43,14 +43,17 @@ class PptxExtractor:
                     if txt:
                         parts.append(txt)
 
-                # Extract images
-                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                    try:
+                # Extract images (wrap shape_type access in try/except for unsupported shapes)
+                try:
+                    if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
                         img_data = self._extract_image_from_shape(shape, slide_num=idx)
                         if img_data:
                             embedded_images.append(img_data)
-                    except Exception as e:
-                        logger.warning(f"Failed to extract image from slide {idx}: {e}")
+                except NotImplementedError:
+                    # Some shape types are not recognized by python-pptx
+                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to extract image from slide {idx}: {e}")
 
             slides_out.append("\n".join(parts))
 
