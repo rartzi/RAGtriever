@@ -38,6 +38,14 @@ class ExtractionResult:
     image_references: list[dict[str, Any]] = field(default_factory=list)
     links: list[tuple[str, str]] = field(default_factory=list)  # (target, link_type)
     error: str | None = None
+    # Enriched metadata for faster operations (passed to image tasks)
+    full_path: str = ""
+    vault_root: str = ""
+    vault_name: str = ""
+    file_name: str = ""
+    file_extension: str = ""
+    modified_at: str = ""
+    obsidian_uri: str = ""
 
 
 @dataclass
@@ -50,6 +58,15 @@ class ImageTask:
     file_type: str
     image_data: dict[str, Any]
     task_type: str  # "embedded" | "reference"
+    # Enriched metadata for faster operations
+    full_path: str = ""
+    vault_root: str = ""
+    vault_name: str = ""
+    file_name: str = ""
+    file_extension: str = ""
+    file_size_bytes: int = 0
+    modified_at: str = ""
+    obsidian_uri: str = ""
 
 
 @dataclass

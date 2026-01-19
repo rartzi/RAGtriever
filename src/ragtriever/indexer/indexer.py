@@ -4,7 +4,9 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from ..config import VaultConfig, MultiVaultConfig, VaultDefinition
 from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats
@@ -156,7 +158,7 @@ class Indexer:
 
                     extraction_results.append(result)
 
-                    # Collect image tasks for Phase 3
+                    # Collect image tasks for Phase 3 (with enriched metadata)
                     for img in result.embedded_images:
                         image_tasks.append(ImageTask(
                             parent_doc_id=result.doc_id,
@@ -165,6 +167,14 @@ class Indexer:
                             file_type=result.file_type,
                             image_data=img,
                             task_type="embedded",
+                            full_path=result.full_path,
+                            vault_root=result.vault_root,
+                            vault_name=result.vault_name,
+                            file_name=result.file_name,
+                            file_extension=result.file_extension,
+                            file_size_bytes=result.size,
+                            modified_at=result.modified_at,
+                            obsidian_uri=result.obsidian_uri,
                         ))
                     for ref in result.image_references:
                         image_tasks.append(ImageTask(
@@ -174,6 +184,14 @@ class Indexer:
                             file_type=result.file_type,
                             image_data=ref,
                             task_type="reference",
+                            full_path=result.full_path,
+                            vault_root=result.vault_root,
+                            vault_name=result.vault_name,
+                            file_name=result.file_name,
+                            file_extension=result.file_extension,
+                            file_size_bytes=result.size,
+                            modified_at=result.modified_at,
+                            obsidian_uri=result.obsidian_uri,
                         ))
 
                 except Exception as e:
@@ -248,8 +266,26 @@ class Indexer:
             # Chunk
             chunked = chunker.chunk(extracted.text, chunking_metadata)
 
-            # Build chunk data objects
+            # Build chunk data objects with enriched metadata
             chunks: list[ChunkData] = []
+
+            # Pre-compute enriched metadata fields (shared across all chunks from this file)
+            full_path = str(abs_path)
+            vault_root = str(self.cfg.vault_root)
+            vault_name = self.cfg.vault_name or ""
+            file_name = abs_path.name
+            file_extension = abs_path.suffix.lower()
+            file_size_bytes = int(st.st_size)
+            modified_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
+
+            # Build Obsidian URI: obsidian://open?vault=<vault_name>&file=<rel_path>
+            # Only include if vault_name is set (multi-vault or named single vault)
+            obsidian_uri = ""
+            if vault_name:
+                # URL-encode the path components for Obsidian URI
+                encoded_path = quote(rel, safe="")
+                obsidian_uri = f"obsidian://open?vault={quote(vault_name, safe='')}&file={encoded_path}"
+
             for c in chunked:
                 text_norm = c.text.strip()
                 if not text_norm:
@@ -258,10 +294,21 @@ class Indexer:
                 cid = blake2b_hex(f"{doc_id}:{c.anchor_type}:{c.anchor_ref}:{th}".encode("utf-8"))[:32]
                 meta = dict(c.metadata or {})
                 meta.update({
+                    # Original fields
                     "rel_path": rel,
                     "file_type": type_label,
                     "anchor_type": c.anchor_type,
                     "anchor_ref": c.anchor_ref,
+                    # Enriched metadata for faster operations
+                    "full_path": full_path,
+                    "vault_root": vault_root,
+                    "vault_name": vault_name,
+                    "vault_id": self.vault_id,
+                    "file_name": file_name,
+                    "file_extension": file_extension,
+                    "file_size_bytes": file_size_bytes,
+                    "modified_at": modified_at,
+                    "obsidian_uri": obsidian_uri,
                 })
                 chunks.append(ChunkData(
                     chunk_id=cid,
@@ -294,6 +341,14 @@ class Indexer:
                 image_references=extracted.metadata.get("image_references", []),
                 links=links,
                 error=None,
+                # Enriched metadata (for image tasks)
+                full_path=full_path,
+                vault_root=vault_root,
+                vault_name=vault_name,
+                file_name=file_name,
+                file_extension=file_extension,
+                modified_at=modified_at,
+                obsidian_uri=obsidian_uri,
             )
 
         except Exception as e:
@@ -490,10 +545,21 @@ class Indexer:
             cid = blake2b_hex(f"{task.parent_doc_id}:{anchor_type}:{anchor_ref}:{th}".encode("utf-8"))[:32]
 
             meta = {
+                # Original fields
                 "rel_path": task.parent_path,
                 "file_type": task.file_type,
                 "anchor_type": anchor_type,
                 "anchor_ref": anchor_ref,
+                # Enriched metadata for faster operations
+                "full_path": task.full_path,
+                "vault_root": task.vault_root,
+                "vault_name": task.vault_name,
+                "vault_id": task.vault_id,
+                "file_name": task.file_name,
+                "file_extension": task.file_extension,
+                "file_size_bytes": task.file_size_bytes,
+                "modified_at": task.modified_at,
+                "obsidian_uri": task.obsidian_uri,
             }
             if "width" in task.image_data:
                 meta["image_width"] = task.image_data["width"]
@@ -636,6 +702,21 @@ class Indexer:
             links = extracted.metadata.get("wikilinks", [])
             # TODO: store links in `links` table and maintain backlinks
 
+        # Pre-compute enriched metadata fields (shared across all chunks from this file)
+        full_path = str(abs_path)
+        vault_root = str(self.cfg.vault_root)
+        vault_name = self.cfg.vault_name or ""
+        file_name = abs_path.name
+        file_extension = abs_path.suffix.lower()
+        file_size_bytes = int(st.st_size)
+        modified_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
+
+        # Build Obsidian URI
+        obsidian_uri = ""
+        if vault_name:
+            encoded_path = quote(rel, safe="")
+            obsidian_uri = f"obsidian://open?vault={quote(vault_name, safe='')}&file={encoded_path}"
+
         for c in chunked:
             text_norm = c.text.strip()
             if not text_norm:
@@ -644,10 +725,21 @@ class Indexer:
             cid = blake2b_hex(f"{doc_id}:{c.anchor_type}:{c.anchor_ref}:{th}".encode("utf-8"))[:32]
             meta = dict(c.metadata or {})
             meta.update({
+                # Original fields
                 "rel_path": rel,
                 "file_type": type_label,
                 "anchor_type": c.anchor_type,
                 "anchor_ref": c.anchor_ref,
+                # Enriched metadata for faster operations
+                "full_path": full_path,
+                "vault_root": vault_root,
+                "vault_name": vault_name,
+                "vault_id": self.vault_id,
+                "file_name": file_name,
+                "file_extension": file_extension,
+                "file_size_bytes": file_size_bytes,
+                "modified_at": modified_at,
+                "obsidian_uri": obsidian_uri,
             })
             chunks.append(Chunk(
                 chunk_id=cid,
@@ -677,6 +769,15 @@ class Indexer:
                 parent_path=rel,
                 file_type=type_label,
                 source_file=abs_path,
+                # Enriched metadata
+                full_path=full_path,
+                vault_root=vault_root,
+                vault_name=vault_name,
+                file_name=file_name,
+                file_extension=file_extension,
+                file_size_bytes=file_size_bytes,
+                modified_at=modified_at,
+                obsidian_uri=obsidian_uri,
             )
 
         # Process image references from Markdown
@@ -685,6 +786,15 @@ class Indexer:
                 image_refs=extracted.metadata["image_references"],
                 parent_doc_id=doc_id,
                 parent_path=rel,
+                # Enriched metadata
+                full_path=full_path,
+                vault_root=vault_root,
+                vault_name=vault_name,
+                file_name=file_name,
+                file_extension=file_extension,
+                file_size_bytes=file_size_bytes,
+                modified_at=modified_at,
+                obsidian_uri=obsidian_uri,
             )
 
     def _process_embedded_images(
@@ -694,6 +804,15 @@ class Indexer:
         parent_path: str,
         file_type: str,
         source_file: Path,
+        # Enriched metadata
+        full_path: str = "",
+        vault_root: str = "",
+        vault_name: str = "",
+        file_name: str = "",
+        file_extension: str = "",
+        file_size_bytes: int = 0,
+        modified_at: str = "",
+        obsidian_uri: str = "",
     ) -> None:
         """Process images embedded in documents (PDF/PPTX).
 
@@ -776,12 +895,23 @@ class Indexer:
                 cid = blake2b_hex(f"{parent_doc_id}:{file_type}_image:{anchor_ref}:{th}".encode("utf-8"))[:32]
 
                 meta = {
+                    # Original fields
                     "rel_path": parent_path,
                     "file_type": file_type,
                     "anchor_type": f"{file_type}_image",
                     "anchor_ref": anchor_ref,
                     "image_width": img_data.get("width", 0),
                     "image_height": img_data.get("height", 0),
+                    # Enriched metadata for faster operations
+                    "full_path": full_path,
+                    "vault_root": vault_root,
+                    "vault_name": vault_name,
+                    "vault_id": self.vault_id,
+                    "file_name": file_name,
+                    "file_extension": file_extension,
+                    "file_size_bytes": file_size_bytes,
+                    "modified_at": modified_at,
+                    "obsidian_uri": obsidian_uri,
                 }
                 # Merge in analysis metadata
                 meta.update(img_analysis.metadata)
@@ -821,6 +951,15 @@ class Indexer:
         image_refs: list[dict],
         parent_doc_id: str,
         parent_path: str,
+        # Enriched metadata
+        full_path: str = "",
+        vault_root: str = "",
+        vault_name: str = "",
+        file_name: str = "",
+        file_extension: str = "",
+        file_size_bytes: int = 0,
+        modified_at: str = "",
+        obsidian_uri: str = "",
     ) -> None:
         """Process image references from markdown files.
 
@@ -859,12 +998,23 @@ class Indexer:
                 cid = blake2b_hex(f"{parent_doc_id}:markdown_image:{anchor_ref}:{th}".encode("utf-8"))[:32]
 
                 meta = {
+                    # Original fields
                     "rel_path": parent_path,
                     "file_type": "markdown",
                     "anchor_type": "markdown_image",
                     "anchor_ref": anchor_ref,
                     "image_path": img_ref["abs_path"],
                     "alt_text": img_ref.get("alt_text", ""),
+                    # Enriched metadata for faster operations
+                    "full_path": full_path,
+                    "vault_root": vault_root,
+                    "vault_name": vault_name,
+                    "vault_id": self.vault_id,
+                    "file_name": file_name,
+                    "file_extension": file_extension,
+                    "file_size_bytes": file_size_bytes,
+                    "modified_at": modified_at,
+                    "obsidian_uri": obsidian_uri,
                 }
                 # Merge in analysis metadata
                 meta.update(img_analysis.metadata)
@@ -930,6 +1080,7 @@ class MultiVaultIndexer:
         return VaultConfig(
             vault_root=vault_def.root,
             ignore=ignore_patterns,
+            vault_name=vault_def.name,
             index_dir=self.cfg.index_dir,
             extractor_version=self.cfg.extractor_version,
             chunker_version=self.cfg.chunker_version,

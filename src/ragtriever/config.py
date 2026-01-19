@@ -34,6 +34,7 @@ class VaultConfig:
     index_dir: Path
 
     ignore: list[str] = field(default_factory=list)
+    vault_name: str = ""  # Human-readable vault name (for enriched metadata)
 
     def __post_init__(self):
         """Convert string paths to Path objects and expand ~ and environment variables."""
