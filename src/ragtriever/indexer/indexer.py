@@ -5,9 +5,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
-from ..config import VaultConfig
+from ..config import VaultConfig, MultiVaultConfig, VaultDefinition
 from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats
 from ..hashing import hash_file, blake2b_hex
 from ..paths import relpath
@@ -892,3 +891,230 @@ class Indexer:
 
             except Exception as e:
                 logger.warning(f"Failed to process image reference {img_ref.get('rel_path', 'unknown')} from {parent_path}: {e}")
+
+
+class MultiVaultIndexer:
+    """Indexer supporting multiple vaults with a shared database.
+
+    Wraps individual VaultConfig/Indexer instances but uses a shared store
+    for cross-vault search capabilities.
+    """
+
+    def __init__(self, cfg: MultiVaultConfig) -> None:
+        self.cfg = cfg
+        self.store = LibSqlStore(
+            cfg.index_dir / "vaultrag.sqlite",
+            use_faiss=cfg.use_faiss,
+            faiss_index_type=cfg.faiss_index_type,
+            faiss_nlist=cfg.faiss_nlist,
+            faiss_nprobe=cfg.faiss_nprobe,
+        )
+        self.store.init()
+
+        # Create individual Indexer instances for each vault
+        self._indexers: dict[str, Indexer] = {}
+        for vault_def in cfg.vaults:
+            if not vault_def.enabled:
+                continue
+            vault_cfg = self._vault_config_from_definition(vault_def)
+            indexer = Indexer(vault_cfg)
+            # Share the store across all indexers
+            indexer.store = self.store
+            self._indexers[vault_def.name] = indexer
+
+    def _vault_config_from_definition(self, vault_def: VaultDefinition) -> VaultConfig:
+        """Create a VaultConfig from a VaultDefinition using shared settings."""
+        # Use vault-specific ignore patterns if provided, otherwise use default
+        ignore_patterns = vault_def.ignore if vault_def.ignore else [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
+
+        return VaultConfig(
+            vault_root=vault_def.root,
+            ignore=ignore_patterns,
+            index_dir=self.cfg.index_dir,
+            extractor_version=self.cfg.extractor_version,
+            chunker_version=self.cfg.chunker_version,
+            embedding_provider=self.cfg.embedding_provider,
+            embedding_model=self.cfg.embedding_model,
+            embedding_device=self.cfg.embedding_device,
+            embedding_batch_size=self.cfg.embedding_batch_size,
+            offline_mode=self.cfg.offline_mode,
+            k_vec=self.cfg.k_vec,
+            k_lex=self.cfg.k_lex,
+            top_k=self.cfg.top_k,
+            use_rerank=self.cfg.use_rerank,
+            rerank_model=self.cfg.rerank_model,
+            rerank_device=self.cfg.rerank_device,
+            rerank_top_k=self.cfg.rerank_top_k,
+            mcp_transport=self.cfg.mcp_transport,
+            image_analysis_provider=self.cfg.image_analysis_provider,
+            gemini_api_key=self.cfg.gemini_api_key,
+            gemini_model=self.cfg.gemini_model,
+            vertex_ai_project_id=self.cfg.vertex_ai_project_id,
+            vertex_ai_location=self.cfg.vertex_ai_location,
+            vertex_ai_credentials_file=self.cfg.vertex_ai_credentials_file,
+            vertex_ai_model=self.cfg.vertex_ai_model,
+            extraction_workers=self.cfg.extraction_workers,
+            embed_batch_size=self.cfg.embed_batch_size,
+            image_workers=self.cfg.image_workers,
+            parallel_scan=self.cfg.parallel_scan,
+            use_faiss=self.cfg.use_faiss,
+            faiss_index_type=self.cfg.faiss_index_type,
+            faiss_nlist=self.cfg.faiss_nlist,
+            faiss_nprobe=self.cfg.faiss_nprobe,
+            overlap_chars=self.cfg.overlap_chars,
+            max_chunk_size=self.cfg.max_chunk_size,
+            preserve_heading_metadata=self.cfg.preserve_heading_metadata,
+            use_query_prefix=self.cfg.use_query_prefix,
+            query_prefix=self.cfg.query_prefix,
+        )
+
+    def get_vault_names(self) -> list[str]:
+        """Get list of configured vault names."""
+        return [v.name for v in self.cfg.vaults if v.enabled]
+
+    def get_vault_ids(self, vault_names: list[str] | None = None) -> list[str]:
+        """Get vault_ids for specified vault names, or all if None."""
+        if vault_names is None:
+            return [indexer.vault_id for indexer in self._indexers.values()]
+
+        vault_ids = []
+        for name in vault_names:
+            if name in self._indexers:
+                vault_ids.append(self._indexers[name].vault_id)
+        return vault_ids
+
+    def scan(self, full: bool = False, vault_names: list[str] | None = None) -> ScanStats:
+        """Scan specified vaults or all if None.
+
+        Args:
+            full: Re-index all files if True
+            vault_names: List of vault names to scan, or None for all
+
+        Returns:
+            Combined ScanStats from all scanned vaults
+        """
+        logger = logging.getLogger(__name__)
+
+        # Resolve target vaults
+        if vault_names is None:
+            target_indexers = list(self._indexers.items())
+        else:
+            target_indexers = [(name, self._indexers[name])
+                              for name in vault_names if name in self._indexers]
+
+        if not target_indexers:
+            logger.warning("No vaults to scan")
+            return ScanStats()
+
+        # Scan each vault and merge stats
+        combined_stats = ScanStats()
+        for name, indexer in target_indexers:
+            logger.info(f"Scanning vault: {name}")
+            stats = indexer.scan(full=full)
+            combined_stats = self._merge_stats(combined_stats, stats)
+            logger.info(f"Vault {name}: {stats.files_indexed} files, {stats.chunks_created} chunks")
+
+        return combined_stats
+
+    def _merge_stats(self, a: ScanStats, b: ScanStats) -> ScanStats:
+        """Merge two ScanStats objects."""
+        return ScanStats(
+            files_scanned=a.files_scanned + b.files_scanned,
+            files_indexed=a.files_indexed + b.files_indexed,
+            files_failed=a.files_failed + b.files_failed,
+            chunks_created=a.chunks_created + b.chunks_created,
+            embeddings_created=a.embeddings_created + b.embeddings_created,
+            images_processed=a.images_processed + b.images_processed,
+            elapsed_seconds=a.elapsed_seconds + b.elapsed_seconds,
+        )
+
+    def watch(self, vault_names: list[str] | None = None) -> None:
+        """Watch specified vaults for changes.
+
+        Args:
+            vault_names: List of vault names to watch, or None for all
+        """
+        import threading
+
+        logger = logging.getLogger(__name__)
+
+        # Resolve target vaults
+        if vault_names is None:
+            target_indexers = list(self._indexers.items())
+        else:
+            target_indexers = [(name, self._indexers[name])
+                              for name in vault_names if name in self._indexers]
+
+        if not target_indexers:
+            logger.warning("No vaults to watch")
+            return
+
+        print(f"Watching {len(target_indexers)} vault(s). Press Ctrl+C to stop.")
+        for name, indexer in target_indexers:
+            vault_def = next(v for v in self.cfg.vaults if v.name == name)
+            print(f"  - {name}: {vault_def.root}")
+
+        # Start watch threads for each vault
+        threads: list[threading.Thread] = []
+        for name, indexer in target_indexers:
+            thread = threading.Thread(
+                target=self._watch_single_vault,
+                args=(name, indexer),
+                daemon=True,
+            )
+            thread.start()
+            threads.append(thread)
+
+        # Wait for interrupt
+        try:
+            while True:
+                import time
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nStopping watch mode...")
+
+    def _watch_single_vault(self, name: str, indexer: Indexer) -> None:
+        """Watch a single vault (runs in separate thread)."""
+        import queue
+
+        logger = logging.getLogger(__name__)
+
+        from .queue import JobQueue
+        from .change_detector import ChangeDetector
+
+        q = JobQueue()
+        detector = ChangeDetector(root=indexer.cfg.vault_root, q=q)
+
+        # Start detector in background
+        import threading
+        detector_thread = threading.Thread(target=detector.watch, daemon=True)
+        detector_thread.start()
+
+        # Process jobs
+        while True:
+            try:
+                job = q.get(timeout=1.0)
+            except queue.Empty:
+                continue
+
+            try:
+                if job.kind == "upsert":
+                    abs_path = indexer.cfg.vault_root / job.rel_path
+                    logger.info(f"[{name}] Indexing: {job.rel_path}")
+                    indexer._index_one(abs_path, force=True)
+
+                elif job.kind == "delete":
+                    logger.info(f"[{name}] Deleting: {job.rel_path}")
+                    self.store.delete_document(indexer.vault_id, job.rel_path)
+
+                elif job.kind == "move":
+                    logger.info(f"[{name}] Moving: {job.rel_path} -> {job.new_rel_path}")
+                    self.store.delete_document(indexer.vault_id, job.rel_path)
+                    if job.new_rel_path:
+                        abs_path = indexer.cfg.vault_root / job.new_rel_path
+                        indexer._index_one(abs_path, force=True)
+
+            except Exception as e:
+                logger.error(f"[{name}] Error processing {job.kind} job: {e}")
+            finally:
+                q.task_done()

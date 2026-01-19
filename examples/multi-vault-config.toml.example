@@ -1,0 +1,161 @@
+# Multi-Vault RAGtriever Configuration Example
+# This configuration indexes multiple vaults into a shared database,
+# enabling cross-vault search while maintaining separate content.
+
+# ============================================
+# VAULT DEFINITIONS
+# ============================================
+# Define each vault with [[vaults]] sections
+
+[[vaults]]
+name = "obsidian"
+root = "/Users/me/Documents/Obsidian"
+ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store", "**/~$*"]
+
+[[vaults]]
+name = "work"
+root = "/Users/me/work/documents"
+ignore = [".git/**", "**/.DS_Store", "**/node_modules/**", "**/~$*"]
+
+[[vaults]]
+name = "research"
+root = "/Users/me/research/papers"
+# Uses default ignore patterns when not specified
+enabled = true  # Can set to false to temporarily exclude a vault
+
+# ============================================
+# SHARED INDEX DIRECTORY
+# ============================================
+# All vaults share this index directory (single SQLite database)
+
+[index]
+dir = "~/.ragtriever/indexes/all-vaults"
+extractor_version = "v1"
+chunker_version = "v1"
+
+# ============================================
+# CHUNKING SETTINGS
+# ============================================
+
+[chunking]
+overlap_chars = 200       # Overlap between chunks
+max_chunk_size = 2000     # Maximum characters per chunk
+preserve_heading_metadata = true
+
+# ============================================
+# EMBEDDINGS
+# ============================================
+
+[embeddings]
+provider = "sentence_transformers"
+model = "BAAI/bge-small-en-v1.5"
+batch_size = 32
+device = "cpu"  # cpu, cuda, or mps
+offline_mode = true
+
+# Query prefix for asymmetric retrieval (BGE pattern)
+use_query_prefix = true
+query_prefix = "Represent this sentence for searching relevant passages: "
+
+# Optional FAISS for large-scale vector search (>10K chunks)
+# use_faiss = true
+# faiss_index_type = "IVF"  # Flat, IVF, or HNSW
+# faiss_nlist = 100
+# faiss_nprobe = 10
+
+# ============================================
+# IMAGE ANALYSIS
+# ============================================
+# Choose one provider: tesseract, gemini, vertex_ai, or off
+
+[image_analysis]
+provider = "tesseract"  # Local OCR, no API needed
+
+# For Gemini API:
+# provider = "gemini"
+# gemini_model = "gemini-2.0-flash"
+# Set GEMINI_API_KEY environment variable
+
+# For Vertex AI:
+# provider = "vertex_ai"
+# [vertex_ai]
+# project_id = "your-gcp-project-id"
+# location = "global"
+# credentials_file = "/path/to/service-account.json"
+# model = "gemini-2.0-flash-exp"
+
+# ============================================
+# RETRIEVAL SETTINGS
+# ============================================
+
+[retrieval]
+k_vec = 40       # Vector search candidates
+k_lex = 40       # Lexical search candidates
+top_k = 10       # Final results after merging
+use_rerank = false
+
+# Optional reranking (requires sentence-transformers)
+# use_rerank = true
+# rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+# rerank_device = "cpu"
+# rerank_top_k = 10
+
+# ============================================
+# PARALLELIZATION (for scan performance)
+# ============================================
+
+[indexing]
+extraction_workers = 4    # Parallel file extraction workers
+embed_batch_size = 256    # Cross-file embedding batch size
+image_workers = 4         # Parallel image API workers
+parallel_scan = true      # Enable parallel scanning
+
+# ============================================
+# MCP SERVER
+# ============================================
+
+[mcp]
+transport = "stdio"
+
+# ============================================
+# DEFAULT IGNORE PATTERNS
+# ============================================
+# Applied to vaults that don't specify their own ignore patterns
+# Uncomment to customize:
+#
+# default_ignore = [
+#     ".git/**",
+#     ".obsidian/cache/**",
+#     "**/.DS_Store",
+#     "**/~$*",
+#     "**/.~lock.*"
+# ]
+
+# ============================================
+# USAGE EXAMPLES
+# ============================================
+#
+# Scan all vaults:
+#   ragtriever scan --config multi-vault.toml --full
+#
+# Scan specific vault(s):
+#   ragtriever scan --config multi-vault.toml --full --vaults obsidian
+#   ragtriever scan --config multi-vault.toml --full --vaults obsidian --vaults work
+#
+# Query all vaults (default):
+#   ragtriever query --config multi-vault.toml "search term"
+#
+# Query specific vault(s):
+#   ragtriever query --config multi-vault.toml "search term" --vaults research
+#
+# List configured vaults:
+#   ragtriever list-vaults --config multi-vault.toml
+#
+# Show status:
+#   ragtriever status --config multi-vault.toml
+#
+# Watch all vaults for changes:
+#   ragtriever watch --config multi-vault.toml
+#
+# Watch specific vault(s):
+#   ragtriever watch --config multi-vault.toml --vaults obsidian

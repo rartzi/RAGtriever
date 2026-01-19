@@ -2,26 +2,31 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
 
-from ..config import VaultConfig
-from ..retrieval.retriever import Retriever
-from .tools import tool_search, tool_open, tool_neighbors, tool_status
+from ..config import VaultConfig, MultiVaultConfig
+from ..retrieval.retriever import Retriever, MultiVaultRetriever
+from .tools import tool_search, tool_open, tool_neighbors, tool_status, tool_list_vaults
 
 TOOL_MAP = {
     "vault.search": tool_search,
     "vault.open": tool_open,
     "vault.neighbors": tool_neighbors,
     "vault.status": tool_status,
+    "vault.list": tool_list_vaults,
 }
 
-def run_stdio_server(cfg: VaultConfig) -> None:
+def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
     """Minimal JSON-RPC-ish server over stdio.
 
     NOTE: MCP implementations vary; a coding agent should adapt this stub to the
     target MCP SDK/contract for the chosen host (Claude Code, Codex, Gemini, etc.).
+
+    Supports both single-vault (VaultConfig) and multi-vault (MultiVaultConfig) configurations.
     """
-    retriever = Retriever(cfg)
+    if isinstance(cfg, MultiVaultConfig):
+        retriever: Retriever | MultiVaultRetriever = MultiVaultRetriever(cfg)
+    else:
+        retriever = Retriever(cfg)
 
     for line in sys.stdin:
         line = line.strip()
