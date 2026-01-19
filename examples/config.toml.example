@@ -106,9 +106,9 @@ use_rerank = false
 # Parallelization (3.6x speedup for full scans)
 # Parallel scanning is enabled by default
 [indexing]
-extraction_workers = 4    # Parallel file extraction workers
+extraction_workers = 8    # Parallel file extraction workers (default: 8)
 embed_batch_size = 256    # Cross-file embedding batch size (GPU efficiency)
-image_workers = 4         # Parallel image API workers (Gemini/Vertex AI)
+image_workers = 8         # Parallel image API workers (default: 8)
 parallel_scan = true      # Enable/disable parallel scanning
 # CLI overrides: --workers N, --no-parallel
 

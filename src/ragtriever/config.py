@@ -88,9 +88,9 @@ class VaultConfig:
     rerank_top_k: int = 10
 
     # Parallelization
-    extraction_workers: int = 4       # Number of parallel extraction workers
+    extraction_workers: int = 8       # Number of parallel extraction workers
     embed_batch_size: int = 256       # Cross-file embedding batch size
-    image_workers: int = 4            # Number of parallel image API workers
+    image_workers: int = 8            # Number of parallel image API workers
     parallel_scan: bool = True        # Enable parallel scanning
 
     # MCP
@@ -231,9 +231,9 @@ class VaultConfig:
             rerank_model=rerank_model,
             rerank_device=rerank_device,
             rerank_top_k=rerank_top_k,
-            extraction_workers=int(indexing.get("extraction_workers", min(os.cpu_count() or 4, 8))),
+            extraction_workers=int(indexing.get("extraction_workers", 8)),
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
-            image_workers=int(indexing.get("image_workers", 4)),
+            image_workers=int(indexing.get("image_workers", 8)),
             parallel_scan=bool(indexing.get("parallel_scan", True)),
             mcp_transport=mcp.get("transport", "stdio"),
         )
@@ -300,9 +300,9 @@ class MultiVaultConfig:
     rerank_top_k: int = 10
 
     # Parallelization
-    extraction_workers: int = 4
+    extraction_workers: int = 8
     embed_batch_size: int = 256
-    image_workers: int = 4
+    image_workers: int = 8
     parallel_scan: bool = True
 
     # MCP
@@ -442,9 +442,9 @@ class MultiVaultConfig:
             rerank_model=ret.get("rerank_model", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             rerank_device=ret.get("rerank_device", "cpu"),
             rerank_top_k=int(ret.get("rerank_top_k", 10)),
-            extraction_workers=int(indexing.get("extraction_workers", min(os.cpu_count() or 4, 8))),
+            extraction_workers=int(indexing.get("extraction_workers", 8)),
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
-            image_workers=int(indexing.get("image_workers", 4)),
+            image_workers=int(indexing.get("image_workers", 8)),
             parallel_scan=bool(indexing.get("parallel_scan", True)),
             mcp_transport=mcp.get("transport", "stdio"),
         )

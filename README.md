@@ -448,9 +448,9 @@ Vault (filesystem)
 | `[retrieval]` | `top_k` | Default number of results | `10` |
 | `[retrieval]` | `k_vec` | Vector search candidates | `40` |
 | `[retrieval]` | `k_lex` | Lexical search candidates | `40` |
-| `[indexing]` | `extraction_workers` | Parallel file extraction workers | `4` |
+| `[indexing]` | `extraction_workers` | Parallel file extraction workers | `8` |
 | `[indexing]` | `embed_batch_size` | Cross-file embedding batch size | `256` |
-| `[indexing]` | `image_workers` | Parallel image API workers | `4` |
+| `[indexing]` | `image_workers` | Parallel image API workers | `8` |
 | `[indexing]` | `parallel_scan` | Enable parallel scanning | `true` |
 
 **Note**: RAGtriever automatically extracts and analyzes images embedded in PDFs and PowerPoint presentations, as well as images referenced in Markdown files (`![](image.png)` and `![[image.png]]`). These are indexed as separate chunks linked to their parent documents.

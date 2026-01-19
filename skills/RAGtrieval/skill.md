@@ -193,9 +193,9 @@ ragtriever watch --config config.toml
 Parallel scanning is enabled by default. Configure in `config.toml`:
 ```toml
 [indexing]
-extraction_workers = 4    # Parallel file extraction workers
+extraction_workers = 8    # Parallel file extraction workers (default: 8)
 embed_batch_size = 256    # Cross-file embedding batch size
-image_workers = 4         # Parallel image API workers
+image_workers = 8         # Parallel image API workers (default: 8)
 parallel_scan = true      # Enable/disable parallel scanning
 ```
 

@@ -151,9 +151,9 @@ ragtriever query "kubernetes deployment" --k 10 --rerank
 
 ### Parallel Scanning (3.6x Speedup)
 Parallel scanning is enabled by default for faster full vault scans. Configure in `[indexing]`:
-- `extraction_workers = 4`: Parallel file extraction workers
+- `extraction_workers = 8`: Parallel file extraction workers (default: 8)
 - `embed_batch_size = 256`: Cross-file embedding batch size
-- `image_workers = 4`: Parallel image API workers
+- `image_workers = 8`: Parallel image API workers (default: 8)
 - `parallel_scan = true`: Enable/disable parallel scanning
 
 **CLI overrides:**
