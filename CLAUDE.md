@@ -15,7 +15,7 @@ RAGtriever Local is a local-first vault indexer + hybrid retrieval system with M
 ## Commands
 
 ```bash
-# Setup
+# Setup (requires Python 3.11+)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -57,12 +57,27 @@ The codebase uses Python Protocol classes for pluggable adapters:
 - **doc_id**: `blake2b("{vault_id}:{rel_path}")[:24]`
 - **chunk_id**: `blake2b("{doc_id}:{anchor_type}:{anchor_ref}:{text_hash}")[:32]`
 
+### Link Graph
+`[[wikilinks]]` and `![[embeds]]` are extracted during indexing and stored in a `links` table for graph traversal (`vault.neighbors` MCP tool).
+
+### Module Organization
+```
+src/ragtriever/
+├── extractors/    # File parsers (markdown, pdf, pptx, xlsx, image)
+├── chunking/      # Text segmentation (heading-aware, boundary markers)
+├── embeddings/    # Vector generation (SentenceTransformers, Ollama)
+├── retrieval/     # Hybrid search + ranking logic
+├── store/         # SQLite persistence layer
+├── indexer/       # Orchestration (change detection, reconciliation, queue)
+└── mcp/           # Model Context Protocol server + tools
+```
+
 ### Key Entry Points
 - `src/ragtriever/cli.py`: Typer CLI (`ragtriever` command) with commands: init, scan, query, watch, open, mcp
 - `src/ragtriever/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
 - `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
 - `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
-- `src/ragtriever/store/libsql_store.py`: SQLite-based storage implementation (`vaultrag.sqlite` database file)
+- `src/ragtriever/store/libsql_store.py`: SQLite-based storage with FTS5 + vector BLOBs (`vaultrag.sqlite`)
 
 ### Hybrid Retrieval Strategy
 1. Lexical candidates via SQLite FTS5
@@ -93,25 +108,11 @@ Set `offline_mode = true` in `[embeddings]` to use cached models only (no Huggin
 - **vertex_ai**: Google Vertex AI with service account JSON credentials (requires google-cloud-aiplatform)
 - **off**: Disable image analysis
 
-## Security
+## Security Notes
 
-### Credentials Management
-- **Never commit** `config.toml` or credential files to version control
-- Store service account JSON files outside the repository (e.g., `~/.config/gcloud/`)
-- Use environment variables for sensitive values when possible
-- The `.gitignore` file protects: `config.toml`, `.env`, `*.key`, `secrets/`, `credentials/`, and API key patterns
-
-### Configuration Validation
-Config loading performs security validations:
-- Credentials file path: Validates existence, file type, and read permissions
-- Numeric values: Validates ranges (batch_size: 1-10000, k_vec/k_lex/top_k: 1-1000)
-- Device: Validates against allowed values (cpu, cuda, mps)
-- Path traversal protection: Resolves paths to absolute before validation
-
-### Logging
-- Sensitive information (credentials paths, project IDs) logged at DEBUG level only
-- Use INFO level for normal operations to avoid exposing sensitive data in production logs
-- Enable DEBUG logging only in development environments
+- `config.toml` and credential files are in `.gitignore` - never commit them
+- Config validation checks credential file existence, numeric ranges, and allowed device values
+- Sensitive info (credentials paths, project IDs) only logged at DEBUG level
 
 ### Side Effects
 ⚠️ **Important**: Configuration loading has side effects:
