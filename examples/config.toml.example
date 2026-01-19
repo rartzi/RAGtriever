@@ -103,5 +103,14 @@ use_rerank = false
 #   "cross-encoder/ms-marco-MiniLM-L-6-v2"   - Balanced (100-200ms, 80MB) ✅ Default
 #   "cross-encoder/ms-marco-electra-base"    - Accurate (200-400ms, 400MB)
 
+# Parallelization (3.6x speedup for full scans)
+# Parallel scanning is enabled by default
+[indexing]
+extraction_workers = 4    # Parallel file extraction workers
+embed_batch_size = 256    # Cross-file embedding batch size (GPU efficiency)
+image_workers = 4         # Parallel image API workers (Gemini/Vertex AI)
+parallel_scan = true      # Enable/disable parallel scanning
+# CLI overrides: --workers N, --no-parallel
+
 [mcp]
 transport = "stdio"
