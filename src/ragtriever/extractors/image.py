@@ -1,16 +1,42 @@
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import logging
 import json
 import os
+import re
 
 from .base import Extracted
 
 logger = logging.getLogger(__name__)
+
+
+def _fix_json_escapes(text: str) -> str:
+    """Fix common invalid escape sequences in JSON returned by LLMs.
+
+    LLMs sometimes return JSON with invalid escape sequences like:
+    - \\N, \\: (backslash followed by non-escape character)
+    - Unescaped control characters
+
+    This function attempts to fix these before JSON parsing.
+    """
+    # Fix invalid escape sequences: \X where X is not a valid JSON escape char
+    # Valid JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+    def fix_escape(match: re.Match) -> str:
+        char = match.group(1)
+        if char in '"\\bfnrt/':
+            return match.group(0)  # Valid escape, keep as-is
+        elif char == 'u':
+            return match.group(0)  # Unicode escape, keep as-is
+        else:
+            # Invalid escape - double the backslash to make it literal
+            return '\\\\' + char
+
+    # Match backslash followed by any character
+    fixed = re.sub(r'\\(.)', fix_escape, text)
+    return fixed
 
 
 @dataclass
@@ -203,7 +229,13 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
                 # Remove first line (```json) and last line (```)
                 response_text = "\n".join(lines[1:-1])
 
-            result = json.loads(response_text)
+            # Try parsing as-is first, then with escape fixes
+            try:
+                result = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Fix invalid escape sequences and retry
+                fixed_text = _fix_json_escapes(response_text)
+                result = json.loads(fixed_text)
             return result
 
         except json.JSONDecodeError as e:
@@ -396,7 +428,13 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
                 # Remove first line (```json) and last line (```)
                 response_text = "\n".join(lines[1:-1])
 
-            result = json.loads(response_text)
+            # Try parsing as-is first, then with escape fixes
+            try:
+                result = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Fix invalid escape sequences and retry
+                fixed_text = _fix_json_escapes(response_text)
+                result = json.loads(fixed_text)
             return result
 
         except json.JSONDecodeError as e:
