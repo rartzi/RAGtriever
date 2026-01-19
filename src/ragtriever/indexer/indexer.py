@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-
+from typing import Sequence
 
 from ..config import VaultConfig
+from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats
 from ..hashing import hash_file, blake2b_hex
 from ..paths import relpath
 from ..models import Document, Chunk
@@ -91,11 +95,435 @@ class Indexer:
         else:
             raise ValueError(f"Unknown embedding provider: {self.cfg.embedding_provider}")
 
-    def scan(self, full: bool = False) -> None:
-        """Scan and index files. `full=True` means re-index all; otherwise only changed."""
+    def scan(self, full: bool = False) -> ScanStats:
+        """Scan and index files. `full=True` means re-index all; otherwise only changed.
+
+        Uses parallel scanning if cfg.parallel_scan is True.
+        """
+        if self.cfg.parallel_scan:
+            return self.scan_parallel(full=full)
+
+        # Sequential scan (original behavior)
+        start = time.time()
         rec = Reconciler(self.cfg.vault_root, self.cfg.ignore)
+        files_indexed = 0
         for p in rec.scan_files():
             self._index_one(p, force=full)
+            files_indexed += 1
+
+        return ScanStats(
+            files_scanned=files_indexed,
+            files_indexed=files_indexed,
+            elapsed_seconds=time.time() - start,
+        )
+
+    def scan_parallel(self, full: bool = False) -> ScanStats:
+        """Parallel scan with batched embedding and writes.
+
+        Phase 1: Parallel extraction/chunking (ThreadPoolExecutor)
+        Phase 2: Batched embedding across files
+        Phase 3: Parallel image analysis (if enabled)
+        """
+        logger = logging.getLogger(__name__)
+        start = time.time()
+
+        # Discover files
+        rec = Reconciler(self.cfg.vault_root, self.cfg.ignore)
+        paths = rec.scan_files()
+        logger.info(f"Found {len(paths)} files to index")
+
+        # Phase 1: Parallel extraction and chunking
+        extraction_results: list[ExtractionResult] = []
+        image_tasks: list[ImageTask] = []
+        files_failed = 0
+
+        with ThreadPoolExecutor(max_workers=self.cfg.extraction_workers) as executor:
+            futures = {
+                executor.submit(self._extract_and_chunk_one, p): p
+                for p in paths
+            }
+
+            for future in as_completed(futures):
+                path = futures[future]
+                try:
+                    result = future.result()
+                    if result is None:
+                        continue  # Skipped file
+
+                    if result.error:
+                        logger.warning(f"Extraction failed for {path}: {result.error}")
+                        files_failed += 1
+                        continue
+
+                    extraction_results.append(result)
+
+                    # Collect image tasks for Phase 3
+                    for img in result.embedded_images:
+                        image_tasks.append(ImageTask(
+                            parent_doc_id=result.doc_id,
+                            parent_path=result.rel_path,
+                            vault_id=result.vault_id,
+                            file_type=result.file_type,
+                            image_data=img,
+                            task_type="embedded",
+                        ))
+                    for ref in result.image_references:
+                        image_tasks.append(ImageTask(
+                            parent_doc_id=result.doc_id,
+                            parent_path=result.rel_path,
+                            vault_id=result.vault_id,
+                            file_type=result.file_type,
+                            image_data=ref,
+                            task_type="reference",
+                        ))
+
+                except Exception as e:
+                    logger.error(f"Worker crashed for {path}: {e}")
+                    files_failed += 1
+
+        logger.info(f"Phase 1 complete: {len(extraction_results)} files extracted, {files_failed} failed")
+
+        # Phase 2: Batched embedding and storage
+        chunks_created, embeddings_created = self._batch_embed_and_store(extraction_results)
+        logger.info(f"Phase 2 complete: {chunks_created} chunks, {embeddings_created} embeddings")
+
+        # Phase 3: Parallel image analysis
+        images_processed = 0
+        if image_tasks and self.cfg.image_analysis_provider != "off":
+            images_processed = self._parallel_process_images(image_tasks)
+            logger.info(f"Phase 3 complete: {images_processed} images processed")
+
+        elapsed = time.time() - start
+        return ScanStats(
+            files_scanned=len(paths),
+            files_indexed=len(extraction_results),
+            files_failed=files_failed,
+            chunks_created=chunks_created,
+            embeddings_created=embeddings_created,
+            images_processed=images_processed,
+            elapsed_seconds=elapsed,
+        )
+
+    def _extract_and_chunk_one(self, abs_path: Path) -> ExtractionResult | None:
+        """Extract and chunk a single file (thread-safe, no DB writes).
+
+        Returns ExtractionResult with chunks ready for embedding,
+        or None if file should be skipped.
+        """
+        if not abs_path.is_file():
+            return None
+        if not abs_path.suffix:
+            return None
+
+        extractor = self.extractors.get(abs_path)
+        if extractor is None:
+            return None
+
+        rel = relpath(self.cfg.vault_root, abs_path)
+
+        try:
+            st = abs_path.stat()
+            chash = hash_file(abs_path)
+            doc_id = blake2b_hex(f"{self.vault_id}:{rel}".encode("utf-8"))[:24]
+            file_type = abs_path.suffix.lower().lstrip(".")
+
+            # Extract
+            extracted = extractor.extract(abs_path)
+
+            # Determine chunker type label
+            if file_type == "md":
+                type_label = "markdown"
+            elif file_type in ("png", "jpg", "jpeg", "webp"):
+                type_label = "image"
+            else:
+                type_label = file_type
+
+            chunker = self.chunkers.get(type_label)
+            if chunker is None:
+                return None
+
+            # Filter metadata for chunking
+            chunking_metadata = {k: v for k, v in extracted.metadata.items()
+                                if k not in ("embedded_images", "image_references", "source_pdf")}
+
+            # Chunk
+            chunked = chunker.chunk(extracted.text, chunking_metadata)
+
+            # Build chunk data objects
+            chunks: list[ChunkData] = []
+            for c in chunked:
+                text_norm = c.text.strip()
+                if not text_norm:
+                    continue
+                th = blake2b_hex(text_norm.encode("utf-8"))
+                cid = blake2b_hex(f"{doc_id}:{c.anchor_type}:{c.anchor_ref}:{th}".encode("utf-8"))[:32]
+                meta = dict(c.metadata or {})
+                meta.update({
+                    "rel_path": rel,
+                    "file_type": type_label,
+                    "anchor_type": c.anchor_type,
+                    "anchor_ref": c.anchor_ref,
+                })
+                chunks.append(ChunkData(
+                    chunk_id=cid,
+                    doc_id=doc_id,
+                    vault_id=self.vault_id,
+                    anchor_type=c.anchor_type,
+                    anchor_ref=c.anchor_ref,
+                    text=text_norm,
+                    text_hash=th,
+                    metadata=meta,
+                ))
+
+            # Collect links
+            links: list[tuple[str, str]] = []
+            if type_label == "markdown":
+                for link in extracted.metadata.get("wikilinks", []):
+                    links.append((link, "wikilink"))
+
+            return ExtractionResult(
+                abs_path=abs_path,
+                rel_path=rel,
+                doc_id=doc_id,
+                vault_id=self.vault_id,
+                file_type=type_label,
+                content_hash=chash,
+                mtime=int(st.st_mtime),
+                size=int(st.st_size),
+                chunks=chunks,
+                embedded_images=extracted.metadata.get("embedded_images", []),
+                image_references=extracted.metadata.get("image_references", []),
+                links=links,
+                error=None,
+            )
+
+        except Exception as e:
+            return ExtractionResult(
+                abs_path=abs_path,
+                rel_path=rel,
+                doc_id="",
+                vault_id=self.vault_id,
+                file_type="",
+                content_hash="",
+                mtime=0,
+                size=0,
+                error=str(e),
+            )
+
+    def _batch_embed_and_store(self, results: list[ExtractionResult]) -> tuple[int, int]:
+        """Batch embed chunks across files and write to store.
+
+        Returns (chunks_created, embeddings_created).
+        """
+        from ..models import Document, Chunk
+
+        # Collect all documents, chunks, and texts
+        all_docs: list[Document] = []
+        all_chunks: list[Chunk] = []
+        all_texts: list[str] = []
+        all_chunk_ids: list[str] = []
+
+        for result in results:
+            doc = Document(
+                doc_id=result.doc_id,
+                vault_id=result.vault_id,
+                rel_path=result.rel_path,
+                file_type=result.file_type,
+                mtime=result.mtime,
+                size=result.size,
+                content_hash=result.content_hash,
+                deleted=False,
+                metadata={"extractor_version": self.cfg.extractor_version},
+            )
+            all_docs.append(doc)
+
+            for chunk_data in result.chunks:
+                chunk = Chunk(
+                    chunk_id=chunk_data.chunk_id,
+                    doc_id=chunk_data.doc_id,
+                    vault_id=chunk_data.vault_id,
+                    anchor_type=chunk_data.anchor_type,
+                    anchor_ref=chunk_data.anchor_ref,
+                    text=chunk_data.text,
+                    text_hash=chunk_data.text_hash,
+                    metadata=chunk_data.metadata,
+                )
+                all_chunks.append(chunk)
+                all_texts.append(chunk_data.text)
+                all_chunk_ids.append(chunk_data.chunk_id)
+
+        # Batch write documents
+        for doc in all_docs:
+            self.store.upsert_document(doc)
+
+        # Batch write chunks
+        if all_chunks:
+            self.store.upsert_chunks(all_chunks)
+
+        # Batch embedding (cross-file) in chunks of embed_batch_size
+        embeddings_created = 0
+        if all_texts:
+            batch_size = self.cfg.embed_batch_size
+            for i in range(0, len(all_texts), batch_size):
+                batch_texts = all_texts[i:i + batch_size]
+                batch_ids = all_chunk_ids[i:i + batch_size]
+
+                vectors = self.embedder.embed_texts(batch_texts)
+                self.store.upsert_embeddings(batch_ids, model_id=self.embedder.model_id, vectors=vectors)
+                embeddings_created += len(batch_ids)
+
+        return len(all_chunks), embeddings_created
+
+    def _parallel_process_images(self, tasks: list[ImageTask]) -> int:
+        """Process images in parallel using thread pool.
+
+        Returns number of images successfully processed.
+        """
+        logger = logging.getLogger(__name__)
+
+        processed = 0
+        image_chunks: list[tuple[Chunk, str]] = []  # (chunk, text)
+
+        with ThreadPoolExecutor(max_workers=self.cfg.image_workers) as executor:
+            futures = {
+                executor.submit(self._process_single_image, task): task
+                for task in tasks
+            }
+
+            for future in as_completed(futures):
+                task = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        image_chunks.append(result)
+                        processed += 1
+                except Exception as e:
+                    logger.warning(f"Image processing failed for {task.parent_path}: {e}")
+
+        # Batch embed and store image chunks
+        if image_chunks:
+            chunks = [c for c, _ in image_chunks]
+            texts = [t for _, t in image_chunks]
+            ids = [c.chunk_id for c in chunks]
+
+            self.store.upsert_chunks(chunks)
+
+            # Batch embed
+            batch_size = self.cfg.embed_batch_size
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                batch_ids = ids[i:i + batch_size]
+
+                vectors = self.embedder.embed_texts(batch_texts)
+                self.store.upsert_embeddings(batch_ids, model_id=self.embedder.model_id, vectors=vectors)
+
+        return processed
+
+    def _process_single_image(self, task: ImageTask) -> tuple[Chunk, str] | None:
+        """Process a single image (thread-safe, returns chunk data).
+
+        Returns (Chunk, text) or None if processing failed.
+        """
+        import tempfile
+        from ..models import Chunk
+
+        logger = logging.getLogger(__name__)
+
+        # Get image extractor
+        image_extractor = None
+        for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+            dummy_path = Path(f"dummy{suffix}")
+            image_extractor = self.extractors.get(dummy_path)
+            if image_extractor is not None:
+                break
+
+        if image_extractor is None:
+            return None
+
+        tmp_path = None
+        try:
+            if task.task_type == "embedded":
+                # Create temp file for embedded image
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+
+                    if "image_bytes" in task.image_data:
+                        tmp.write(task.image_data["image_bytes"])
+                    else:
+                        # PDF case - skip for now (requires fitz which may not be thread-safe)
+                        return None
+
+                img_analysis = image_extractor.extract(tmp_path)
+
+                if not img_analysis.text.strip():
+                    return None
+
+                # Determine anchor reference
+                if "page_num" in task.image_data:
+                    anchor_ref = f"page_{task.image_data['page_num']}"
+                elif "slide_num" in task.image_data:
+                    anchor_ref = f"slide_{task.image_data['slide_num']}"
+                else:
+                    anchor_ref = "embedded_image"
+
+                anchor_type = f"{task.file_type}_image"
+
+            else:  # reference
+                img_path = Path(task.image_data["abs_path"])
+                if not img_path.exists():
+                    return None
+
+                image_extractor = self.extractors.get(img_path)
+                if image_extractor is None:
+                    return None
+
+                img_analysis = image_extractor.extract(img_path)
+
+                if not img_analysis.text.strip():
+                    return None
+
+                anchor_ref = task.image_data["rel_path"]
+                anchor_type = "markdown_image"
+
+            # Create chunk
+            text_norm = img_analysis.text.strip()
+            th = blake2b_hex(text_norm.encode("utf-8"))
+            cid = blake2b_hex(f"{task.parent_doc_id}:{anchor_type}:{anchor_ref}:{th}".encode("utf-8"))[:32]
+
+            meta = {
+                "rel_path": task.parent_path,
+                "file_type": task.file_type,
+                "anchor_type": anchor_type,
+                "anchor_ref": anchor_ref,
+            }
+            if "width" in task.image_data:
+                meta["image_width"] = task.image_data["width"]
+            if "height" in task.image_data:
+                meta["image_height"] = task.image_data["height"]
+            meta.update(img_analysis.metadata)
+
+            chunk = Chunk(
+                chunk_id=cid,
+                doc_id=task.parent_doc_id,
+                vault_id=task.vault_id,
+                anchor_type=anchor_type,
+                anchor_ref=anchor_ref,
+                text=text_norm,
+                text_hash=th,
+                metadata=meta,
+            )
+
+            return (chunk, text_norm)
+
+        except Exception as e:
+            logger.warning(f"Failed to process image: {e}")
+            return None
+        finally:
+            if tmp_path and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
 
     def watch(self) -> None:
         """Watch loop that indexes in response to filesystem events."""

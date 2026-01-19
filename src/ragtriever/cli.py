@@ -58,12 +58,32 @@ transport = "stdio"
     typer.echo(f"Wrote {outp}")
 
 @app.command()
-def scan(config: str = typer.Option("config.toml"), full: bool = typer.Option(False, help="Re-index all files")):
+def scan(
+    config: str = typer.Option("config.toml"),
+    full: bool = typer.Option(False, help="Re-index all files"),
+    parallel: bool = typer.Option(None, help="Override parallel_scan config"),
+    workers: int = typer.Option(None, help="Override extraction_workers"),
+):
     """Scan vault and index."""
     cfg = _cfg(config)
+
+    # Override parallelization settings if specified via CLI
+    if parallel is not None:
+        cfg = dataclasses.replace(cfg, parallel_scan=parallel)
+    if workers is not None:
+        cfg = dataclasses.replace(cfg, extraction_workers=workers)
+
     idx = Indexer(cfg)
-    idx.scan(full=full)
-    typer.echo("Scan complete.")
+    stats = idx.scan(full=full)
+
+    if stats.elapsed_seconds > 0:
+        typer.echo(f"Scan complete: {stats.files_indexed} files, {stats.chunks_created} chunks in {stats.elapsed_seconds:.1f}s")
+        if stats.files_failed > 0:
+            typer.echo(f"  ({stats.files_failed} files failed)")
+        if stats.images_processed > 0:
+            typer.echo(f"  ({stats.images_processed} images processed)")
+    else:
+        typer.echo("Scan complete.")
 
 @app.command()
 def query(q: str, config: str = typer.Option("config.toml"), k: int = typer.Option(10),
