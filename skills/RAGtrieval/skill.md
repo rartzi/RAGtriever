@@ -1,19 +1,49 @@
 ---
 name: RAGtrieval
-description: Workflow assistant for RAGtriever - setup, configuration, scanning, and troubleshooting
+description: Answer questions from indexed vault content using RAGtriever search, plus setup, configuration, and troubleshooting
 ---
 
 # RAGtrieval Skill
 
 Claude Code skill for working with RAGtriever (local-first vault indexer with hybrid retrieval).
 
+**Primary Purpose:** Search and answer questions from the indexed vault content, not the RAGtriever codebase.
+
 ## When to Use This Skill
 
+- **Answering questions about vault content** - Always use RAGtriever to search indexed content
 - Setting up RAGtriever for a new vault
 - Configuring image analysis (Tesseract, Gemini API, or Vertex AI)
 - Troubleshooting scanning or indexing issues
 - Testing search and retrieval functionality
 - Working with embeddings and offline mode
+
+## CRITICAL: Answering Questions from Vault Content
+
+**When the user asks ANY question that could be answered from vault content:**
+
+1. **ALWAYS use `ragtriever query` to search the indexed vault**
+2. **NEVER answer from memory or assumptions about the codebase**
+3. **The vault content is the source of truth** - not the RAGtriever repository code itself
+
+### Question Types to Search For:
+- "What ideas do we have?" → Search vault for ideas
+- "List all projects" → Search vault for projects
+- "Who is working on X?" → Search vault for people/assignments
+- "What's the status of Y?" → Search vault for status updates
+- "Find information about Z" → Search vault content
+
+### Example Query Pattern:
+```bash
+source .venv/bin/activate
+ragtriever query --config config.toml "user's question keywords" --k 15
+```
+
+### Current Vault Configuration:
+Check `test_config.toml` or the active config to see:
+- Vault root path (what content is indexed)
+- Index directory (where the database lives)
+- Which files are included/ignored
 
 ## Pre-flight Checks
 
@@ -372,13 +402,15 @@ nohup ragtriever watch --config config.toml > watch.log 2>&1 &
 
 When helping users with RAGtriever:
 
-1. **Always check config first** - Most issues stem from configuration
-2. **Verify virtual environment** - Commands fail if venv not activated
-3. **Check file paths** - Use absolute paths, expand ~
-4. **Office temp files** - First thing to check if PPTX extraction fails
-5. **Offline mode** - Corporate users need this; verify model is cached
-6. **Rate limits are OK** - 429 errors are expected with many images
-7. **Test incrementally** - Small vault first, then scale up
+1. **ALWAYS search vault content first** - When user asks questions, use `ragtriever query` to search indexed vault
+2. **Vault content ≠ RAGtriever code** - Don't confuse searching the vault (user's content) with RAGtriever repository code
+3. **Always check config first** - Most issues stem from configuration
+4. **Verify virtual environment** - Commands fail if venv not activated
+5. **Check file paths** - Use absolute paths, expand ~
+6. **Office temp files** - First thing to check if PPTX extraction fails
+7. **Offline mode** - Corporate users need this; verify model is cached
+8. **Rate limits are OK** - 429 errors are expected with many images
+9. **Test incrementally** - Small vault first, then scale up
 
 ## Notes
 
