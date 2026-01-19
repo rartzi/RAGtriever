@@ -73,6 +73,12 @@ class VaultConfig:
     rerank_device: str = "cpu"  # cpu|cuda|mps
     rerank_top_k: int = 10
 
+    # Parallelization
+    extraction_workers: int = 4       # Number of parallel extraction workers
+    embed_batch_size: int = 256       # Cross-file embedding batch size
+    image_workers: int = 4            # Number of parallel image API workers
+    parallel_scan: bool = True        # Enable parallel scanning
+
     # MCP
     mcp_transport: str = "stdio"
 
@@ -87,6 +93,7 @@ class VaultConfig:
         vertex = data.get("vertex_ai", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
+        indexing = data.get("indexing", {})
 
         vault_root = Path(_expand(vault["root"])).resolve()
         index_dir = Path(_expand(index["dir"])).resolve()
@@ -210,5 +217,9 @@ class VaultConfig:
             rerank_model=rerank_model,
             rerank_device=rerank_device,
             rerank_top_k=rerank_top_k,
+            extraction_workers=int(indexing.get("extraction_workers", min(os.cpu_count() or 4, 8))),
+            embed_batch_size=int(indexing.get("embed_batch_size", 256)),
+            image_workers=int(indexing.get("image_workers", 4)),
+            parallel_scan=bool(indexing.get("parallel_scan", True)),
             mcp_transport=mcp.get("transport", "stdio"),
         )

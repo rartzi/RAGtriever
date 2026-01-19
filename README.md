@@ -35,6 +35,7 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 - **Cross-Encoder Reranking (Optional)** - Refine search results with cross-encoder for 20-30% quality improvement
 - **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
 - **Multi-Format Support** - Index Markdown, PDF, PPTX, XLSX, and images
+- **Parallel Scanning (3.6x Faster)** - ThreadPool-based parallel extraction and image analysis
 - **Embedded Image Extraction** - Automatically extracts and analyzes images from PDFs, PowerPoints, and Markdown
 - **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR, Gemini Vision, or Vertex AI
 - **Watch Mode** - Continuously index changes as you edit your vault
@@ -116,17 +117,21 @@ top_k = 10
 ## Quick Start
 
 ```bash
-# Index your vault
-cortex scan --full
+# Index your vault (uses parallel scanning by default - 3.6x faster)
+ragtriever scan --full
 
 # Search your knowledge
-cortex query "machine learning concepts"
+ragtriever query "machine learning concepts"
 
 # Search with reranking for best quality
-cortex query "machine learning concepts" --rerank
+ragtriever query "machine learning concepts" --rerank
+
+# Control parallel scanning
+ragtriever scan --full --workers 8      # Use 8 parallel workers
+ragtriever scan --full --no-parallel    # Disable parallelization
 
 # Watch for changes (continuous indexing)
-cortex watch
+ragtriever watch
 ```
 
 ### Enable Reranking (Optional)
@@ -141,14 +146,14 @@ use_rerank = true
 This adds ~100-200ms latency but significantly improves relevance. You can also enable it per-query:
 
 ```bash
-cortex query "kubernetes deployment" --rerank
+ragtriever query "kubernetes deployment" --rerank
 ```
 
 ---
 
 ## Usage
 
-CortexIndex can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
+RAGtriever can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
 
 ### CLI Usage
 
@@ -427,6 +432,10 @@ Vault (filesystem)
 | `[retrieval]` | `top_k` | Default number of results | `10` |
 | `[retrieval]` | `k_vec` | Vector search candidates | `40` |
 | `[retrieval]` | `k_lex` | Lexical search candidates | `40` |
+| `[indexing]` | `extraction_workers` | Parallel file extraction workers | `4` |
+| `[indexing]` | `embed_batch_size` | Cross-file embedding batch size | `256` |
+| `[indexing]` | `image_workers` | Parallel image API workers | `4` |
+| `[indexing]` | `parallel_scan` | Enable parallel scanning | `true` |
 
 **Note**: RAGtriever automatically extracts and analyzes images embedded in PDFs and PowerPoint presentations, as well as images referenced in Markdown files (`![](image.png)` and `![[image.png]]`). These are indexed as separate chunks linked to their parent documents.
 

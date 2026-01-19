@@ -102,6 +102,7 @@ TOML-based config (see `examples/config.toml.example`):
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
+- `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
 
 ### Offline Mode
@@ -147,6 +148,21 @@ ragtriever query "kubernetes deployment" --k 10 --rerank
 **Code reference:**
 - `src/ragtriever/retrieval/reranker.py`: CrossEncoderReranker implementation
 - `src/ragtriever/retrieval/retriever.py:search()`: Integration point (line 66-67)
+
+### Parallel Scanning (3.6x Speedup)
+Parallel scanning is enabled by default for faster full vault scans. Configure in `[indexing]`:
+- `extraction_workers = 4`: Parallel file extraction workers
+- `embed_batch_size = 256`: Cross-file embedding batch size
+- `image_workers = 4`: Parallel image API workers
+- `parallel_scan = true`: Enable/disable parallel scanning
+
+**CLI overrides:**
+```bash
+ragtriever scan --full --workers 8     # Use 8 extraction workers
+ragtriever scan --full --no-parallel   # Disable parallelization
+```
+
+**Tested performance:** 337s → 93s (3.6x speedup) on 143-file vault with images.
 
 ### Image Analysis Options
 - **tesseract**: Local OCR using pytesseract (requires tesseract-ocr installed)

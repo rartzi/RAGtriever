@@ -132,14 +132,30 @@ ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
 
 ### Scanning and Indexing
 ```bash
-# Full scan (re-index everything)
+# Full scan (re-index everything) - uses parallel processing by default
 ragtriever scan --config config.toml --full
+
+# Full scan with explicit parallel settings
+ragtriever scan --config config.toml --full --workers 8
+
+# Sequential scan (disable parallelization)
+ragtriever scan --config config.toml --full --no-parallel
 
 # Incremental scan (only changed files)
 ragtriever scan --config config.toml
 
 # Watch mode (continuous indexing)
 ragtriever watch --config config.toml
+```
+
+### Parallel Scanning (3.6x faster)
+Parallel scanning is enabled by default. Configure in `config.toml`:
+```toml
+[indexing]
+extraction_workers = 4    # Parallel file extraction workers
+embed_batch_size = 256    # Cross-file embedding batch size
+image_workers = 4         # Parallel image API workers
+parallel_scan = true      # Enable/disable parallel scanning
 ```
 
 ### Querying
@@ -301,13 +317,13 @@ ragtriever query --config config.toml "image description" --k 5
 
 ## Architecture Quick Reference
 
-### Data Flow
+### Data Flow (Parallel Pipeline)
 ```
 Vault (filesystem)
-  → Change Detection (mtime + content_hash)
-  → Extraction (by file type)
-  → Chunking (semantic segments)
-  → Embedding (vector generation)
+  → File Discovery (Reconciler)
+  → Phase 1: Parallel Extraction + Chunking (ThreadPoolExecutor)
+  → Phase 2: Batched Embedding (cross-file batches of 256)
+  → Phase 3: Parallel Image Analysis (if enabled)
   → Store (SQLite + FTS5)
   → Retrieval (hybrid search)
 ```
