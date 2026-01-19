@@ -90,6 +90,9 @@ tmp/
 temp/
 *.tmp
 
+# Output directory
+output/
+
 # Build artifacts
 *.whl
 
