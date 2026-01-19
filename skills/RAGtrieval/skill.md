@@ -25,6 +25,26 @@ Claude Code skill for working with RAGtriever (local-first vault indexer with hy
 1. **ALWAYS use `ragtriever query` to search the indexed vault**
 2. **NEVER answer from memory or assumptions about the codebase**
 3. **The vault content is the source of truth** - not the RAGtriever repository code itself
+4. **ALWAYS cite sources in your response** - Include the file paths and locations where the information was found
+
+### MANDATORY: Citing Sources in Responses
+
+**Every answer based on vault content MUST include a "Sources" section at the end:**
+
+```
+## Sources
+- `path/to/file.md` (Section: Heading Name)
+- `folder/document.pdf` (Page: 5)
+- `presentations/deck.pptx` (Slide: 12)
+- `images/diagram.png` (Image analysis)
+```
+
+**Source citation rules:**
+- List ALL files that contributed to the answer
+- Include the specific location within the file (heading, page, slide number)
+- For images, note that it came from image analysis
+- Use the `rel_path` from search results
+- If information comes from multiple chunks in the same file, list it once with all relevant sections
 
 ### Question Types to Search For:
 - "What ideas do we have?" → Search vault for ideas
@@ -37,6 +57,27 @@ Claude Code skill for working with RAGtriever (local-first vault indexer with hy
 ```bash
 source .venv/bin/activate
 ragtriever query --config config.toml "user's question keywords" --k 15
+```
+
+### Example Response Format:
+
+**User asks:** "What types of agentic workflows exist?"
+
+**Response should be:**
+```
+Based on the vault content, there are two main types of agentic workflows with LLMs:
+
+1. **Reflexion - Learning from Feedback**
+   - Uses self-reflection and evaluation
+   - Components: Actor, Evaluator, Experience memory
+
+2. **Multi-Agent Systems**
+   - Specialized agents working together
+   - Examples: Search agent, Reasoning agent, Hypothesis agent
+
+## Sources
+- `99-Images/Pasted image 20240917165150.png` (Image: Agentic workflows diagram)
+- `99-Images/Pasted image 20240917165410.png` (Image: Amazon Bedrock Agents)
 ```
 
 ### Current Vault Configuration:
@@ -419,14 +460,15 @@ nohup ragtriever watch --config config.toml > watch.log 2>&1 &
 When helping users with RAGtriever:
 
 1. **ALWAYS search vault content first** - When user asks questions, use `ragtriever query` to search indexed vault
-2. **Vault content ≠ RAGtriever code** - Don't confuse searching the vault (user's content) with RAGtriever repository code
-3. **Always check config first** - Most issues stem from configuration
-4. **Verify virtual environment** - Commands fail if venv not activated
-5. **Check file paths** - Use absolute paths, expand ~
-6. **Office temp files** - First thing to check if PPTX extraction fails
-7. **Offline mode** - Corporate users need this; verify model is cached
-8. **Rate limits are OK** - 429 errors are expected with many images
-9. **Test incrementally** - Small vault first, then scale up
+2. **ALWAYS cite sources** - Every response MUST end with a "Sources" section listing file paths and locations
+3. **Vault content ≠ RAGtriever code** - Don't confuse searching the vault (user's content) with RAGtriever repository code
+4. **Always check config first** - Most issues stem from configuration
+5. **Verify virtual environment** - Commands fail if venv not activated
+6. **Check file paths** - Use absolute paths, expand ~
+7. **Office temp files** - First thing to check if PPTX extraction fails
+8. **Offline mode** - Corporate users need this; verify model is cached
+9. **Rate limits are OK** - 429 errors are expected with many images
+10. **Test incrementally** - Small vault first, then scale up
 
 ## Notes
 
