@@ -319,15 +319,22 @@ class LibSqlStore:
 
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         vault_id = filters.get("vault_id")
+        vault_ids = filters.get("vault_ids")  # Support list of vault_ids for multi-vault
         path_prefix = filters.get("path_prefix", "")
-        params = []
+        params: list[Any] = []
         where = "1=1"
-        if vault_id:
+
+        # Handle single vault_id or list of vault_ids
+        if vault_ids:
+            placeholders = ",".join("?" * len(vault_ids))
+            where += f" AND vault_id IN ({placeholders})"
+            params.extend(vault_ids)
+        elif vault_id:
             where += " AND vault_id=?"
             params.append(vault_id)
 
         sql = f"""
-        SELECT chunk_id, bm25(fts_chunks) AS rank, rel_path, text
+        SELECT chunk_id, bm25(fts_chunks) AS rank, rel_path, text, vault_id
         FROM fts_chunks
         WHERE {where} AND fts_chunks MATCH ?
         ORDER BY rank
@@ -344,40 +351,45 @@ class LibSqlStore:
             if path_prefix and not rel.startswith(path_prefix):
                 continue
             snippet = (r["text"] or "")[:600]
+            row_vault_id = r["vault_id"] if "vault_id" in r.keys() else (vault_id or "")
             sr = SourceRef(
-                vault_id=vault_id or "",
+                vault_id=row_vault_id,
                 rel_path=rel,
                 file_type="unknown",
                 anchor_type="chunk",
                 anchor_ref=r["chunk_id"],
                 locator={},
             )
-            results.append(SearchResult(chunk_id=r["chunk_id"], score=float(-r["rank"]), snippet=snippet, source_ref=sr, metadata={"rel_path": rel}))
+            results.append(SearchResult(chunk_id=r["chunk_id"], score=float(-r["rank"]), snippet=snippet, source_ref=sr, metadata={"rel_path": rel, "vault_id": row_vault_id}))
         return results[:k]
 
     def vector_search(self, query_vec: np.ndarray, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         """Vector search with optional FAISS acceleration.
 
         Uses FAISS approximate nearest neighbor if enabled, otherwise brute-force.
+        Supports single vault_id or list of vault_ids for multi-vault search.
         """
         vault_id = filters.get("vault_id")
+        vault_ids = filters.get("vault_ids")  # Support list of vault_ids for multi-vault
         path_prefix = filters.get("path_prefix", "")
 
         # Use FAISS if enabled
         if self.use_faiss and self.faiss_index and self.faiss_index.size() > 0:
-            return self._faiss_vector_search(query_vec, k, vault_id, path_prefix)
+            return self._faiss_vector_search(query_vec, k, vault_id, vault_ids, path_prefix)
         else:
-            return self._brute_force_vector_search(query_vec, k, vault_id, path_prefix)
+            return self._brute_force_vector_search(query_vec, k, vault_id, vault_ids, path_prefix)
 
     def _faiss_vector_search(
         self,
         query_vec: np.ndarray,
         k: int,
         vault_id: Optional[str],
+        vault_ids: Optional[list[str]],
         path_prefix: str,
     ) -> list[SearchResult]:
-        """FAISS-accelerated vector search."""
+        """FAISS-accelerated vector search with multi-vault support."""
         # FAISS search (returns chunk_ids and scores)
+        assert self.faiss_index is not None  # Caller ensures this
         chunk_ids, scores = self.faiss_index.search(query_vec, k * 2)  # Over-fetch for filtering
 
         if not chunk_ids:
@@ -390,12 +402,16 @@ class LibSqlStore:
             FROM chunks c
             WHERE c.chunk_id IN ({placeholders})
         """
+        params: list[Any] = list(chunk_ids)
 
-        if vault_id:
+        # Handle single vault_id or list of vault_ids
+        if vault_ids:
+            vault_placeholders = ",".join("?" * len(vault_ids))
+            query_sql += f" AND c.vault_id IN ({vault_placeholders})"
+            params.extend(vault_ids)
+        elif vault_id:
             query_sql += " AND c.vault_id = ?"
-            params = chunk_ids + [vault_id]
-        else:
-            params = chunk_ids
+            params.append(vault_id)
 
         rows = self._conn.execute(query_sql, params).fetchall()
 
@@ -417,8 +433,9 @@ class LibSqlStore:
                 continue
 
             snippet = (r["text"] or "")[:600]
+            row_vault_id = r["vault_id"]
             sr = SourceRef(
-                vault_id=vault_id or r["vault_id"],
+                vault_id=row_vault_id,
                 rel_path=rel,
                 file_type=meta.get("file_type", "unknown"),
                 anchor_type=meta.get("anchor_type", "chunk"),
@@ -430,7 +447,7 @@ class LibSqlStore:
                 score=score,
                 snippet=snippet,
                 source_ref=sr,
-                metadata=meta
+                metadata={**meta, "vault_id": row_vault_id}
             ))
 
             if len(results) >= k:
@@ -443,22 +460,31 @@ class LibSqlStore:
         query_vec: np.ndarray,
         k: int,
         vault_id: Optional[str],
+        vault_ids: Optional[list[str]],
         path_prefix: str,
     ) -> list[SearchResult]:
-        """Brute-force cosine similarity vector search."""
+        """Brute-force cosine similarity vector search with multi-vault support."""
         q = np.asarray(query_vec, dtype=np.float32).ravel()
         qn = np.linalg.norm(q) + 1e-12
 
-        rows = self._conn.execute(
-            """SELECT e.chunk_id, e.vector, c.text, c.metadata_json
-               FROM embeddings e JOIN chunks c ON c.chunk_id=e.chunk_id
-               WHERE c.vault_id=?
-            """,
-            (vault_id,) if vault_id else ("",),
-        ).fetchall() if vault_id else self._conn.execute(
-            """SELECT e.chunk_id, e.vector, c.text, c.metadata_json, c.vault_id
-               FROM embeddings e JOIN chunks c ON c.chunk_id=e.chunk_id
-            """).fetchall()
+        # Build query based on vault filtering
+        base_sql = """
+            SELECT e.chunk_id, e.vector, c.text, c.metadata_json, c.vault_id
+            FROM embeddings e JOIN chunks c ON c.chunk_id=e.chunk_id
+        """
+
+        if vault_ids:
+            # Filter by list of vault_ids
+            placeholders = ",".join("?" * len(vault_ids))
+            sql = base_sql + f" WHERE c.vault_id IN ({placeholders})"
+            rows = self._conn.execute(sql, vault_ids).fetchall()
+        elif vault_id:
+            # Filter by single vault_id
+            sql = base_sql + " WHERE c.vault_id=?"
+            rows = self._conn.execute(sql, (vault_id,)).fetchall()
+        else:
+            # No vault filter - search all
+            rows = self._conn.execute(base_sql).fetchall()
 
         scored = []
         for r in rows:
@@ -476,8 +502,9 @@ class LibSqlStore:
         for sim, r, meta in scored[:k]:
             rel = meta.get("rel_path", "")
             snippet = (r["text"] or "")[:600]
+            row_vault_id = r["vault_id"] if "vault_id" in r.keys() else (vault_id or "")
             sr = SourceRef(
-                vault_id=vault_id or meta.get("vault_id", ""),
+                vault_id=row_vault_id,
                 rel_path=rel,
                 file_type=meta.get("file_type", "unknown"),
                 anchor_type=meta.get("anchor_type", "chunk"),
@@ -489,7 +516,7 @@ class LibSqlStore:
                 score=sim,
                 snippet=snippet,
                 source_ref=sr,
-                metadata=meta
+                metadata={**meta, "vault_id": row_vault_id}
             ))
         return results
 
