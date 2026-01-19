@@ -30,7 +30,13 @@ class Indexer:
 
     def __post_init__(self) -> None:
         self.vault_id = blake2b_hex(str(self.cfg.vault_root).encode("utf-8"))[:12]
-        self.store = LibSqlStore(self.cfg.index_dir / "vaultrag.sqlite")
+        self.store = LibSqlStore(
+            self.cfg.index_dir / "vaultrag.sqlite",
+            use_faiss=self.cfg.use_faiss,
+            faiss_index_type=self.cfg.faiss_index_type,
+            faiss_nlist=self.cfg.faiss_nlist,
+            faiss_nprobe=self.cfg.faiss_nprobe,
+        )
         self.store.init()
 
         # Extractors
@@ -55,23 +61,33 @@ class Indexer:
             ))
         # If "off", no image extractor is registered
 
-        # Chunkers
+        # Chunkers with overlap configuration
         self.chunkers = ChunkerRegistry()
-        self.chunkers.register("markdown", MarkdownChunker())
-        self.chunkers.register("pdf", BoundaryMarkerChunker("PAGE"))
-        self.chunkers.register("pptx", BoundaryMarkerChunker("SLIDE"))
-        self.chunkers.register("xlsx", BoundaryMarkerChunker("SHEET"))
-        self.chunkers.register("image", BoundaryMarkerChunker("IMAGE"))
+        self.chunkers.register("markdown", MarkdownChunker(
+            overlap_chars=self.cfg.overlap_chars,
+            max_chunk_size=self.cfg.max_chunk_size,
+            preserve_heading_metadata=self.cfg.preserve_heading_metadata,
+        ))
+        self.chunkers.register("pdf", BoundaryMarkerChunker("PAGE", overlap_chars=self.cfg.overlap_chars))
+        self.chunkers.register("pptx", BoundaryMarkerChunker("SLIDE", overlap_chars=self.cfg.overlap_chars))
+        self.chunkers.register("xlsx", BoundaryMarkerChunker("SHEET", overlap_chars=self.cfg.overlap_chars))
+        self.chunkers.register("image", BoundaryMarkerChunker("IMAGE", overlap_chars=self.cfg.overlap_chars))
 
-        # Embedder
+        # Embedder with query prefix configuration
         if self.cfg.embedding_provider == "sentence_transformers":
             self.embedder = SentenceTransformersEmbedder(
                 model_id=self.cfg.embedding_model,
                 device=self.cfg.embedding_device,
                 batch_size=self.cfg.embedding_batch_size,
+                use_query_prefix=self.cfg.use_query_prefix,
+                query_prefix=self.cfg.query_prefix,
             )
         elif self.cfg.embedding_provider == "ollama":
-            self.embedder = OllamaEmbedder(model_id=self.cfg.embedding_model)
+            self.embedder = OllamaEmbedder(
+                model_id=self.cfg.embedding_model,
+                use_query_prefix=self.cfg.use_query_prefix,
+                query_prefix=self.cfg.query_prefix,
+            )
         else:
             raise ValueError(f"Unknown embedding provider: {self.cfg.embedding_provider}")
 

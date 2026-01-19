@@ -34,6 +34,7 @@ pytest tests/test_markdown_parsing.py::test_parse_wikilinks  # single test
 ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
 ragtriever scan --full
 ragtriever query "search term" --k 10
+ragtriever query "search term" --k 10 --rerank  # with cross-encoder reranking
 ragtriever watch              # watch mode for continuous indexing
 ragtriever mcp                # MCP server over stdio
 ```
@@ -76,8 +77,11 @@ src/ragtriever/
 - `src/ragtriever/cli.py`: Typer CLI (`ragtriever` command) with commands: init, scan, query, watch, open, mcp
 - `src/ragtriever/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
 - `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
+- `src/ragtriever/retrieval/reranker.py`: Optional `CrossEncoderReranker` for improving result quality (enabled via `use_rerank = true`)
 - `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
 - `src/ragtriever/store/libsql_store.py`: SQLite-based storage with FTS5 + vector BLOBs (`vaultrag.sqlite`)
+- `src/ragtriever/store/faiss_index.py`: Optional FAISS index for approximate NN search (enabled via `use_faiss = true`)
+- `src/ragtriever/chunking/markdown_chunker.py`: v2 chunker with overlap support for context preservation
 
 ### Hybrid Retrieval Strategy
 1. Lexical candidates via SQLite FTS5
@@ -92,8 +96,9 @@ Search queries are automatically escaped for FTS5 to handle special characters (
 
 TOML-based config (see `examples/config.toml.example`):
 - `[vault]`: root path, ignore patterns
-- `[index]`: index directory, extractor/chunker versions
-- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true)
+- `[index]`: index directory, extractor_version, chunker_version (v2 adds overlap support)
+- `[chunking]`: overlap_chars (default: 200), max_chunk_size, preserve_heading_metadata
+- `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true), use_query_prefix (asymmetric retrieval), use_faiss (approximate NN search)
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
@@ -101,6 +106,47 @@ TOML-based config (see `examples/config.toml.example`):
 
 ### Offline Mode
 Set `offline_mode = true` in `[embeddings]` to use cached models only (no HuggingFace downloads). This is useful in corporate environments with restricted internet access. Can be overridden with the `HF_OFFLINE_MODE` environment variable.
+
+### Chunk Overlap (v2 Chunker)
+Set `chunker_version = "v2"` in `[index]` to enable chunk overlap. This preserves context between adjacent chunks by including the last 200 characters (configurable) of the previous chunk in the next chunk. This improves retrieval quality when relevant information spans chunk boundaries.
+
+### Query Instruction Prefix
+Set `use_query_prefix = true` in `[embeddings]` to enable asymmetric retrieval for BGE models. This adds a prefix like "Represent this sentence for searching relevant passages: " to queries (but not documents), improving relevance by making the model aware that the query is a search task rather than a passage to be indexed.
+
+### FAISS Approximate Nearest Neighbor Search
+For large vaults (>10K chunks), set `use_faiss = true` in `[embeddings]` to enable approximate nearest neighbor search via FAISS. This provides 5-10x speedup (~10-20ms vs 50-100ms+) for vector search at the cost of slight accuracy loss. Requires `faiss-cpu` or `faiss-gpu` installed.
+
+Recommended settings:
+- `faiss_index_type = "IVF"` (inverted file index, good for 10K-1M vectors)
+- `faiss_nlist = 100` (number of clusters)
+- `faiss_nprobe = 10` (clusters to search, higher = more accurate but slower)
+
+### Cross-Encoder Reranking
+Set `use_rerank = true` in `[retrieval]` to enable cross-encoder reranking. This improves result quality by 20-30% by reranking top candidates with a model that reads query + document together (cross-encoder) instead of separately (bi-encoder).
+
+**Benefits:**
+- Reduces false positives from partial term matches
+- Improves result ordering (relevant docs move to top 3)
+- Especially helpful for complex queries with multiple concepts
+
+**Performance:**
+- CPU: ~100-200ms for 40 candidates
+- GPU: ~20-50ms for 40 candidates
+
+**Recommended settings:**
+- `rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"` (balanced speed/accuracy)
+- `rerank_device = "cpu"` (or "cuda", "mps" for GPU acceleration)
+- `rerank_top_k = 10` (number of results to return)
+
+**Example:**
+```bash
+# Test reranking on a specific query
+ragtriever query "kubernetes deployment" --k 10 --rerank
+```
+
+**Code reference:**
+- `src/ragtriever/retrieval/reranker.py`: CrossEncoderReranker implementation
+- `src/ragtriever/retrieval/retriever.py:search()`: Integration point (line 66-67)
 
 ### Image Analysis Options
 - **tesseract**: Local OCR using pytesseract (requires tesseract-ocr installed)

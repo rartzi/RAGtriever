@@ -8,6 +8,7 @@ import json
 import numpy as np
 
 from ..models import Document, Chunk, SearchResult, SourceRef, OpenResult
+from .faiss_index import FAISSIndex, FAISS_AVAILABLE
 
 
 def _escape_fts5_query(query: str) -> str:
@@ -123,26 +124,113 @@ def _blob_to_vec(blob: bytes) -> np.ndarray:
     return np.frombuffer(blob, dtype=np.float32)
 
 class LibSqlStore:
-    """SQLite/libSQL-backed store.
+    """SQLite/libSQL-backed store with optional FAISS vector index.
 
-    NOTE: Vector search is placeholder in this skeleton:
-    - embeddings are stored
-    - vector_search currently does brute-force cosine over filtered rows
-
-    A coding agent can replace this with:
-    - libSQL native vector indexing (if available locally)
-    - or external vector store adapter
+    Vector search can use:
+    - Brute-force cosine similarity (default, works for <10K chunks)
+    - FAISS approximate nearest neighbor (optional, for >10K chunks)
     """
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        use_faiss: bool = False,
+        faiss_index_type: str = "IVF",
+        faiss_nlist: int = 100,
+        faiss_nprobe: int = 10,
+    ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._conn.row_factory = sqlite3.Row
 
+        # FAISS setup
+        self.use_faiss = use_faiss
+        self.faiss_index: Optional[FAISSIndex] = None
+        self.faiss_index_type = faiss_index_type
+        self.faiss_nlist = faiss_nlist
+        self.faiss_nprobe = faiss_nprobe
+
+        if use_faiss:
+            if not FAISS_AVAILABLE:
+                raise ImportError(
+                    "FAISS requested but not installed. Install with: pip install faiss-cpu or pip install faiss-gpu"
+                )
+
+            # FAISS index will be initialized lazily after tables exist
+            # See _initialize_faiss() called from init() or after first embedding
+
     def init(self) -> None:
         self._conn.executescript(SCHEMA_SQL)
         self._conn.commit()
+
+        # Initialize FAISS index if enabled
+        if self.use_faiss:
+            self._initialize_faiss()
+
+    def _initialize_faiss(self) -> None:
+        """Initialize FAISS index from existing embeddings (if any)."""
+        if not self.use_faiss or self.faiss_index is not None:
+            return
+
+        # Check if we have any embeddings to determine dimensions
+        cursor = self._conn.execute("SELECT dims FROM embeddings LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            embedding_dim = row["dims"]
+            self.faiss_index = FAISSIndex(
+                embedding_dim=embedding_dim,
+                index_type=self.faiss_index_type,
+                nlist=self.faiss_nlist,
+                nprobe=self.faiss_nprobe,
+                metric="cosine",
+            )
+
+            # Try to load existing FAISS index
+            faiss_path = self.db_path.parent / "faiss"
+            if (faiss_path / "faiss.index").exists():
+                try:
+                    self.faiss_index.load(faiss_path)
+                    print(f"Loaded FAISS index with {self.faiss_index.size()} vectors")
+                except Exception as e:
+                    print(f"Warning: Failed to load FAISS index: {e}")
+                    print("Building new FAISS index from embeddings...")
+                    self._build_faiss_index()
+            else:
+                # Build index from existing embeddings
+                print("Building FAISS index from embeddings...")
+                self._build_faiss_index()
+
+    def _build_faiss_index(self) -> None:
+        """Build FAISS index from all embeddings in database."""
+        if not self.faiss_index:
+            return
+
+        print("Loading embeddings from database...")
+        cursor = self._conn.execute("""
+            SELECT chunk_id, vector
+            FROM embeddings
+        """)
+
+        chunk_ids = []
+        vectors = []
+
+        for row in cursor:
+            chunk_ids.append(row["chunk_id"])
+            vectors.append(_blob_to_vec(row["vector"]))
+
+        if not vectors:
+            print("No embeddings found in database")
+            return
+
+        vectors_array = np.vstack(vectors)
+        print(f"Adding {len(vectors)} vectors to FAISS index...")
+        self.faiss_index.add(chunk_ids, vectors_array)
+
+        # Save index
+        faiss_path = self.db_path.parent / "faiss"
+        self.faiss_index.save(faiss_path)
+        print(f"FAISS index saved to {faiss_path}")
 
     def upsert_document(self, doc: Document) -> None:
         self._conn.execute(
@@ -206,6 +294,29 @@ class LibSqlStore:
             )
         self._conn.commit()
 
+        # Initialize FAISS index if needed (on first embeddings)
+        if self.use_faiss and self.faiss_index is None and len(chunk_ids) > 0:
+            # Get embedding dimension from first vector
+            embedding_dim = vectors.shape[1]
+            self.faiss_index = FAISSIndex(
+                embedding_dim=embedding_dim,
+                index_type=self.faiss_index_type,
+                nlist=self.faiss_nlist,
+                nprobe=self.faiss_nprobe,
+                metric="cosine",
+            )
+            print(f"Initialized FAISS {self.faiss_index_type} index (dim={embedding_dim})")
+
+        # Add to FAISS index if enabled
+        if self.use_faiss and self.faiss_index and len(chunk_ids) > 0:
+            self.faiss_index.add(list(chunk_ids), vectors)
+
+            # Periodically save FAISS index (every 100 vectors)
+            if self.faiss_index.size() % 100 == 0:
+                faiss_path = self.db_path.parent / "faiss"
+                self.faiss_index.save(faiss_path)
+                print(f"FAISS index saved ({self.faiss_index.size()} vectors)")
+
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         vault_id = filters.get("vault_id")
         path_prefix = filters.get("path_prefix", "")
@@ -245,9 +356,96 @@ class LibSqlStore:
         return results[:k]
 
     def vector_search(self, query_vec: np.ndarray, k: int, filters: dict[str, Any]) -> list[SearchResult]:
-        # Brute-force cosine similarity over embeddings. Replace with ANN/vector index in production.
+        """Vector search with optional FAISS acceleration.
+
+        Uses FAISS approximate nearest neighbor if enabled, otherwise brute-force.
+        """
         vault_id = filters.get("vault_id")
         path_prefix = filters.get("path_prefix", "")
+
+        # Use FAISS if enabled
+        if self.use_faiss and self.faiss_index and self.faiss_index.size() > 0:
+            return self._faiss_vector_search(query_vec, k, vault_id, path_prefix)
+        else:
+            return self._brute_force_vector_search(query_vec, k, vault_id, path_prefix)
+
+    def _faiss_vector_search(
+        self,
+        query_vec: np.ndarray,
+        k: int,
+        vault_id: Optional[str],
+        path_prefix: str,
+    ) -> list[SearchResult]:
+        """FAISS-accelerated vector search."""
+        # FAISS search (returns chunk_ids and scores)
+        chunk_ids, scores = self.faiss_index.search(query_vec, k * 2)  # Over-fetch for filtering
+
+        if not chunk_ids:
+            return []
+
+        # Fetch chunk details from SQLite
+        placeholders = ",".join("?" * len(chunk_ids))
+        query_sql = f"""
+            SELECT c.chunk_id, c.text, c.metadata_json, c.vault_id
+            FROM chunks c
+            WHERE c.chunk_id IN ({placeholders})
+        """
+
+        if vault_id:
+            query_sql += " AND c.vault_id = ?"
+            params = chunk_ids + [vault_id]
+        else:
+            params = chunk_ids
+
+        rows = self._conn.execute(query_sql, params).fetchall()
+
+        # Build chunk_id to row mapping
+        chunk_data = {r["chunk_id"]: r for r in rows}
+
+        # Build results maintaining FAISS score order
+        results: list[SearchResult] = []
+        for chunk_id, score in zip(chunk_ids, scores):
+            if chunk_id not in chunk_data:
+                continue
+
+            r = chunk_data[chunk_id]
+            meta = json.loads(r["metadata_json"] or "{}")
+            rel = meta.get("rel_path", "")
+
+            # Apply path prefix filter
+            if path_prefix and rel and not str(rel).startswith(path_prefix):
+                continue
+
+            snippet = (r["text"] or "")[:600]
+            sr = SourceRef(
+                vault_id=vault_id or r["vault_id"],
+                rel_path=rel,
+                file_type=meta.get("file_type", "unknown"),
+                anchor_type=meta.get("anchor_type", "chunk"),
+                anchor_ref=meta.get("anchor_ref", chunk_id),
+                locator=meta.get("locator", {}),
+            )
+            results.append(SearchResult(
+                chunk_id=chunk_id,
+                score=score,
+                snippet=snippet,
+                source_ref=sr,
+                metadata=meta
+            ))
+
+            if len(results) >= k:
+                break
+
+        return results
+
+    def _brute_force_vector_search(
+        self,
+        query_vec: np.ndarray,
+        k: int,
+        vault_id: Optional[str],
+        path_prefix: str,
+    ) -> list[SearchResult]:
+        """Brute-force cosine similarity vector search."""
         q = np.asarray(query_vec, dtype=np.float32).ravel()
         qn = np.linalg.norm(q) + 1e-12
 
@@ -272,20 +470,27 @@ class LibSqlStore:
             vn = np.linalg.norm(v) + 1e-12
             sim = float(np.dot(q, v) / (qn * vn))
             scored.append((sim, r, meta))
+
         scored.sort(key=lambda x: x[0], reverse=True)
         results: list[SearchResult] = []
         for sim, r, meta in scored[:k]:
             rel = meta.get("rel_path", "")
             snippet = (r["text"] or "")[:600]
             sr = SourceRef(
-                vault_id=vault_id or meta.get("vault_id",""),
+                vault_id=vault_id or meta.get("vault_id", ""),
                 rel_path=rel,
-                file_type=meta.get("file_type","unknown"),
-                anchor_type=meta.get("anchor_type","chunk"),
+                file_type=meta.get("file_type", "unknown"),
+                anchor_type=meta.get("anchor_type", "chunk"),
                 anchor_ref=meta.get("anchor_ref", r["chunk_id"]),
                 locator=meta.get("locator", {}),
             )
-            results.append(SearchResult(chunk_id=r["chunk_id"], score=sim, snippet=snippet, source_ref=sr, metadata=meta))
+            results.append(SearchResult(
+                chunk_id=r["chunk_id"],
+                score=sim,
+                snippet=snippet,
+                source_ref=sr,
+                metadata=meta
+            ))
         return results
 
     def open(self, source_ref: SourceRef) -> OpenResult:

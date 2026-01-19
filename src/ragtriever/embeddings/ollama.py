@@ -19,6 +19,8 @@ class OllamaEmbedder:
     endpoint: str = "http://127.0.0.1:11434/api/embeddings"
     timeout_s: float = 30.0
     dims: int = 0
+    use_query_prefix: bool = True
+    query_prefix: str = "Represent this sentence for searching relevant passages: "
 
     def _call(self, prompt: str) -> list[float]:
         payload = {"model": self.model_id, "prompt": prompt}
@@ -32,6 +34,7 @@ class OllamaEmbedder:
         return [float(x) for x in vec]
 
     def embed_texts(self, texts: Sequence[str]) -> np.ndarray:
+        """Embed documents (no prefix)."""
         vectors = [self._call(t) for t in texts]
         arr = np.array(vectors, dtype=np.float32)
         if self.dims == 0:
@@ -39,6 +42,9 @@ class OllamaEmbedder:
         return arr
 
     def embed_query(self, query: str) -> np.ndarray:
+        """Embed query with optional instruction prefix for asymmetric retrieval."""
+        if self.use_query_prefix and self.query_prefix:
+            query = self.query_prefix + query
         v = self._call(query)
         arr = np.array(v, dtype=np.float32)
         if self.dims == 0:

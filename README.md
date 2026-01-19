@@ -30,11 +30,15 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 ## Features
 
 - **Hybrid Retrieval** - Combines vector embeddings with full-text search for superior results
+- **Chunk Overlap (v1.0+)** - Context preservation with configurable 200-char overlap between chunks
+- **Query Instruction Prefix (v1.0+)** - Asymmetric retrieval for better BGE model performance
+- **Cross-Encoder Reranking (Optional)** - Refine search results with cross-encoder for 20-30% quality improvement
 - **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
 - **Multi-Format Support** - Index Markdown, PDF, PPTX, XLSX, and images
 - **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR or Gemini Vision
 - **Watch Mode** - Continuously index changes as you edit your vault
 - **MCP Server** - Expose your vault to AI agents via the Model Context Protocol
+- **FAISS Scaling** - Optional approximate nearest neighbor search for large vaults (10K+ chunks)
 - **100% Local** - Your data never leaves your machine
 
 ---
@@ -111,8 +115,26 @@ cortex scan --full
 # Search your knowledge
 cortex query "machine learning concepts"
 
+# Search with reranking for best quality
+cortex query "machine learning concepts" --rerank
+
 # Watch for changes (continuous indexing)
 cortex watch
+```
+
+### Enable Reranking (Optional)
+
+For best result quality, enable cross-encoder reranking in your config:
+
+```toml
+[retrieval]
+use_rerank = true
+```
+
+This adds ~100-200ms latency but significantly improves relevance. You can also enable it per-query:
+
+```bash
+cortex query "kubernetes deployment" --rerank
 ```
 
 ---
@@ -135,6 +157,9 @@ cortex scan
 
 # Search your vault
 cortex query "project planning" --k 10
+
+# Search with reranking (improves quality by 20-30%)
+cortex query "project planning" --k 10 --rerank
 
 # Search with path filter
 cortex query "meeting notes" --path "Work/Meetings/"

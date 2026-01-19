@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+# Suppress harmless multiprocessing resource tracker warnings (common on macOS)
+import warnings
+warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
+
 from pathlib import Path
 import typer
 import json
+import dataclasses
 
 from .config import VaultConfig
 from .indexer.indexer import Indexer
@@ -62,9 +67,15 @@ def scan(config: str = typer.Option("config.toml"), full: bool = typer.Option(Fa
 
 @app.command()
 def query(q: str, config: str = typer.Option("config.toml"), k: int = typer.Option(10),
-          path: str = typer.Option("", help="Path prefix filter")):
-    """Search the vault."""
+          path: str = typer.Option("", help="Path prefix filter"),
+          rerank: bool = typer.Option(None, help="Override use_rerank config (true/false)")):
+    """Search the vault with optional reranking."""
     cfg = _cfg(config)
+
+    # Override rerank if specified via CLI
+    if rerank is not None:
+        cfg = dataclasses.replace(cfg, use_rerank=rerank)
+
     r = Retriever(cfg)
     filters = {"vault_id": r.store.status(r.cfg.index_dir.name if False else "")}  # placeholder
     filt = {}
@@ -72,13 +83,27 @@ def query(q: str, config: str = typer.Option("config.toml"), k: int = typer.Opti
         filt["path_prefix"] = path
     # In skeleton, vault_id is computed by Indexer; for now omit unless you set it explicitly.
     hits = r.search(q, k=k, filters=filt)
-    typer.echo(json.dumps([{
-        "chunk_id": h.chunk_id,
-        "score": h.score,
-        "snippet": h.snippet,
-        "source_ref": h.source_ref.__dict__,
-        "metadata": h.metadata,
-    } for h in hits], indent=2))
+
+    # Enhanced output with reranking info
+    results = []
+    for h in hits:
+        result_dict = {
+            "chunk_id": h.chunk_id,
+            "score": h.score,
+            "snippet": h.snippet,
+            "source_ref": h.source_ref.__dict__,
+            "metadata": h.metadata,
+        }
+        # Show reranking info if present
+        if h.metadata.get("reranked"):
+            result_dict["reranking"] = {
+                "original_score": h.metadata.get("original_score"),
+                "reranker_score": h.metadata.get("reranker_score"),
+                "reranked": True
+            }
+        results.append(result_dict)
+
+    typer.echo(json.dumps(results, indent=2))
 
 @app.command()
 def open(chunk_id: str, config: str = typer.Option("config.toml")):

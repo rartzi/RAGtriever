@@ -92,3 +92,8 @@ temp/
 
 # Build artifacts
 *.whl
+
+# Reference Docs
+ref-docs/
+ref-docs/*
+test_config.toml
