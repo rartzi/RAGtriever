@@ -327,15 +327,17 @@ class LibSqlStore:
         # Handle single vault_id or list of vault_ids
         if vault_ids:
             placeholders = ",".join("?" * len(vault_ids))
-            where += f" AND vault_id IN ({placeholders})"
+            where += f" AND f.vault_id IN ({placeholders})"
             params.extend(vault_ids)
         elif vault_id:
-            where += " AND vault_id=?"
+            where += " AND f.vault_id=?"
             params.append(vault_id)
 
+        # Join with chunks table to get full metadata
         sql = f"""
-        SELECT chunk_id, bm25(fts_chunks) AS rank, rel_path, text, vault_id
-        FROM fts_chunks
+        SELECT f.chunk_id, bm25(fts_chunks) AS rank, f.rel_path, f.text, f.vault_id, c.metadata_json
+        FROM fts_chunks f
+        LEFT JOIN chunks c ON f.chunk_id = c.chunk_id
         WHERE {where} AND fts_chunks MATCH ?
         ORDER BY rank
         LIMIT ?
@@ -347,7 +349,9 @@ class LibSqlStore:
 
         results: list[SearchResult] = []
         for r in rows:
-            rel = r["rel_path"] or ""
+            # Parse full metadata from chunks table
+            meta = json.loads(r["metadata_json"] or "{}")
+            rel = meta.get("rel_path", r["rel_path"] or "")
             if path_prefix and not rel.startswith(path_prefix):
                 continue
             snippet = (r["text"] or "")[:600]
@@ -355,12 +359,18 @@ class LibSqlStore:
             sr = SourceRef(
                 vault_id=row_vault_id,
                 rel_path=rel,
-                file_type="unknown",
-                anchor_type="chunk",
-                anchor_ref=r["chunk_id"],
-                locator={},
+                file_type=meta.get("file_type", "unknown"),
+                anchor_type=meta.get("anchor_type", "chunk"),
+                anchor_ref=meta.get("anchor_ref", r["chunk_id"]),
+                locator=meta.get("locator", {}),
             )
-            results.append(SearchResult(chunk_id=r["chunk_id"], score=float(-r["rank"]), snippet=snippet, source_ref=sr, metadata={"rel_path": rel, "vault_id": row_vault_id}))
+            results.append(SearchResult(
+                chunk_id=r["chunk_id"],
+                score=float(-r["rank"]),
+                snippet=snippet,
+                source_ref=sr,
+                metadata={**meta, "vault_id": row_vault_id}
+            ))
         return results[:k]
 
     def vector_search(self, query_vec: np.ndarray, k: int, filters: dict[str, Any]) -> list[SearchResult]:
