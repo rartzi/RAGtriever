@@ -89,6 +89,33 @@ src/ragtriever/
 3. Merge + dedupe with configurable weights
 4. Optional graph boost (backlinks) and rerank
 
+### Enriched Chunk Metadata
+Every indexed chunk includes enriched metadata for fast operations without additional database lookups:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `full_path` | Absolute filesystem path | `/Volumes/.../file.md` |
+| `vault_root` | Root path of containing vault | `/Volumes/.../my-vault` |
+| `vault_name` | Human-readable vault name | `my-thoughts` |
+| `vault_id` | Hash identifier for vault | `ba1c6c00379e` |
+| `file_name` | Filename only | `notes.md` |
+| `file_extension` | File extension | `.md` |
+| `file_size_bytes` | File size in bytes | `9488` |
+| `modified_at` | ISO 8601 timestamp | `2025-01-19T20:13:34+00:00` |
+| `obsidian_uri` | Direct Obsidian app link | `obsidian://open?vault=...` |
+
+**Usage example:**
+```bash
+# Get full_path directly from query results
+ragtriever query "search term" --k 1 | jq -r '.[0].metadata.full_path'
+
+# Open file directly without database lookup
+open "$(ragtriever query 'search term' --k 1 | jq -r '.[0].metadata.full_path')"
+```
+
+**Code reference:**
+- `src/ragtriever/indexer/indexer.py:_extract_and_chunk_one()`: Metadata assembly (lines 272-312)
+
 ### Query Handling
 Search queries are automatically escaped for FTS5 to handle special characters (hyphens, slashes, etc.) in technical and medical terms. Queries are treated as phrase searches wrapped in double quotes, ensuring terms like "T-DXd", "CDK4/6i", or "HR+/HER2-low" work correctly without FTS5 syntax errors.
 
