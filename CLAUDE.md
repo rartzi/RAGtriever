@@ -59,7 +59,7 @@ The codebase uses Python Protocol classes for pluggable adapters:
 - **chunk_id**: `blake2b("{doc_id}:{anchor_type}:{anchor_ref}:{text_hash}")[:32]`
 
 ### Link Graph
-`[[wikilinks]]` and `![[embeds]]` are extracted during indexing and stored in a `links` table for graph traversal (`vault.neighbors` MCP tool).
+`[[wikilinks]]` and `![[embeds]]` are extracted during indexing and stored in a `links` table for graph traversal (`vault_neighbors` MCP tool).
 
 ### Module Organization
 ```
@@ -78,7 +78,7 @@ src/ragtriever/
 - `src/ragtriever/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
 - `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
 - `src/ragtriever/retrieval/reranker.py`: Optional `CrossEncoderReranker` for improving result quality (enabled via `use_rerank = true`)
-- `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault.search`, `vault.open`, `vault.neighbors`, `vault.status`)
+- `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault_search`, `vault_open`, `vault_neighbors`, `vault_status`, `vault_list`)
 - `src/ragtriever/store/libsql_store.py`: SQLite-based storage with FTS5 + vector BLOBs (`vaultrag.sqlite`)
 - `src/ragtriever/store/faiss_index.py`: Optional FAISS index for approximate NN search (enabled via `use_faiss = true`)
 - `src/ragtriever/chunking/markdown_chunker.py`: v2 chunker with overlap support for context preservation

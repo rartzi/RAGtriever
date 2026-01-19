@@ -476,10 +476,11 @@ nohup ragtriever watch --config config.toml &
 **Tools Exposed to Claude:**
 ```json
 {
-  "vault.search": "Hybrid search with semantic + lexical",
-  "vault.open": "Retrieve full document/chunk content",
-  "vault.neighbors": "Find related chunks via [[wikilinks]]",
-  "vault.status": "Get indexing status and statistics"
+  "vault_search": "Hybrid search with semantic + lexical",
+  "vault_open": "Retrieve full document/chunk content",
+  "vault_neighbors": "Find related chunks via [[wikilinks]]",
+  "vault_status": "Get indexing status and statistics",
+  "vault_list": "List configured vaults"
 }
 ```
 
@@ -503,7 +504,7 @@ nohup ragtriever watch --config config.toml &
 **Example Interaction:**
 ```
 You: "What did I write about kubernetes deployments?"
-Claude: [calls vault.search("kubernetes deployments")]
+Claude: [calls vault_search("kubernetes deployments")]
 Claude: "Based on your notes, you wrote about..."
 ```
 

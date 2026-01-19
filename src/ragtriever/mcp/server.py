@@ -8,18 +8,15 @@ from ..retrieval.retriever import Retriever, MultiVaultRetriever
 from .tools import tool_search, tool_open, tool_neighbors, tool_status, tool_list_vaults
 
 TOOL_MAP = {
-    "vault.search": tool_search,
-    "vault.open": tool_open,
-    "vault.neighbors": tool_neighbors,
-    "vault.status": tool_status,
-    "vault.list": tool_list_vaults,
+    "vault_search": tool_search,
+    "vault_open": tool_open,
+    "vault_neighbors": tool_neighbors,
+    "vault_status": tool_status,
+    "vault_list": tool_list_vaults,
 }
 
 def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
-    """Minimal JSON-RPC-ish server over stdio.
-
-    NOTE: MCP implementations vary; a coding agent should adapt this stub to the
-    target MCP SDK/contract for the chosen host (Claude Code, Codex, Gemini, etc.).
+    """MCP server over stdio with full protocol support.
 
     Supports both single-vault (VaultConfig) and multi-vault (MultiVaultConfig) configurations.
     """
@@ -37,11 +34,126 @@ def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
             rid = req.get("id")
             method = req.get("method")
             params = req.get("params") or {}
-            if method not in TOOL_MAP:
-                resp = {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "Method not found"}}
-            else:
+
+            # Handle notifications (no id = no response expected)
+            if rid is None:
+                # Notifications like "notifications/initialized" don't get responses
+                continue
+
+            # Handle MCP protocol methods
+            if method == "initialize":
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": rid,
+                    "result": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {
+                            "tools": {}
+                        },
+                        "serverInfo": {
+                            "name": "ragtriever",
+                            "version": "1.0.0"
+                        }
+                    }
+                }
+            elif method == "tools/list":
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": rid,
+                    "result": {
+                        "tools": [
+                            {
+                                "name": "vault_search",
+                                "description": "Search across indexed vaults using hybrid semantic and lexical search",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "query": {"type": "string", "description": "Search query"},
+                                        "k": {"type": "integer", "description": "Number of results (default: 10)"}
+                                    },
+                                    "required": ["query"]
+                                }
+                            },
+                            {
+                                "name": "vault_neighbors",
+                                "description": "Find wikilink neighbors and backlinks for a document",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "rel_path": {"type": "string", "description": "Relative path to file"}
+                                    },
+                                    "required": ["rel_path"]
+                                }
+                            },
+                            {
+                                "name": "vault_open",
+                                "description": "Open a file in Obsidian",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "rel_path": {"type": "string", "description": "Relative path to file"}
+                                    },
+                                    "required": ["rel_path"]
+                                }
+                            },
+                            {
+                                "name": "vault_status",
+                                "description": "Get indexing status and vault configuration",
+                                "inputSchema": {"type": "object", "properties": {}}
+                            },
+                            {
+                                "name": "vault_list",
+                                "description": "List configured vaults",
+                                "inputSchema": {"type": "object", "properties": {}}
+                            }
+                        ]
+                    }
+                }
+            elif method == "tools/call":
+                # MCP tools/call method - extract tool name and arguments
+                tool_name = params.get("name")
+                tool_args = params.get("arguments", {})
+                if tool_name in TOOL_MAP:
+                    try:
+                        result = TOOL_MAP[tool_name](retriever, tool_args)
+                        # MCP expects content array format for tool results
+                        resp = {
+                            "jsonrpc": "2.0",
+                            "id": rid,
+                            "result": {
+                                "content": [
+                                    {"type": "text", "text": json.dumps(result, indent=2)}
+                                ]
+                            }
+                        }
+                    except Exception as tool_error:
+                        resp = {
+                            "jsonrpc": "2.0",
+                            "id": rid,
+                            "result": {
+                                "content": [
+                                    {"type": "text", "text": f"Error: {str(tool_error)}"}
+                                ],
+                                "isError": True
+                            }
+                        }
+                else:
+                    resp = {
+                        "jsonrpc": "2.0",
+                        "id": rid,
+                        "result": {
+                            "content": [
+                                {"type": "text", "text": f"Unknown tool: {tool_name}"}
+                            ],
+                            "isError": True
+                        }
+                    }
+            elif method in TOOL_MAP:
+                # Direct tool call (legacy support)
                 result = TOOL_MAP[method](retriever, params)
                 resp = {"jsonrpc": "2.0", "id": rid, "result": result}
+            else:
+                resp = {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Method not found: {method}"}}
         except Exception as e:
             resp = {"jsonrpc": "2.0", "id": req.get("id") if isinstance(req, dict) else None,
                     "error": {"code": -32000, "message": str(e)}}

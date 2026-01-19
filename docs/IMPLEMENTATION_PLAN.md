@@ -8,7 +8,7 @@
 - Embeddings via SentenceTransformers (local)
 - Vector store adapter (initial: brute-force in-memory for small sets OR placeholder)
 - Retrieval: lexical-only first, then add vector
-- MCP tools: `vault.search`, `vault.open`, `vault.status`
+- MCP tools: `vault_search`, `vault_open`, `vault_neighbors`, `vault_status`, `vault_list`
 
 ## Phase 2: Sync engine
 - Watch mode (watchdog) with debounce + job queue

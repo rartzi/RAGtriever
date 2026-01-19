@@ -266,10 +266,11 @@ CortexIndex exposes your vault to AI agents via the [Model Context Protocol](htt
 
 | Tool | Description |
 |------|-------------|
-| `vault.search` | Hybrid search across your vault |
-| `vault.open` | Retrieve full content of a search result |
-| `vault.neighbors` | Get linked notes (outlinks/backlinks) |
-| `vault.status` | Index statistics |
+| `vault_search` | Hybrid search across your vault |
+| `vault_open` | Retrieve full content of a search result |
+| `vault_neighbors` | Get linked notes (outlinks/backlinks) |
+| `vault_status` | Index statistics |
+| `vault_list` | List configured vaults |
 
 ### Running the MCP Server
 
@@ -304,55 +305,70 @@ Then restart Claude Desktop. You can now ask Claude to search your vault:
 
 The MCP server accepts JSON-RPC requests. Here are example tool calls:
 
-#### vault.search
+#### vault_search
 
 ```json
 {
-  "tool": "vault.search",
+  "method": "tools/call",
   "params": {
-    "query": "kubernetes deployment",
-    "k": 5,
-    "filters": {
-      "path_prefix": "DevOps/"
+    "name": "vault_search",
+    "arguments": {
+      "query": "kubernetes deployment",
+      "k": 5
     }
   }
 }
 ```
 
-#### vault.open
+#### vault_open
 
 ```json
 {
-  "tool": "vault.open",
+  "method": "tools/call",
   "params": {
-    "source_ref": {
-      "rel_path": "Projects/K8s.md",
-      "file_type": "markdown",
-      "anchor_type": "md_heading",
-      "anchor_ref": "Deployment Strategy"
+    "name": "vault_open",
+    "arguments": {
+      "rel_path": "Projects/K8s.md"
     }
   }
 }
 ```
 
-#### vault.neighbors
+#### vault_neighbors
 
 ```json
 {
-  "tool": "vault.neighbors",
+  "method": "tools/call",
   "params": {
-    "path_or_doc_id": "Projects/MyProject.md",
-    "depth": 1
+    "name": "vault_neighbors",
+    "arguments": {
+      "rel_path": "Projects/MyProject.md"
+    }
   }
 }
 ```
 
-#### vault.status
+#### vault_status
 
 ```json
 {
-  "tool": "vault.status",
-  "params": {}
+  "method": "tools/call",
+  "params": {
+    "name": "vault_status",
+    "arguments": {}
+  }
+}
+```
+
+#### vault_list
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "vault_list",
+    "arguments": {}
+  }
 }
 ```
 
