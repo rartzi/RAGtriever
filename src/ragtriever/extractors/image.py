@@ -218,11 +218,11 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                     prompt,
-                ],
+                ],  # type: ignore[arg-type]
             )
 
             # Parse the JSON response
-            response_text = response.text.strip()
+            response_text = (response.text or "").strip()
             # Remove markdown code block if present
             if response_text.startswith("```"):
                 lines = response_text.split("\n")
@@ -241,7 +241,7 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse Gemini response as JSON: {e}")
             # Try to extract what we can from non-JSON response
-            return {"description": response.text[:500] if 'response' in dir() else ""}
+            return {"description": (response.text or "")[:500] if 'response' in locals() else ""}
         except Exception as e:
             logger.warning(f"Gemini analysis failed: {e}")
             return {}
@@ -452,4 +452,172 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
             # Catch-all for unexpected errors, but log the type for debugging
             logger.error(f"Vertex AI analysis failed: {type(e).__name__}")
             logger.debug(f"Vertex AI analysis error details: {e}")
+            return {}
+
+
+@dataclass
+class AIGatewayImageExtractor:
+    """Image extractor using Microsoft AI Gateway to access Google Gemini models.
+
+    Uses Microsoft AI Gateway as a proxy to Gemini vision models for image analysis.
+    This enables:
+    - Enterprise authentication and routing through Microsoft infrastructure
+    - Access control and usage tracking via AI Gateway
+    - Centralized endpoint management
+
+    Extracts:
+    - Detailed description of the image content
+    - Any text visible in the image (OCR)
+    - Key topics/themes
+    - Entities mentioned (people, organizations, products)
+    - Image type classification (screenshot, diagram, photo, etc.)
+    """
+    supported_suffixes = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+    gateway_url: str | None = None
+    gateway_key: str | None = None
+    model: str = "gemini-2.5-flash"
+
+    def __post_init__(self) -> None:
+        # Try to get values from environment if not provided
+        if self.gateway_url is None:
+            self.gateway_url = os.environ.get("AI_GATEWAY_URL")
+        if self.gateway_key is None:
+            self.gateway_key = os.environ.get("AI_GATEWAY_KEY")
+
+    def extract(self, path: Path) -> Extracted:
+        """Extract image content using Microsoft AI Gateway proxy to Gemini."""
+        try:
+            from PIL import Image  # type: ignore
+        except ImportError:
+            raise RuntimeError("Pillow required for image extraction")
+
+        # Get basic image info
+        with Image.open(path) as img:
+            w, h = img.size
+            img_format = img.format or path.suffix.lstrip(".").upper()
+
+        # Read image bytes
+        image_bytes = path.read_bytes()
+
+        # Analyze with AI Gateway
+        analysis = self._analyze_with_aigateway(image_bytes, path.suffix)
+
+        # Build the text content for indexing (same pattern as GeminiImageExtractor)
+        text_parts = []
+
+        if analysis.get("description"):
+            text_parts.append(f"Description: {analysis['description']}")
+
+        if analysis.get("visible_text"):
+            text_parts.append(f"Visible text: {analysis['visible_text']}")
+
+        if analysis.get("topics"):
+            text_parts.append(f"Topics: {', '.join(analysis['topics'])}")
+
+        if analysis.get("entities"):
+            text_parts.append(f"Entities: {', '.join(analysis['entities'])}")
+
+        text = "\n\n".join(text_parts)
+
+        meta: dict[str, Any] = {
+            "width": w,
+            "height": h,
+            "format": img_format,
+            "image_type": analysis.get("image_type", "unknown"),
+            "description": analysis.get("description", ""),
+            "visible_text": analysis.get("visible_text", ""),
+            "topics": analysis.get("topics", []),
+            "entities": analysis.get("entities", []),
+            "analysis_model": self.model,
+            "analysis_provider": "aigateway",
+        }
+
+        return Extracted(text=text, metadata=meta)
+
+    def _analyze_with_aigateway(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Call Microsoft AI Gateway to access Gemini API for image analysis."""
+        if not self.gateway_url:
+            logger.warning(
+                "No AI Gateway URL found. Set aigateway_url in config or AI_GATEWAY_URL environment variable. "
+                "Returning empty analysis."
+            )
+            return {}
+
+        if not self.gateway_key:
+            logger.warning(
+                "No AI Gateway key found. Set aigateway_key in config or AI_GATEWAY_KEY environment variable. "
+                "Returning empty analysis."
+            )
+            return {}
+
+        try:
+            from google import genai  # type: ignore
+            from google.genai import types  # type: ignore
+        except ImportError:
+            logger.warning(
+                "google-genai not installed. Install with: pip install google-genai"
+            )
+            return {}
+
+        try:
+            # Configure client to use Microsoft AI Gateway endpoint
+            endpoint = f"{self.gateway_url}/vertex-ai-express"
+            client = genai.Client(
+                http_options=types.HttpOptions(
+                    base_url=endpoint,
+                    api_version="v1"
+                ),
+                api_key=self.gateway_key,
+                vertexai=True
+            )
+
+            # Determine mime type
+            mime_map = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+                ".gif": "image/gif",
+            }
+            mime_type = mime_map.get(suffix.lower(), "image/png")
+
+            # Create the prompt for structured analysis (same as GeminiImageExtractor)
+            prompt = """Analyze this image and provide a structured response in JSON format with these fields:
+
+1. "description": A detailed description of what the image shows (2-3 sentences)
+2. "visible_text": Any text visible in the image, transcribed accurately
+3. "image_type": One of: screenshot, diagram, flowchart, photo, presentation_slide, document, chart, infographic, logo, ui_mockup, other
+4. "topics": List of 3-5 key topics or themes in the image
+5. "entities": List of any named entities (people, companies, products, technologies) mentioned or shown
+
+Respond ONLY with valid JSON, no markdown formatting or extra text."""
+
+            response = client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    types.Part.from_text(text=prompt),
+                ],  # type: ignore[arg-type]
+            )
+
+            # Parse the JSON response (same pattern as GeminiImageExtractor)
+            response_text = (response.text or "").strip()
+            # Remove markdown code block if present
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                response_text = "\n".join(lines[1:-1])
+
+            # Try parsing as-is first, then with escape fixes
+            try:
+                result = json.loads(response_text)
+            except json.JSONDecodeError:
+                fixed_text = _fix_json_escapes(response_text)
+                result = json.loads(fixed_text)
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse AI Gateway response as JSON: {e}")
+            return {"description": (response.text or "")[:500] if 'response' in locals() else ""}
+        except Exception as e:
+            logger.warning(f"AI Gateway analysis failed: {e}")
             return {}

@@ -55,7 +55,7 @@ faiss_nlist = 100  # Number of clusters (IVF only)
 faiss_nprobe = 10  # Number of clusters to search (IVF only, higher = more accurate but slower)
 
 [image_analysis]
-provider = "tesseract"  # tesseract|gemini|vertex_ai|off
+provider = "tesseract"  # tesseract|gemini|vertex_ai|aigateway|off
 # Automatically extracts and analyzes:
 # - Images embedded in PDFs (extracted via PyMuPDF)
 # - Images in PowerPoint slides (extracted via python-pptx)
@@ -65,6 +65,7 @@ provider = "tesseract"  # tesseract|gemini|vertex_ai|off
 # For tesseract: requires pytesseract and tesseract-ocr installed on system
 # For gemini: set GEMINI_API_KEY env var or gemini_api_key below
 # For vertex_ai: configure [vertex_ai] section below
+# For aigateway: configure [aigateway] section below
 # gemini_api_key = ""
 gemini_model = "gemini-2.0-flash"
 
@@ -74,6 +75,13 @@ gemini_model = "gemini-2.0-flash"
 # location = "global"  # or us-central1, us-east4, etc. depending on model availability
 # credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS env var
 # model = "gemini-2.0-flash-exp"  # available models depend on region
+
+# Microsoft AI Gateway configuration (for provider = "aigateway")
+# Enables enterprise access to Gemini models via Microsoft AI Gateway
+[aigateway]
+# url = "https://your-gateway.azure.com"  # or set AI_GATEWAY_URL env var
+# key = "your-api-key"  # or set AI_GATEWAY_KEY env var
+# model = "gemini-2.5-flash"  # Gemini model to use via gateway
 
 [retrieval]
 k_vec = 40

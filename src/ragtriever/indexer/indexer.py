@@ -18,7 +18,7 @@ from ..extractors.markdown import MarkdownExtractor
 from ..extractors.pdf import PdfExtractor
 from ..extractors.pptx import PptxExtractor
 from ..extractors.xlsx import XlsxExtractor
-from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor, VertexAIImageExtractor
+from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor, VertexAIImageExtractor, AIGatewayImageExtractor
 from ..chunking.base import ChunkerRegistry
 from ..chunking.markdown_chunker import MarkdownChunker
 from ..chunking.boundary_chunker import BoundaryMarkerChunker
@@ -63,6 +63,12 @@ class Indexer:
                 location=self.cfg.vertex_ai_location,
                 credentials_file=self.cfg.vertex_ai_credentials_file,
                 model=self.cfg.vertex_ai_model,
+            ))
+        elif self.cfg.image_analysis_provider == "aigateway":
+            self.extractors.register(AIGatewayImageExtractor(
+                gateway_url=self.cfg.aigateway_url,
+                gateway_key=self.cfg.aigateway_key,
+                model=self.cfg.aigateway_model,
             ))
         # If "off", no image extractor is registered
 

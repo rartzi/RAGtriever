@@ -46,6 +46,114 @@ ragtriever mcp                # MCP server over stdio
 Vault (filesystem) → Change Detection → Ingestion Pipeline → Stores → Retrieval Service → Python API / MCP
 ```
 
+### Parallel Processing Architecture
+
+RAGtriever uses parallel processing to significantly speed up full vault scans (3.6x speedup tested). The architecture separates extraction, embedding, and image analysis into parallel worker pools:
+
+**Worker Pools:**
+1. **Extraction Workers** (`extraction_workers`): Parallel file extraction **for ALL file types**
+   - Each worker handles file reading and content extraction
+   - Processes markdown, PDFs, PowerPoint, Excel, images in parallel
+   - **NOT limited to images** - all files are extracted in parallel
+   - Default: 8 workers
+   - Bottleneck: CPU-bound (parsing, text extraction)
+
+2. **Image Analysis Workers** (`image_workers`): Parallel API calls
+   - Dedicated pool for external image analysis APIs
+   - Handles Gemini, Vertex AI, AI Gateway requests concurrently
+   - Default: 8 workers
+   - Bottleneck: Network I/O (API latency)
+
+3. **Cross-File Embedding Batches** (`embed_batch_size`): GPU efficiency
+   - Collects chunks from multiple files before embedding
+   - Larger batches = better GPU utilization
+   - Default: 256 chunks
+   - Bottleneck: GPU throughput
+
+**Processing Flow:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Parallel Extraction                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │ Worker 1 │  │ Worker 2 │  │ Worker 3 │  │ Worker N │   │
+│  │ file.md  │  │ doc.pdf  │  │ pres.pptx│  │ sheet.xlsx│  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   │
+└───────┼─────────────┼─────────────┼─────────────┼──────────┘
+        │             │             │             │
+        └─────────────┴─────────────┴─────────────┘
+                      │
+                      ▼
+        ┌─────────────────────────┐
+        │   Chunking (serial)     │
+        │   Per-file processing   │
+        └─────────┬───────────────┘
+                  │
+                  ▼
+        ┌─────────────────────────┐
+        │  Cross-File Batching    │
+        │  Collect 256 chunks     │
+        └─────────┬───────────────┘
+                  │
+                  ▼
+        ┌─────────────────────────┐
+        │   Embedding (batch)     │
+        │   GPU-accelerated       │
+        └─────────┬───────────────┘
+                  │
+                  ▼
+        ┌─────────────────────────┐
+        │    SQLite Storage       │
+        │    (transaction batch)  │
+        └─────────────────────────┘
+```
+
+**Image Processing (Parallel):**
+```
+┌────────────────────────────────────────────────────────────┐
+│              Parallel Image Analysis Workers               │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐     │
+│  │Worker 1 │  │Worker 2 │  │Worker 3 │  │Worker N │     │
+│  │img1.png │  │img2.jpg │  │img3.png │  │img4.jpg │     │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘     │
+└───────┼────────────┼────────────┼────────────┼───────────┘
+        │            │            │            │
+        └────────────┴────────────┴────────────┘
+                     │
+     ┌───────────────┼───────────────┐
+     │               │               │
+     ▼               ▼               ▼
+┌─────────┐    ┌──────────┐    ┌──────────┐
+│ Gemini  │    │Vertex AI │    │AI Gateway│
+│   API   │    │   API    │    │   API    │
+└─────────┘    └──────────┘    └──────────┘
+```
+
+**Configuration:**
+```toml
+[indexing]
+extraction_workers = 10   # Parallel file extraction (CPU-bound)
+embed_batch_size = 256    # Cross-file embedding batch size
+image_workers = 10        # Parallel image API calls (I/O-bound)
+parallel_scan = true      # Enable/disable parallelization
+```
+
+**CLI Overrides:**
+```bash
+ragtriever scan --full --workers 10     # Override extraction workers
+ragtriever scan --full --no-parallel    # Disable all parallelization
+```
+
+**Performance Characteristics:**
+- **Small vaults (<50 files)**: Overhead dominates, minimal benefit
+- **Medium vaults (50-500 files)**: 2-3x speedup with 8-10 workers
+- **Large vaults (>500 files)**: 3-4x speedup, scales with worker count
+- **With images**: Image workers critical for API-bound providers (Gemini, Vertex AI, AI Gateway)
+
+**Example Performance (119 files, 16 images):**
+- Sequential: ~180s estimated
+- Parallel (10 workers): 49s actual
+- Speedup: **3.7x**
+
 ### Core Protocols (in `**/base.py`)
 The codebase uses Python Protocol classes for pluggable adapters:
 - `Extractor`: file content extraction (one per file type: `.md`, `.pdf`, `.pptx`, `.xlsx`, images)
@@ -126,8 +234,9 @@ TOML-based config (see `examples/config.toml.example`):
 - `[index]`: index directory, extractor_version, chunker_version (v2 adds overlap support)
 - `[chunking]`: overlap_chars (default: 200), max_chunk_size, preserve_heading_metadata
 - `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true), use_query_prefix (asymmetric retrieval), use_faiss (approximate NN search)
-- `[image_analysis]`: provider (tesseract/gemini/vertex_ai/off), gemini_model for Gemini API
+- `[image_analysis]`: provider (tesseract/gemini/vertex_ai/aigateway/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
+- `[aigateway]`: url, key, model (for Microsoft AI Gateway proxy to Gemini)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
@@ -216,11 +325,196 @@ ragtriever scan --full --no-parallel   # Disable parallelization
 
 **Tested performance:** 337s → 93s (3.6x speedup) on 143-file vault with images.
 
-### Image Analysis Options
-- **tesseract**: Local OCR using pytesseract (requires tesseract-ocr installed)
-- **gemini**: Google Gemini API with API key authentication (set GEMINI_API_KEY)
-- **vertex_ai**: Google Vertex AI with service account JSON credentials (requires google-cloud-aiplatform)
-- **off**: Disable image analysis
+### Image Analysis Providers
+
+RAGtriever supports multiple image analysis providers, each with different capabilities and use cases. All AI-powered providers (gemini, vertex_ai, aigateway) extract structured metadata including:
+- **Description**: Detailed 2-3 sentence description of image content
+- **Visible Text**: OCR transcription of any text in the image
+- **Image Type**: Classification (screenshot, diagram, flowchart, photo, presentation_slide, document, chart, infographic, logo, ui_mockup, other)
+- **Topics**: 3-5 key topics or themes
+- **Entities**: Named entities (people, companies, products, technologies)
+
+---
+
+#### 1. Tesseract (Local OCR)
+**Use case**: Offline OCR, privacy-sensitive documents, no API costs
+
+**Features:**
+- Local pytesseract-based OCR
+- No external API calls
+- Extracts visible text only (no semantic analysis)
+- Fast for text-heavy images
+
+**Requirements:**
+- `pip install pytesseract`
+- System installation: `brew install tesseract-ocr` (macOS) or `apt-get install tesseract-ocr` (Linux)
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "tesseract"
+```
+
+**Limitations:**
+- Text extraction only (no image understanding)
+- Accuracy depends on image quality
+- No structured metadata (description, topics, entities)
+
+---
+
+#### 2. Google Gemini API (Direct)
+**Use case**: Personal projects, direct API access, simple auth
+
+**Features:**
+- Full vision + language understanding
+- Structured metadata extraction
+- API key authentication (simple setup)
+- Gemini 2.0/2.5 Flash models
+
+**Requirements:**
+- `pip install google-genai`
+- API key from Google AI Studio
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "gemini"
+gemini_model = "gemini-2.0-flash"  # or "gemini-2.5-flash"
+
+# Option 1: Environment variable (recommended)
+# export GEMINI_API_KEY="your-api-key"
+
+# Option 2: Config file (not recommended for security)
+# gemini_api_key = "your-api-key"
+```
+
+**Performance:**
+- Latency: ~500-1000ms per image
+- Parallel workers critical for large vaults
+- Rate limits: depends on API tier
+
+**Cost:** Pay-per-use (check Google AI pricing)
+
+---
+
+#### 3. Google Vertex AI (Service Account)
+**Use case**: Enterprise GCP deployments, service account auth, fine-grained IAM
+
+**Features:**
+- Same Gemini models as direct API
+- Service account JSON authentication
+- GCP IAM integration
+- Regional deployment options
+- Enterprise SLAs
+
+**Requirements:**
+- `pip install google-cloud-aiplatform google-auth`
+- GCP project with Vertex AI enabled
+- Service account JSON credentials
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "vertex_ai"
+
+[vertex_ai]
+project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT env var
+location = "global"  # or "us-central1", "us-east4", etc.
+credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS
+model = "gemini-2.0-flash-exp"  # regional model availability varies
+```
+
+**Performance:**
+- Similar to Gemini API (~500-1000ms)
+- Benefits from GCP network proximity
+- Parallel workers recommended
+
+**Security:**
+- Service account credentials (more secure than API keys)
+- GCP audit logging
+- VPC-SC support for enterprise
+
+**Cost:** GCP Vertex AI pricing (typically higher than direct API)
+
+---
+
+#### 4. Microsoft AI Gateway (Enterprise Proxy)
+**Use case**: Enterprise Microsoft shops, centralized governance, routing/monitoring
+
+**Features:**
+- Proxies to Google Gemini via Microsoft infrastructure
+- Enterprise authentication (API keys managed by gateway)
+- Centralized usage tracking and billing
+- Access control and rate limiting at gateway level
+- Same structured metadata as direct Gemini
+
+**Requirements:**
+- `pip install google-genai` (uses same SDK as Gemini)
+- AI Gateway URL and API key from Microsoft
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "aigateway"
+
+[aigateway]
+url = "https://your-gateway.azure.com"  # or set AI_GATEWAY_URL env var
+key = "your-api-key"  # or set AI_GATEWAY_KEY env var
+model = "gemini-2.5-flash"
+```
+
+**Architecture:**
+```
+RAGtriever → AI Gateway (Microsoft) → Vertex AI Express → Gemini API
+```
+
+**Performance:**
+- Latency: ~500-1500ms per image (additional gateway hop)
+- Parallel workers critical for throughput
+- Example: 16 images in 49s with 10 workers
+
+**Benefits:**
+- Centralized governance (audit, compliance)
+- Simplified credential management
+- Cross-cloud routing (Azure → GCP)
+- Enterprise support channels
+
+**Cost:** Gateway pricing + underlying Gemini API costs
+
+---
+
+#### 5. Off (Disabled)
+**Use case**: Text-only vaults, cost reduction, privacy
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "off"
+```
+
+**Effect:**
+- Images are skipped during indexing
+- No image metadata in search results
+- Faster scans (no API calls)
+
+---
+
+### Provider Comparison
+
+| Provider | Auth | Location | Latency | Parallel Workers | Use Case |
+|----------|------|----------|---------|------------------|----------|
+| **tesseract** | None | Local | ~100ms | Not critical | Offline OCR, text extraction only |
+| **gemini** | API key | Google Cloud | ~500ms | Critical | Personal projects, simple setup |
+| **vertex_ai** | Service account | GCP region | ~500ms | Critical | Enterprise GCP, IAM integration |
+| **aigateway** | Gateway key | Microsoft + GCP | ~1000ms | Critical | Enterprise Microsoft, governance |
+| **off** | N/A | N/A | 0ms | N/A | Text-only, cost savings |
+
+**Recommendations:**
+- **Small vaults (<20 images)**: Any provider works, latency not critical
+- **Medium vaults (20-100 images)**: Use 8-10 image workers for any API provider
+- **Large vaults (>100 images)**: Maximize image workers (10-20), consider costs
+- **Offline/Privacy**: Use tesseract (local only)
+- **Enterprise**: Use vertex_ai (GCP) or aigateway (Microsoft) for compliance/governance
 
 ## Security Notes
 
