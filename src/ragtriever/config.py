@@ -69,7 +69,7 @@ class VaultConfig:
     faiss_nprobe: int = 10  # Number of clusters to search (IVF)
 
     # Image analysis
-    image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|off
+    image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|aigateway|off
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
@@ -78,6 +78,11 @@ class VaultConfig:
     vertex_ai_location: str = "global"
     vertex_ai_credentials_file: str | None = None
     vertex_ai_model: str = "gemini-2.0-flash-exp"
+
+    # Microsoft AI Gateway (for image_analysis_provider="aigateway")
+    aigateway_url: str | None = None
+    aigateway_key: str | None = None
+    aigateway_model: str = "gemini-2.5-flash"
 
     # Retrieval
     k_vec: int = 40
@@ -106,6 +111,7 @@ class VaultConfig:
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
         vertex = data.get("vertex_ai", {})
+        aigateway = data.get("aigateway", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
         indexing = data.get("indexing", {})
@@ -225,6 +231,9 @@ class VaultConfig:
             vertex_ai_location=vertex.get("location", "us-central1"),
             vertex_ai_credentials_file=vertex_ai_credentials_file,
             vertex_ai_model=vertex.get("model", "gemini-2.0-flash-exp"),
+            aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
+            aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
+            aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
@@ -290,6 +299,11 @@ class MultiVaultConfig:
     vertex_ai_location: str = "global"
     vertex_ai_credentials_file: str | None = None
     vertex_ai_model: str = "gemini-2.0-flash-exp"
+
+    # Microsoft AI Gateway
+    aigateway_url: str | None = None
+    aigateway_key: str | None = None
+    aigateway_model: str = "gemini-2.5-flash"
 
     # Retrieval
     k_vec: int = 40
@@ -365,6 +379,7 @@ class MultiVaultConfig:
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
         vertex = data.get("vertex_ai", {})
+        aigateway = data.get("aigateway", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
         indexing = data.get("indexing", {})
@@ -436,6 +451,9 @@ class MultiVaultConfig:
             vertex_ai_location=vertex.get("location", "us-central1"),
             vertex_ai_credentials_file=vertex_ai_credentials_file,
             vertex_ai_model=vertex.get("model", "gemini-2.0-flash-exp"),
+            aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
+            aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
+            aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
