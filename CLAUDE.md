@@ -132,6 +132,31 @@ TOML-based config (see `examples/config.toml.example`):
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
 
+### Ignore Patterns
+Each vault can specify ignore patterns to exclude files and folders from indexing. Patterns are applied to both full scans and watch mode.
+
+**Supported patterns:**
+- `"folder/**"` - ignore entire folder and all contents (e.g., `"00-Input/**"`)
+- `"**/.DS_Store"` - ignore file in any directory
+- `"**/~$*"` - ignore files matching pattern in any directory
+
+**Example config (multi-vault):**
+```toml
+[[vaults]]
+name = "my-vault"
+root = "/path/to/vault"
+ignore = [
+    ".git/**",
+    ".obsidian/cache/**",
+    "**/.DS_Store",
+    "00-Input/**",      # Staging folder - not indexed
+    "99-Archive/**",    # Archive folder - not indexed
+    "drafts/**"         # Work in progress - not indexed
+]
+```
+
+Multiple folders can be ignored per vault. Files moved from ignored folders to non-ignored folders will be indexed; files moved to ignored folders will be removed from the index.
+
 ### Offline Mode
 Set `offline_mode = true` in `[embeddings]` to use cached models only (no HuggingFace downloads). This is useful in corporate environments with restricted internet access. Can be overridden with the `HF_OFFLINE_MODE` environment variable.
 
