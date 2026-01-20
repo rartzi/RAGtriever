@@ -596,7 +596,7 @@ class Indexer:
         import queue
 
         q = JobQueue()
-        detector = ChangeDetector(root=self.cfg.vault_root, q=q)
+        detector = ChangeDetector(root=self.cfg.vault_root, q=q, ignore=self.cfg.ignore)
 
         # Start detector in background thread
         detector_thread = threading.Thread(target=detector.watch, daemon=True)
@@ -1234,7 +1234,7 @@ class MultiVaultIndexer:
         from .change_detector import ChangeDetector
 
         q = JobQueue()
-        detector = ChangeDetector(root=indexer.cfg.vault_root, q=q)
+        detector = ChangeDetector(root=indexer.cfg.vault_root, q=q, ignore=indexer.cfg.ignore)
 
         # Start detector in background
         import threading
