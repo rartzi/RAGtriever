@@ -106,27 +106,51 @@ class Indexer:
         """Scan and index files. `full=True` means re-index all; otherwise only changed.
 
         Uses parallel scanning if cfg.parallel_scan is True.
+        Detects and removes deleted files from the index.
         """
         if self.cfg.parallel_scan:
             return self.scan_parallel(full=full)
 
         # Sequential scan (original behavior)
+        logger = logging.getLogger(__name__)
         start = time.time()
         rec = Reconciler(self.cfg.vault_root, self.cfg.ignore)
+
+        # Get files currently on filesystem
+        paths = rec.scan_files()
+        fs_files = {relpath(self.cfg.vault_root, p) for p in paths}
+
+        # Get files currently indexed in database
+        indexed_files = self.store.get_indexed_files(self.vault_id)
+
+        # Detect deletions: files in DB but not on filesystem
+        deleted_files = indexed_files - fs_files
+        files_deleted = 0
+        for rel_path in deleted_files:
+            logger.info(f"Detected deletion: {rel_path}")
+            self.store.delete_document(self.vault_id, rel_path)
+            files_deleted += 1
+
+        if files_deleted > 0:
+            logger.info(f"Removed {files_deleted} deleted file(s) from index")
+
+        # Index existing files
         files_indexed = 0
-        for p in rec.scan_files():
+        for p in paths:
             self._index_one(p, force=full)
             files_indexed += 1
 
         return ScanStats(
             files_scanned=files_indexed,
             files_indexed=files_indexed,
+            files_deleted=files_deleted,
             elapsed_seconds=time.time() - start,
         )
 
     def scan_parallel(self, full: bool = False) -> ScanStats:
         """Parallel scan with batched embedding and writes.
 
+        Phase 0: Detect and remove deleted files from index
         Phase 1: Parallel extraction/chunking (ThreadPoolExecutor)
         Phase 2: Batched embedding across files
         Phase 3: Parallel image analysis (if enabled)
@@ -138,6 +162,19 @@ class Indexer:
         rec = Reconciler(self.cfg.vault_root, self.cfg.ignore)
         paths = rec.scan_files()
         logger.info(f"Found {len(paths)} files to index")
+
+        # Phase 0: Detect and remove deleted files
+        fs_files = {relpath(self.cfg.vault_root, p) for p in paths}
+        indexed_files = self.store.get_indexed_files(self.vault_id)
+        deleted_files = indexed_files - fs_files
+        files_deleted = 0
+        for rel_path in deleted_files:
+            logger.info(f"Detected deletion: {rel_path}")
+            self.store.delete_document(self.vault_id, rel_path)
+            files_deleted += 1
+
+        if files_deleted > 0:
+            logger.info(f"Phase 0 complete: Removed {files_deleted} deleted file(s) from index")
 
         # Phase 1: Parallel extraction and chunking
         extraction_results: list[ExtractionResult] = []
@@ -220,6 +257,7 @@ class Indexer:
         return ScanStats(
             files_scanned=len(paths),
             files_indexed=len(extraction_results),
+            files_deleted=files_deleted,
             files_failed=files_failed,
             chunks_created=chunks_created,
             embeddings_created=embeddings_created,
@@ -1178,6 +1216,7 @@ class MultiVaultIndexer:
         return ScanStats(
             files_scanned=a.files_scanned + b.files_scanned,
             files_indexed=a.files_indexed + b.files_indexed,
+            files_deleted=a.files_deleted + b.files_deleted,
             files_failed=a.files_failed + b.files_failed,
             chunks_created=a.chunks_created + b.chunks_created,
             embeddings_created=a.embeddings_created + b.embeddings_created,

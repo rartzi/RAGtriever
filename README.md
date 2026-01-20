@@ -38,7 +38,8 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 - **Parallel Scanning (3.6x Faster)** - ThreadPool-based parallel extraction and image analysis
 - **Embedded Image Extraction** - Automatically extracts and analyzes images from PDFs, PowerPoints, and Markdown
 - **AI-Powered Image Analysis** - Extract text and metadata using Tesseract OCR, Gemini Vision, or Vertex AI
-- **Watch Mode** - Continuously index changes as you edit your vault
+- **Watch Mode** - Continuously index changes as you edit your vault (add, change, delete)
+- **File Deletion Detection** - Scan mode detects deleted files and removes them from index
 - **MCP Server** - Expose your vault to AI agents via the Model Context Protocol
 - **FAISS Scaling** - Optional approximate nearest neighbor search for large vaults (10K+ chunks)
 - **100% Local** - Your data never leaves your machine (when using local embeddings + Tesseract)

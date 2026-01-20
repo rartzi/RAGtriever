@@ -75,6 +75,7 @@ class ScanStats:
 
     files_scanned: int = 0
     files_indexed: int = 0
+    files_deleted: int = 0
     files_failed: int = 0
     chunks_created: int = 0
     embeddings_created: int = 0

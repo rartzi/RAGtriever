@@ -24,6 +24,10 @@ class Store(Protocol):
     def delete_document(self, vault_id: str, rel_path: str) -> None:
         ...
 
+    def get_indexed_files(self, vault_id: str) -> set[str]:
+        """Get set of rel_paths for all non-deleted documents in vault."""
+        ...
+
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
         ...
 

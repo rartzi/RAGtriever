@@ -455,12 +455,46 @@ observer.start()
 def on_modified(event):
     if not should_ignore(event.src_path):
         indexer._index_one(event.src_path)  # Re-index immediately
+
+def on_deleted(event):
+    if not should_ignore(event.src_path):
+        store.delete_document(vault_id, rel_path)  # Remove from index
 ```
 
 **Use Cases:**
 - Real-time indexing as you work
 - Keep vault always up-to-date
 - Background daemon for productivity
+
+**File Lifecycle Handling:**
+
+Both scan and watch modes handle the complete file lifecycle:
+
+| Event | Scan Mode | Watch Mode |
+|-------|-----------|------------|
+| **Add** | Indexed on scan | Indexed immediately |
+| **Change** | Re-indexed on scan | Re-indexed immediately |
+| **Delete** | Detected via reconciliation | Detected via filesystem event |
+
+**Deletion Detection (Scan Mode):**
+```python
+# Phase 0 of scan: Reconciliation
+fs_files = {rel_path for p in scan_files()}  # Files on disk
+indexed_files = store.get_indexed_files(vault_id)  # Files in DB
+
+# Find deleted files
+deleted = indexed_files - fs_files
+for rel_path in deleted:
+    store.delete_document(vault_id, rel_path)  # Full cleanup
+```
+
+**What Gets Cleaned Up:**
+- Document marked as `deleted=1`
+- All chunks removed
+- All embeddings removed
+- FTS entries removed
+- Outgoing links removed
+- Manifest entry removed
 
 **Run as daemon:**
 ```bash

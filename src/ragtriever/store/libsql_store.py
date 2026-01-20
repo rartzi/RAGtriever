@@ -279,7 +279,19 @@ class LibSqlStore:
             self._conn.execute("DELETE FROM fts_chunks WHERE chunk_id=?", (cid,))
         self._conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
         self._conn.execute("UPDATE documents SET deleted=1 WHERE doc_id=?", (doc_id,))
+        # Clean up links table (outgoing links from this file)
+        self._conn.execute("DELETE FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path))
+        # Clean up manifest table
+        self._conn.execute("DELETE FROM manifest WHERE vault_id=? AND rel_path=?", (vault_id, rel_path))
         self._conn.commit()
+
+    def get_indexed_files(self, vault_id: str) -> set[str]:
+        """Get set of rel_paths for all non-deleted documents in vault."""
+        rows = self._conn.execute(
+            "SELECT rel_path FROM documents WHERE vault_id=? AND deleted=0",
+            (vault_id,)
+        ).fetchall()
+        return {row["rel_path"] for row in rows}
 
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
         cur = self._conn.cursor()

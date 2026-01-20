@@ -197,6 +197,52 @@ src/ragtriever/
 3. Merge + dedupe with configurable weights
 4. Optional graph boost (backlinks) and rerank
 
+### File Lifecycle Management
+
+RAGtriever properly handles the complete file lifecycle: **add**, **change**, and **delete** operations are detected and processed by both scan and watch modes.
+
+**Lifecycle Events:**
+
+| Event | Scan Mode | Watch Mode |
+|-------|-----------|------------|
+| **File Added** | Indexed on next scan | Indexed immediately via filesystem event |
+| **File Changed** | Re-indexed on next scan | Re-indexed immediately via filesystem event |
+| **File Deleted** | Detected via reconciliation, removed from index | Detected via filesystem event, removed from index |
+
+**How Deletion Detection Works:**
+
+1. **Scan Mode (Reconciliation)**:
+   - Compares files on filesystem vs files in database
+   - Files in DB but not on filesystem are marked as deleted
+   - All related data is cleaned up (chunks, embeddings, FTS, links, manifest)
+   - Reports deleted file count in scan output
+
+2. **Watch Mode (Filesystem Events)**:
+   - Watchdog library detects `FileDeleted` events
+   - Triggers immediate `delete_document()` call
+   - Same cleanup logic as scan mode
+
+**What Gets Cleaned Up on Deletion:**
+- `documents` table: Document marked as `deleted=1`
+- `chunks` table: All chunks for document deleted
+- `embeddings` table: All embeddings for those chunks deleted
+- `fts_chunks` table: All FTS entries deleted
+- `links` table: All outgoing links from deleted file removed
+- `manifest` table: Indexing metadata removed
+
+**Code References:**
+- `src/ragtriever/indexer/indexer.py:scan()` - Reconciliation logic (lines 119-135)
+- `src/ragtriever/indexer/indexer.py:scan_parallel()` - Parallel reconciliation (lines 166-177)
+- `src/ragtriever/store/libsql_store.py:delete_document()` - Full cleanup (lines 268-286)
+- `src/ragtriever/store/libsql_store.py:get_indexed_files()` - Get indexed files for reconciliation
+
+**CLI Output Example:**
+```bash
+$ ragtriever scan
+Scan complete: 119 files, 792 chunks in 45.2s
+  (3 deleted files removed from index)
+```
+
 ### Enriched Chunk Metadata
 Every indexed chunk includes enriched metadata for fast operations without additional database lookups:
 
