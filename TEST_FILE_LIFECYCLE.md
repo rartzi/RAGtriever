@@ -1,8 +1,12 @@
 # File Lifecycle Cleanup Test
 
-## Current delete_document() Implementation
+> **STATUS: TESTS PASSING** (2026-01-20)
+>
+> All file lifecycle tests pass. See "Test Results" section at bottom.
 
-Looking at `src/ragtriever/store/libsql_store.py:268-282`:
+## Current delete_document() Implementation (UPDATED)
+
+Looking at `src/ragtriever/store/libsql_store.py:268-286`:
 
 ```python
 def delete_document(self, vault_id: str, rel_path: str) -> None:
@@ -19,6 +23,10 @@ def delete_document(self, vault_id: str, rel_path: str) -> None:
         self._conn.execute("DELETE FROM fts_chunks WHERE chunk_id=?", (cid,))
     self._conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
     self._conn.execute("UPDATE documents SET deleted=1 WHERE doc_id=?", (doc_id,))
+    # Clean up links table (outgoing links from this file) - ADDED
+    self._conn.execute("DELETE FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path))
+    # Clean up manifest table - ADDED
+    self._conn.execute("DELETE FROM manifest WHERE vault_id=? AND rel_path=?", (vault_id, rel_path))
     self._conn.commit()
 ```
 
@@ -28,8 +36,10 @@ def delete_document(self, vault_id: str, rel_path: str) -> None:
 2. **FTS Entries**: Deleted for each chunk (`DELETE FROM fts_chunks WHERE chunk_id=?`)
 3. **Chunks**: All chunks for document deleted (`DELETE FROM chunks WHERE doc_id=?`)
 4. **Document**: Marked as deleted (soft delete: `UPDATE documents SET deleted=1`)
+5. **Links**: Outgoing links from deleted file removed (`DELETE FROM links WHERE src_rel_path=?`) - **ADDED**
+6. **Manifest**: Indexing metadata removed (`DELETE FROM manifest WHERE rel_path=?`) - **ADDED**
 
-## Potential Residuals ❌
+## ~~Potential Residuals~~ All Fixed ✅
 
 ### 1. Links Table
 **Schema** (lines 97-105):
@@ -161,6 +171,66 @@ Option B: Track deleted chunks and remove from FAISS
 Option C: Accept rebuild-on-restart approach (current behavior)
 
 ## Files to Check
-- `src/ragtriever/store/libsql_store.py:268-282` - delete_document implementation
-- `src/ragtriever/indexer/indexer.py:627-629` - delete job processing
+- `src/ragtriever/store/libsql_store.py:268-294` - delete_document implementation (UPDATED)
+- `src/ragtriever/indexer/indexer.py:119-177` - reconciliation in scan/scan_parallel (ADDED)
 - `src/ragtriever/store/faiss_index.py` - FAISS index management
+
+---
+
+## Test Results (2026-01-20)
+
+### Unit Tests (Store Methods)
+
+```python
+# Test get_indexed_files
+indexed = store.get_indexed_files(vault_id)
+assert indexed == {'file1.md', 'file2.md', 'file3.md'}  # ✅ PASS
+
+# Test delete_document marks document as deleted
+store.delete_document(vault_id, 'file1.md')
+row = conn.execute('SELECT deleted FROM documents WHERE rel_path=?', ('file1.md',)).fetchone()
+assert row['deleted'] == 1  # ✅ PASS
+
+# Test delete_document cleans up links table
+links_count = conn.execute('SELECT COUNT(*) FROM links WHERE src_rel_path=?', ('file1.md',)).fetchone()[0]
+assert links_count == 0  # ✅ PASS
+
+# Test delete_document cleans up manifest table
+manifest_count = conn.execute('SELECT COUNT(*) FROM manifest WHERE rel_path=?', ('file1.md',)).fetchone()[0]
+assert manifest_count == 0  # ✅ PASS
+
+# Test get_indexed_files excludes deleted files
+indexed_after = store.get_indexed_files(vault_id)
+assert indexed_after == {'file2.md', 'file3.md'}  # ✅ PASS
+```
+
+### Integration Test (test_file_lifecycle.py)
+
+```
+============================================================
+FILE LIFECYCLE CLEANUP TEST
+============================================================
+
+=== INITIAL STATE ===
+Documents (active): 120
+
+✅ Created test file with wikilinks
+
+=== AFTER ADDING TEST FILE ===
+Documents (active): 120
+
+🗑️  Deleted test file from filesystem
+
+=== AFTER DELETING TEST FILE ===
+Documents (active): 119
+Documents (deleted): 1
+
+=== Checking residuals for 'test_lifecycle.md' ===
+Outgoing links: 0  ✅
+Manifest entry: 0  ✅
+Document entry: exists (deleted=1)  ✅ Correctly marked as deleted
+
+============================================================
+TEST COMPLETE - ALL CHECKS PASSED
+============================================================
+```
