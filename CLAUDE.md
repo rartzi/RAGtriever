@@ -48,7 +48,7 @@ Vault (filesystem) → Change Detection → Ingestion Pipeline → Stores → Re
 
 ### Parallel Processing Architecture
 
-RAGtriever uses parallel processing to significantly speed up full vault scans (3.6x speedup tested). The architecture separates extraction, embedding, and image analysis into parallel worker pools:
+RAGtriever uses parallel processing to significantly speed up full vault scans (3.6x speedup tested). **All file types** (markdown, PDFs, PowerPoint, Excel, images) are extracted in parallel, not just images. The architecture uses three types of parallelization:
 
 **Worker Pools:**
 1. **Extraction Workers** (`extraction_workers`): Parallel file extraction **for ALL file types**
@@ -70,10 +70,10 @@ RAGtriever uses parallel processing to significantly speed up full vault scans (
    - Default: 256 chunks
    - Bottleneck: GPU throughput
 
-**Processing Flow:**
+**Processing Flow (All File Types):**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Parallel Extraction                       │
+│         Parallel Extraction (Markdown, PDF, PPTX, etc.)      │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
 │  │ Worker 1 │  │ Worker 2 │  │ Worker 3 │  │ Worker N │   │
 │  │ file.md  │  │ doc.pdf  │  │ pres.pptx│  │ sheet.xlsx│  │
@@ -107,10 +107,10 @@ RAGtriever uses parallel processing to significantly speed up full vault scans (
         └─────────────────────────┘
 ```
 
-**Image Processing (Parallel):**
+**Image Analysis (Separate Parallel Pool for API Calls):**
 ```
 ┌────────────────────────────────────────────────────────────┐
-│              Parallel Image Analysis Workers               │
+│       Parallel Image Analysis Workers (API-bound)          │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐     │
 │  │Worker 1 │  │Worker 2 │  │Worker 3 │  │Worker N │     │
 │  │img1.png │  │img2.jpg │  │img3.png │  │img4.jpg │     │
