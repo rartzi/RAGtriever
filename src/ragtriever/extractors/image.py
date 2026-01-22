@@ -500,7 +500,7 @@ class AIGatewayImageExtractor:
         image_bytes = path.read_bytes()
 
         # Analyze with AI Gateway
-        analysis = self._analyze_with_aigateway(image_bytes, path.suffix)
+        analysis = self._analyze_with_aigateway(image_bytes, path.suffix, path)
 
         # Build the text content for indexing (same pattern as GeminiImageExtractor)
         text_parts = []
@@ -534,7 +534,7 @@ class AIGatewayImageExtractor:
 
         return Extracted(text=text, metadata=meta)
 
-    def _analyze_with_aigateway(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+    def _analyze_with_aigateway(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
         """Call Microsoft AI Gateway to access Gemini API for image analysis."""
         if not self.gateway_url:
             logger.warning(
@@ -617,8 +617,10 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
             return result
 
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse AI Gateway response as JSON: {e}")
+            source_info = f" [source: {source_path}]" if source_path else ""
+            logger.warning(f"Failed to parse AI Gateway response as JSON: {e}{source_info}")
             return {"description": (response.text or "")[:500] if 'response' in locals() else ""}
         except Exception as e:
-            logger.warning(f"AI Gateway analysis failed: {e}")
+            source_info = f" [source: {source_path}]" if source_path else ""
+            logger.warning(f"AI Gateway analysis failed: {e}{source_info}")
             return {}
