@@ -566,7 +566,8 @@ class AIGatewayImageExtractor:
             client = genai.Client(
                 http_options=types.HttpOptions(
                     base_url=endpoint,
-                    api_version="v1"
+                    api_version="v1",
+                    timeout=90000,  # 90 second timeout to prevent hanging
                 ),
                 api_key=self.gateway_key,
                 vertexai=True
