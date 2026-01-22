@@ -85,6 +85,8 @@ gemini_model = "gemini-2.0-flash"  # Default for gemini/aigateway providers
 # url = "https://your-gateway.azure.com"  # or set AI_GATEWAY_URL env var
 # key = "your-api-key"  # or set AI_GATEWAY_KEY env var
 # model = "gemini-2.5-flash"  # Gemini model to use via gateway
+# timeout = 90000  # Request timeout in milliseconds (default: 90000 = 90s)
+# endpoint_path = "vertex-ai-express"  # Path suffix appended to URL (default: vertex-ai-express)
 
 [retrieval]
 k_vec = 40

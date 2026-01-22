@@ -83,6 +83,8 @@ class VaultConfig:
     aigateway_url: str | None = None
     aigateway_key: str | None = None
     aigateway_model: str = "gemini-2.5-flash"
+    aigateway_timeout: int = 90000  # Timeout in milliseconds
+    aigateway_endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
 
     # Retrieval
     k_vec: int = 40
@@ -234,6 +236,8 @@ class VaultConfig:
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
+            aigateway_timeout=int(aigateway.get("timeout", 90000)),
+            aigateway_endpoint_path=aigateway.get("endpoint_path", "vertex-ai-express"),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
@@ -304,6 +308,8 @@ class MultiVaultConfig:
     aigateway_url: str | None = None
     aigateway_key: str | None = None
     aigateway_model: str = "gemini-2.5-flash"
+    aigateway_timeout: int = 90000  # Timeout in milliseconds
+    aigateway_endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
 
     # Retrieval
     k_vec: int = 40
@@ -454,6 +460,8 @@ class MultiVaultConfig:
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
+            aigateway_timeout=int(aigateway.get("timeout", 90000)),
+            aigateway_endpoint_path=aigateway.get("endpoint_path", "vertex-ai-express"),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,

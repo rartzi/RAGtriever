@@ -476,6 +476,8 @@ class AIGatewayImageExtractor:
     gateway_url: str | None = None
     gateway_key: str | None = None
     model: str = "gemini-2.5-flash"
+    timeout: int = 90000  # Timeout in milliseconds
+    endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
 
     def __post_init__(self) -> None:
         # Try to get values from environment if not provided
@@ -561,13 +563,13 @@ class AIGatewayImageExtractor:
 
         try:
             # Configure client to use Microsoft AI Gateway endpoint
-            # Append /vertex-ai-express to base URL (per ref-docs/GoogleVertexNative.ipynb)
-            endpoint = f"{self.gateway_url}/vertex-ai-express"
+            # Append endpoint_path to base URL (configurable, default: vertex-ai-express)
+            endpoint = f"{self.gateway_url}/{self.endpoint_path}"
             client = genai.Client(
                 http_options=types.HttpOptions(
                     base_url=endpoint,
                     api_version="v1",
-                    timeout=90000,  # 90 second timeout to prevent hanging
+                    timeout=self.timeout,  # Configurable timeout to prevent hanging
                 ),
                 api_key=self.gateway_key,
                 vertexai=True

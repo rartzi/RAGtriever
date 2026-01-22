@@ -69,6 +69,8 @@ class Indexer:
                 gateway_url=self.cfg.aigateway_url,
                 gateway_key=self.cfg.aigateway_key,
                 model=self.cfg.aigateway_model,
+                timeout=self.cfg.aigateway_timeout,
+                endpoint_path=self.cfg.aigateway_endpoint_path,
             ))
         # If "off", no image extractor is registered
 
