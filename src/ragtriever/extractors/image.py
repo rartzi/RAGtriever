@@ -561,7 +561,7 @@ class AIGatewayImageExtractor:
 
         try:
             # Configure client to use Microsoft AI Gateway endpoint
-            endpoint = f"{self.gateway_url}/vertex-ai-express"
+            endpoint = self.gateway_url  # Gateway URL should already include full path
             client = genai.Client(
                 http_options=types.HttpOptions(
                     base_url=endpoint,
