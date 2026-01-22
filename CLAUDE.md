@@ -282,7 +282,7 @@ TOML-based config (see `examples/config.toml.example`):
 - `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true), use_query_prefix (asymmetric retrieval), use_faiss (approximate NN search)
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/aigateway/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
-- `[aigateway]`: url, key, model (for Microsoft AI Gateway proxy to Gemini)
+- `[aigateway]`: url, key, model, timeout, endpoint_path (for Microsoft AI Gateway proxy to Gemini)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
@@ -507,11 +507,13 @@ provider = "aigateway"
 url = "https://your-gateway.azure.com"  # or set AI_GATEWAY_URL env var
 key = "your-api-key"  # or set AI_GATEWAY_KEY env var
 model = "gemini-2.5-flash"
+timeout = 90000  # Request timeout in milliseconds (default: 90000 = 90s)
+endpoint_path = "vertex-ai-express"  # Path suffix appended to URL (default: vertex-ai-express)
 ```
 
 **Architecture:**
 ```
-RAGtriever → AI Gateway (Microsoft) → Vertex AI Express → Gemini API
+RAGtriever → AI Gateway (Microsoft) → /{endpoint_path} → Gemini API
 ```
 
 **Performance:**
