@@ -85,7 +85,84 @@ class GeminiResponse:
 
 ---
 
-### 2. Add Better Error Handling for Office Files
+### 2. Unified Scan/Watch Pipeline with Parallel Processing
+
+**Status:** Planned
+**Priority:** High
+**Complexity:** Medium
+
+#### Problem
+Scan and watch modes use different code paths for indexing files:
+- `scan_parallel()` uses `_extract_and_chunk_one()` with batch embedding
+- `watch()` uses `_index_one()` with inline embedding (serial)
+
+This leads to:
+- Code duplication
+- Watch mode is slower (no parallelism)
+- Different behavior between modes
+
+#### Current Architecture
+```
+Scan Mode:                          Watch Mode:
+_extract_and_chunk_one()            _index_one()
+  → Extract                           → Extract
+  → Chunk                             → Chunk
+  → Return result                     → Embed (inline)
+  ↓                                   → Store (inline)
+Batch embed
+Batch store
+```
+
+#### Planned Architecture
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Shared Pipeline                              │
+│  _process_file(path) → ExtractionResult (chunks, metadata)      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+            ┌─────────────────┴─────────────────┐
+            ▼                                   ▼
+    ┌───────────────────┐              ┌───────────────────┐
+    │   Scan Mode       │              │   Watch Mode      │
+    │   - Batch files   │              │   - Queue events  │
+    │   - Parallel      │              │   - Mini-batch    │
+    │     extraction    │              │     (N files or   │
+    │   - Batch embed   │              │      N seconds)   │
+    │   - Batch store   │              │   - Parallel      │
+    └───────────────────┘              │     workers       │
+                                       └───────────────────┘
+```
+
+#### Implementation Tasks
+- [ ] Create shared `_process_file()` method (extract + chunk only)
+- [ ] Refactor `scan_parallel()` to use shared method
+- [ ] Refactor `watch()` to use shared method with mini-batching
+- [ ] Add `watch_workers` config option for parallel watch processing
+- [ ] Add `watch_batch_size` and `watch_batch_timeout` config options
+- [ ] Ensure thread safety for SQLite store
+
+#### Configuration
+```toml
+[indexing]
+# Existing scan settings
+extraction_workers = 8
+embed_batch_size = 256
+
+# New watch settings
+watch_workers = 4           # Parallel workers for watch mode
+watch_batch_size = 10       # Batch N files before embedding
+watch_batch_timeout = 5     # Or batch after N seconds
+```
+
+#### Benefits
+- Single code path for file processing
+- Watch mode gets parallelism (faster for bulk adds)
+- Easier maintenance
+- Consistent behavior between modes
+
+---
+
+### 3. Better Error Handling for Office Files
 
 **Status:** Planned
 **Priority:** High
@@ -121,7 +198,7 @@ def extract(self, path: Path) -> Extracted:
 
 ---
 
-### 3. Offline Mode Validation
+### 4. Offline Mode Validation
 
 **Status:** Planned
 **Priority:** Medium
@@ -148,7 +225,7 @@ if offline_mode:
 
 ## Priority: Medium
 
-### 4. Batch Image Processing with Rate Limit Handling
+### 5. Batch Image Processing with Rate Limit Handling
 
 **Status:** Planned
 **Priority:** Medium
@@ -173,7 +250,7 @@ backoff_seconds = 5
 
 ---
 
-### 5. Image Analysis Quality Metrics
+### 6. Image Analysis Quality Metrics
 
 **Status:** Planned
 **Priority:** Medium
@@ -204,7 +281,7 @@ class AnalysisMetrics:
 
 ## Priority: Low
 
-### 6. Smart Chunk Size Optimization
+### 7. Smart Chunk Size Optimization
 
 **Status:** Planned
 **Priority:** Low
@@ -228,7 +305,7 @@ strategy = "semantic"    # heading|boundary|semantic
 
 ---
 
-### 7. Incremental Indexing with Change Detection
+### 8. Incremental Indexing with Change Detection
 
 **Status:** Partially Implemented
 **Priority:** Low
@@ -245,7 +322,7 @@ strategy = "semantic"    # heading|boundary|semantic
 
 ---
 
-### 8. MCP Server Enhancements
+### 9. MCP Server Enhancements
 
 **Status:** Planned
 **Priority:** Low
@@ -305,4 +382,4 @@ strategy = "semantic"    # heading|boundary|semantic
 - ⚪ **Planned**: Documented but not started
 - 🔴 **Blocked**: Waiting on external dependency
 
-Last Updated: 2026-01-15
+Last Updated: 2026-01-23

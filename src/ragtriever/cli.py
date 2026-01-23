@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-# Suppress harmless multiprocessing resource tracker warnings (common on macOS)
-import warnings
-warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
-
-from pathlib import Path
-import typer
-import json
 import dataclasses
+import json
+import logging
+import warnings
+from pathlib import Path
+
+import typer
 
 from .config import VaultConfig, MultiVaultConfig, load_config
 from .indexer.indexer import Indexer, MultiVaultIndexer
-from .retrieval.retriever import Retriever, MultiVaultRetriever
 from .mcp.server import run_stdio_server
+from .retrieval.retriever import Retriever, MultiVaultRetriever
+
+# Suppress harmless multiprocessing resource tracker warnings (common on macOS)
+warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -178,10 +180,44 @@ def open(chunk_id: str, config: str = typer.Option("config.toml")):
     out = r.open(sr)
     typer.echo(out.content)
 
+def _setup_logging(log_file: str | None, log_level: str, verbose: bool) -> None:
+    """Configure logging for watch mode."""
+    level = logging.DEBUG if verbose else getattr(logging, log_level.upper(), logging.INFO)
+
+    # Format with timestamp for auditability
+    fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    datefmt = "%Y-%m-%d %H:%M:%S"
+
+    handlers: list[logging.Handler] = []
+
+    # Always add console handler
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter(fmt, datefmt))
+    handlers.append(console)
+
+    # Add file handler if specified
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(fmt, datefmt))
+        handlers.append(file_handler)
+
+    # Configure root logger for ragtriever
+    logger = logging.getLogger("ragtriever")
+    logger.setLevel(level)
+    for h in handlers:
+        logger.addHandler(h)
+
+
 @app.command()
 def watch(config: str = typer.Option("config.toml"),
-          vaults: list[str] = typer.Option(None, help="Vault names to watch (multi-vault only, default: all)")):
+          vaults: list[str] = typer.Option(None, help="Vault names to watch (multi-vault only, default: all)"),
+          log_file: str = typer.Option(None, "--log-file", "-l", help="Log file path for audit trail"),
+          log_level: str = typer.Option("INFO", "--log-level", help="Log level: DEBUG, INFO, WARNING, ERROR"),
+          verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose (DEBUG) logging")):
     """Watch vault(s) for changes and index continuously. Supports both single-vault and multi-vault configs."""
+    # Setup logging before anything else
+    _setup_logging(log_file, log_level, verbose)
+
     cfg = _multi_cfg(config)
 
     if isinstance(cfg, MultiVaultConfig):
