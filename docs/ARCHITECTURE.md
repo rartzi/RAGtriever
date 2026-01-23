@@ -481,13 +481,16 @@ def on_deleted(event):
 
 **File Lifecycle Handling:**
 
-Both scan and watch modes handle the complete file lifecycle:
+Both scan and watch modes handle the complete file lifecycle, including directory-level operations:
 
 | Event | Scan Mode | Watch Mode |
 |-------|-----------|------------|
-| **Add** | Indexed on scan | Indexed immediately |
-| **Change** | Re-indexed on scan | Re-indexed immediately |
-| **Delete** | Detected via reconciliation | Detected via filesystem event |
+| **File Add** | Indexed on scan | Indexed immediately |
+| **File Change** | Re-indexed on scan | Re-indexed immediately |
+| **File Delete** | Detected via reconciliation | Detected via filesystem event |
+| **Directory Add** | All files indexed on scan | All files indexed immediately |
+| **Directory Delete** | Files detected via reconciliation | Queries DB for files under path, removes all |
+| **Directory Move** | Old paths deleted, new paths added | Queries DB for files, updates all paths atomically |
 
 **Deletion Detection (Scan Mode):**
 ```python
@@ -495,13 +498,33 @@ Both scan and watch modes handle the complete file lifecycle:
 fs_files = {rel_path for p in scan_files()}  # Files on disk
 indexed_files = store.get_indexed_files(vault_id)  # Files in DB
 
-# Find deleted files
+# Find deleted files (works for individual files and entire directories)
 deleted = indexed_files - fs_files
 for rel_path in deleted:
     store.delete_document(vault_id, rel_path)  # Full cleanup
 ```
 
-**What Gets Cleaned Up:**
+**Directory Operations (Watch Mode):**
+```python
+# Directory deletion
+def on_deleted(event):
+    if event.is_directory:
+        # Query all indexed files under directory path
+        files_under = store.get_files_under_path(vault_id, rel_path)
+        for file_rel in files_under:
+            queue.put(Job(kind="delete", rel_path=file_rel))
+
+# Directory move
+def on_moved(event):
+    if event.is_directory:
+        # Query all indexed files and update their paths
+        files_under = store.get_files_under_path(vault_id, old_rel_path)
+        for file_rel in files_under:
+            new_file_rel = file_rel.replace(old_rel_path, new_rel_path, 1)
+            queue.put(Job(kind="move", rel_path=file_rel, new_rel_path=new_file_rel))
+```
+
+**What Gets Cleaned Up on Deletion:**
 - Document marked as `deleted=1`
 - All chunks removed
 - All embeddings removed

@@ -143,6 +143,12 @@ ragtriever scan --help | grep -A 2 log
 
 ## Managing the Watcher
 
+**The watcher automatically handles:**
+- Individual file changes (create, modify, delete, move)
+- Directory operations (delete entire folders, move/rename folders)
+- All files within deleted or moved directories are updated in the index
+- No manual intervention needed for vault reorganization
+
 ### Check if Watcher is Running
 ```bash
 # Check for running watcher process
