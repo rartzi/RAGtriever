@@ -218,8 +218,9 @@ RAGtriever properly handles the complete file lifecycle: **add**, **change**, an
    - Reports deleted file count in scan output
 
 2. **Watch Mode (Filesystem Events)**:
-   - Watchdog library detects `FileDeleted` events
-   - Triggers immediate `delete_document()` call
+   - Watchdog library detects filesystem events (create, modify, delete, move)
+   - **New folders with files**: When a folder is created/copied with files inside, the watcher scans the directory recursively and queues all files
+   - Triggers immediate indexing or deletion as appropriate
    - Same cleanup logic as scan mode
 
 **What Gets Cleaned Up on Deletion:**
@@ -242,6 +243,36 @@ $ ragtriever scan
 Scan complete: 119 files, 792 chunks in 45.2s
   (3 deleted files removed from index)
 ```
+
+### Watch Mode Logging
+
+The file watcher provides comprehensive logging for auditability and debugging. Logs are written to the standard Python logging system.
+
+**INFO Level (Auditability):**
+| Event | Log Message |
+|-------|-------------|
+| Watcher start | `Starting file watcher on: /path/to/vault` |
+| Ignore patterns | `Ignore patterns: ['.git/**', '**/.DS_Store']` |
+| Watcher ready | `File watcher started - monitoring for changes` |
+| Directory created | `Directory created: /path/to/new_folder` |
+| Directory scan complete | `Directory scan complete: new_folder - queued 5 files, ignored 1` |
+| File created | `File created: documents/notes.md` |
+| File modified | `File modified: documents/notes.md` |
+| File deleted | `File deleted: old_file.txt` |
+| File moved | `File moved: draft.md -> published/final.md` |
+| Move from ignored | `File moved from ignored location (treating as create): file.md` |
+| Move to ignored | `File moved to ignored location (treating as delete): file.md` |
+| Watcher stop | `Stopping file watcher...` / `File watcher stopped` |
+
+**DEBUG Level (Debugging):**
+- Debounce interval configuration
+- Debounced events (rapid duplicate events filtered)
+- Ignored files (matching patterns)
+- Individual files queued from new directories
+- Directory move/delete events
+
+**Code Reference:**
+- `src/ragtriever/indexer/change_detector.py`: ChangeDetector class with Handler inner class
 
 ### Enriched Chunk Metadata
 Every indexed chunk includes enriched metadata for fast operations without additional database lookups:

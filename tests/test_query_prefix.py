@@ -6,7 +6,7 @@ import numpy as np
 
 def test_sentence_transformers_query_prefix():
     """Test that SentenceTransformersEmbedder applies prefix to queries."""
-    from src.ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
+    from ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
 
     # Mock the SentenceTransformer to avoid loading actual model
     with patch('sentence_transformers.SentenceTransformer') as mock_st:
@@ -36,7 +36,7 @@ def test_sentence_transformers_query_prefix():
 
 def test_sentence_transformers_document_no_prefix():
     """Test that document embeddings don't get prefix."""
-    from src.ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
+    from ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
 
     with patch('sentence_transformers.SentenceTransformer') as mock_st:
         mock_model = Mock()
@@ -63,7 +63,7 @@ def test_sentence_transformers_document_no_prefix():
 
 def test_sentence_transformers_prefix_disabled():
     """Test that prefix can be disabled."""
-    from src.ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
+    from ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
 
     with patch('sentence_transformers.SentenceTransformer') as mock_st:
         mock_model = Mock()
@@ -88,7 +88,7 @@ def test_sentence_transformers_prefix_disabled():
 
 def test_ollama_query_prefix():
     """Test that OllamaEmbedder applies prefix to queries."""
-    from src.ragtriever.embeddings.ollama import OllamaEmbedder
+    from ragtriever.embeddings.ollama import OllamaEmbedder
 
     embedder = OllamaEmbedder(
         model_id="test-model",
@@ -108,7 +108,7 @@ def test_ollama_query_prefix():
 
 def test_ollama_document_no_prefix():
     """Test that Ollama document embeddings don't get prefix."""
-    from src.ragtriever.embeddings.ollama import OllamaEmbedder
+    from ragtriever.embeddings.ollama import OllamaEmbedder
 
     embedder = OllamaEmbedder(
         model_id="test-model",
@@ -130,7 +130,7 @@ def test_ollama_document_no_prefix():
 
 def test_ollama_prefix_disabled():
     """Test that Ollama prefix can be disabled."""
-    from src.ragtriever.embeddings.ollama import OllamaEmbedder
+    from ragtriever.embeddings.ollama import OllamaEmbedder
 
     embedder = OllamaEmbedder(
         model_id="test-model",
@@ -149,7 +149,7 @@ def test_ollama_prefix_disabled():
 
 def test_bge_default_prefix():
     """Test that the default BGE prefix is correct."""
-    from src.ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
+    from ragtriever.embeddings.sentence_transformers import SentenceTransformersEmbedder
 
     with patch('sentence_transformers.SentenceTransformer') as mock_st:
         mock_model = Mock()
