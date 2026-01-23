@@ -16,6 +16,13 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 # Configuration
 CONFIG_FILE="${CONFIG_FILE:-config.toml}"
 PID_FILE="logs/watcher.pid"
@@ -23,6 +30,40 @@ LOG_DIR="logs"
 
 # Create log directory if needed
 mkdir -p "$LOG_DIR"
+
+# Check dependencies
+check_dependencies() {
+    local errors=0
+
+    # Check if we're in the right directory
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}✗${NC} Config file not found: $CONFIG_FILE"
+        echo "  Current directory: $(pwd)"
+        errors=$((errors + 1))
+    fi
+
+    # Check if venv exists
+    if [ ! -f ".venv/bin/activate" ] && [ ! -f "venv/bin/activate" ]; then
+        echo -e "${RED}✗${NC} Virtual environment not found (.venv/ or venv/)"
+        echo "  Run: python -m venv .venv && source .venv/bin/activate && pip install -e ."
+        errors=$((errors + 1))
+    fi
+
+    # Check if ragtriever is installed (after activating venv)
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    elif [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+    fi
+
+    if ! command -v ragtriever &> /dev/null; then
+        echo -e "${RED}✗${NC} ragtriever command not found"
+        echo "  Run: pip install -e ."
+        errors=$((errors + 1))
+    fi
+
+    return $errors
+}
 
 # Check if watcher is running
 is_running() {
@@ -49,6 +90,16 @@ cmd_status() {
 
 # Start command
 cmd_start() {
+    # Check dependencies first
+    echo "Checking dependencies..."
+    if ! check_dependencies; then
+        echo ""
+        echo -e "${RED}✗${NC} Dependency check failed - cannot start watcher"
+        return 1
+    fi
+    echo -e "${GREEN}✓${NC} All dependencies OK"
+    echo ""
+
     if is_running; then
         echo -e "${YELLOW}⚠${NC} Watcher is already running"
         cmd_status
@@ -57,32 +108,54 @@ cmd_start() {
 
     echo "Starting watcher..."
 
-    # Activate venv if it exists
+    # Activate venv (already checked in dependencies)
     if [ -f ".venv/bin/activate" ]; then
         source .venv/bin/activate
+    elif [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
     fi
 
-    # Start watcher in background
-    nohup ragtriever watch --config "$CONFIG_FILE" > /dev/null 2>&1 &
-    WATCHER_PID=$!
+    # Set offline mode environment variables (for corporate proxies)
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
 
-    # Save PID
-    echo $WATCHER_PID > "$PID_FILE"
+    # Start watcher in background using /bin/bash explicitly
+    /bin/bash -c "source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null; export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1; nohup ragtriever watch --config '$CONFIG_FILE' > /dev/null 2>&1 &
+    echo \$!" > "$PID_FILE"
+
+    # Get PID from file
+    if [ -f "$PID_FILE" ]; then
+        WATCHER_PID=$(cat "$PID_FILE")
+    else
+        echo -e "${RED}✗${NC} Failed to save PID"
+        return 1
+    fi
 
     # Wait a moment for startup
-    sleep 2
+    sleep 3
 
     # Verify it started
     if is_running; then
-        echo -e "${GREEN}✓${NC} Watcher started successfully (PID: $WATCHER_PID)"
+        ACTUAL_PID=$(get_pid)
+        echo -e "${GREEN}✓${NC} Watcher started successfully (PID: $ACTUAL_PID)"
 
         # Check for log file
         TODAY=$(date +%Y%m%d)
         if [ -f "$LOG_DIR/watch_$TODAY.log" ]; then
             echo "Log file: $LOG_DIR/watch_$TODAY.log"
+        else
+            echo "Log file will be created: $LOG_DIR/watch_$TODAY.log"
+        fi
+
+        # Show recent log lines if available
+        if [ -f "$LOG_DIR/watch_$TODAY.log" ]; then
+            echo ""
+            echo "Recent log:"
+            tail -5 "$LOG_DIR/watch_$TODAY.log"
         fi
     else
         echo -e "${RED}✗${NC} Failed to start watcher"
+        echo "Check if ragtriever is installed: pip install -e ."
         return 1
     fi
 }
@@ -204,15 +277,36 @@ case "${1:-status}" in
     health)
         cmd_health
         ;;
-    *)
-        echo "Usage: $0 {status|start|stop|restart|health}"
+    check)
+        check_dependencies
+        ;;
+    help|--help|-h)
+        echo "RAGtriever Watcher Management Script"
+        echo ""
+        echo "Usage: $0 {status|start|stop|restart|health|check}"
         echo ""
         echo "Commands:"
         echo "  status   - Check if watcher is running"
-        echo "  start    - Start the watcher"
-        echo "  stop     - Stop the watcher"
+        echo "  start    - Start the watcher (with dependency checks)"
+        echo "  stop     - Stop the watcher gracefully"
         echo "  restart  - Restart the watcher"
-        echo "  health   - Run health check"
+        echo "  health   - Run comprehensive health check"
+        echo "  check    - Check dependencies only"
+        echo ""
+        echo "Environment:"
+        echo "  CONFIG_FILE - Config file path (default: config.toml)"
+        echo "  Example: CONFIG_FILE=my_config.toml $0 start"
+        echo ""
+        echo "Output files:"
+        echo "  logs/watcher.pid        - Watcher process ID"
+        echo "  logs/watch_YYYYMMDD.log - Daily log file"
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Error:${NC} Unknown command: $1"
+        echo ""
+        echo "Usage: $0 {status|start|stop|restart|health|check}"
+        echo "Run '$0 help' for more information"
         exit 1
         ;;
 esac
