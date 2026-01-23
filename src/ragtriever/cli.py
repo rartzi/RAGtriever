@@ -4,6 +4,7 @@ import dataclasses
 import json
 import logging
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -17,6 +18,28 @@ from .retrieval.retriever import Retriever, MultiVaultRetriever
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+def _resolve_log_path(log_path_template: str | None) -> str | None:
+    """Resolve log file path with date/time pattern substitution.
+
+    Supports:
+    - {date}: YYYYMMDD (e.g., 20260123)
+    - {datetime}: YYYYMMDD_HHMMSS (e.g., 20260123_142030)
+    """
+    if not log_path_template:
+        return None
+
+    now = datetime.now()
+    date_str = now.strftime("%Y%m%d")
+    datetime_str = now.strftime("%Y%m%d_%H%M%S")
+
+    resolved = log_path_template.replace("{date}", date_str).replace("{datetime}", datetime_str)
+
+    # Create parent directory if it doesn't exist
+    log_path = Path(resolved)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return str(log_path)
 
 def _cfg(config: str) -> VaultConfig:
     """Load config and ensure it's a single-vault config."""
@@ -77,9 +100,37 @@ def scan(
     parallel: bool = typer.Option(None, help="Override parallel_scan config"),
     workers: int = typer.Option(None, help="Override extraction_workers"),
     vaults: list[str] = typer.Option(None, help="Vault names to scan (multi-vault only, default: all)"),
+    log_file: str = typer.Option(None, "--log-file", "-l", help="Log file path for audit trail"),
+    log_level: str = typer.Option("INFO", "--log-level", help="Log level: DEBUG, INFO, WARNING, ERROR"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose (DEBUG) logging"),
+    profile: str = typer.Option(None, "--profile", "-p", help="Generate profiling report to this file"),
 ):
     """Scan vault(s) and index. Supports both single-vault and multi-vault configs."""
+    import cProfile
+    import pstats
+    from io import StringIO
+
     cfg = _multi_cfg(config)
+
+    # Determine log file: CLI flag > config setting > None
+    effective_log_file = log_file
+    effective_log_level = log_level
+    effective_verbose = verbose
+
+    # If no CLI log file but config has logging enabled
+    if not effective_log_file and cfg.enable_scan_logging and cfg.scan_log_file:
+        effective_log_file = _resolve_log_path(cfg.scan_log_file)
+        effective_log_level = cfg.log_level
+
+    # Setup logging if requested
+    if effective_log_file or effective_verbose:
+        _setup_logging(effective_log_file, effective_log_level, effective_verbose)
+
+    # Wrap scan execution with optional profiling
+    profiler = cProfile.Profile() if profile else None
+
+    if profiler:
+        profiler.enable()
 
     if isinstance(cfg, MultiVaultConfig):
         # Multi-vault scan
@@ -105,6 +156,24 @@ def scan(
         idx = Indexer(cfg)
         stats = idx.scan(full=full)
         vault_info = ""
+
+    if profiler:
+        profiler.disable()
+
+        # Write detailed profiling report
+        s = StringIO()
+        ps = pstats.Stats(profiler, stream=s)
+
+        # Sort by cumulative time and print top 50 functions
+        ps.strip_dirs().sort_stats("cumulative").print_stats(50)
+
+        # Also print callers for top 20 functions
+        s.write("\n\n=== Top 20 Functions by Cumulative Time (with callers) ===\n")
+        ps.print_callers(20)
+
+        # Write to file
+        Path(profile).write_text(s.getvalue())
+        typer.echo(f"Profiling report written to: {profile}")
 
     if stats.elapsed_seconds > 0:
         typer.echo(f"Scan complete{vault_info}: {stats.files_indexed} files, {stats.chunks_created} chunks in {stats.elapsed_seconds:.1f}s")
@@ -213,21 +282,47 @@ def watch(config: str = typer.Option("config.toml"),
           vaults: list[str] = typer.Option(None, help="Vault names to watch (multi-vault only, default: all)"),
           log_file: str = typer.Option(None, "--log-file", "-l", help="Log file path for audit trail"),
           log_level: str = typer.Option("INFO", "--log-level", help="Log level: DEBUG, INFO, WARNING, ERROR"),
-          verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose (DEBUG) logging")):
-    """Watch vault(s) for changes and index continuously. Supports both single-vault and multi-vault configs."""
-    # Setup logging before anything else
-    _setup_logging(log_file, log_level, verbose)
+          verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose (DEBUG) logging"),
+          batch_size: int = typer.Option(None, "--batch-size", "-b", help="Max files per batch (default: from config)"),
+          batch_timeout: float = typer.Option(None, "--batch-timeout", "-t", help="Batch timeout in seconds (default: from config)"),
+          no_batch: bool = typer.Option(False, "--no-batch", help="Disable batching, process files one at a time")):
+    """Watch vault(s) for changes and index continuously.
 
+    By default, uses batched processing for efficiency. Use --no-batch for legacy serial mode.
+    """
     cfg = _multi_cfg(config)
+
+    # Determine log file: CLI flag > config setting > None
+    effective_log_file = log_file
+    effective_log_level = log_level
+    effective_verbose = verbose
+
+    # If no CLI log file but config has logging enabled
+    if not effective_log_file and cfg.enable_watch_logging and cfg.watch_log_file:
+        effective_log_file = _resolve_log_path(cfg.watch_log_file)
+        effective_log_level = cfg.log_level
+
+    # Setup logging before anything else
+    _setup_logging(effective_log_file, effective_log_level, effective_verbose)
+
+    # Override batch settings if provided
+    if batch_size is not None:
+        object.__setattr__(cfg, 'watch_batch_size', batch_size)
+    if batch_timeout is not None:
+        object.__setattr__(cfg, 'watch_batch_timeout', batch_timeout)
 
     if isinstance(cfg, MultiVaultConfig):
         idx = MultiVaultIndexer(cfg)
+        # Multi-vault indexer uses legacy mode (batching not implemented yet)
         idx.watch(vault_names=vaults)
     else:
         if vaults:
             typer.echo("Warning: --vaults flag ignored for single-vault config", err=True)
         idx = Indexer(cfg)
-        idx.watch()
+        if no_batch:
+            idx.watch()  # Legacy serial mode
+        else:
+            idx.watch_batched()  # New batched mode (default)
 
 @app.command(name="list-vaults")
 def list_vaults(config: str = typer.Option("config.toml")):

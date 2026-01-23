@@ -92,32 +92,45 @@ vault/
 
 **What:** Converts files into searchable chunks
 **Code:** `src/ragtriever/indexer/indexer.py`
-**Entry Point:** `Indexer.scan()`
+**Entry Point:** `Indexer.scan()` or `Indexer.watch()`
 
-**Pipeline:**
+**Unified Processing (`_process_file()`):**
+
+Both scan and watch modes use a shared `_process_file()` method that:
+- Is thread-safe (no DB writes, no shared mutable state)
+- Returns a `ProcessResult` with chunks and image tasks
+- Handles errors gracefully (returns error in result, doesn't raise)
+- Generates deterministic IDs (same file = same doc_id/chunk_ids)
+
 ```python
-for file in vault:
-    1. Extract  → text + metadata + images  (MarkdownExtractor, PDFExtractor, ImageExtractor)
-       ├─ Text content from document
-       ├─ Metadata (frontmatter, page count, etc.)
-       └─ Embedded images (PDFs, PPTX) or image references (Markdown)
+# Single file processing (thread-safe, no DB writes)
+result = indexer._process_file(abs_path)  # → ProcessResult
 
-    2. Chunk    → segments                  (MarkdownChunker, BoundaryMarkerChunker)
-       └─ Text chunks with anchor types
+# ProcessResult contains:
+# - chunks: list[ChunkData]      # Ready for embedding
+# - image_tasks: list[ImageTask] # Ready for image processing
+# - links: list[tuple]           # Wikilinks for graph
+# - error: str | None            # If processing failed
+# - skipped: bool                # If file should be skipped
+```
 
-    3. Process embedded images              (ImageExtractor via temp files)
-       ├─ Extract image bytes from PDFs (PyMuPDF)
-       ├─ Extract image bytes from PPTX slides (python-pptx)
-       ├─ Resolve Markdown image references
-       └─ Analyze with Tesseract/Gemini/Vertex AI
+**Pipeline Phases:**
+```
+Phase 0: Reconciliation (detect deleted files)
+Phase 1: Parallel extraction via _process_file()
+    - ThreadPoolExecutor(extraction_workers)
+    - Each worker: validate → extract → chunk → build metadata
+    - Returns ProcessResult with chunks + image_tasks
 
-    4. Embed    → vectors                   (SentenceTransformers, Ollama)
-       ├─ Text chunks → embeddings
-       └─ Image analysis text → embeddings
+Phase 2: Batched embedding and storage
+    - Collect chunks across files
+    - Batch embed (embed_batch_size chunks)
+    - Batch write to SQLite
 
-    5. Store    → SQLite + FTS5             (LibSqlStore)
-       ├─ Text chunks linked to documents
-       └─ Image chunks linked to parent documents
+Phase 3: Parallel image analysis
+    - ThreadPoolExecutor(image_workers)
+    - Process embedded/referenced images
+    - Create additional searchable chunks
 ```
 
 **Pluggable via Protocol classes:**

@@ -106,14 +106,28 @@ class VaultConfig:
     rerank_device: str = "cpu"  # cpu|cuda|mps
     rerank_top_k: int = 10
 
-    # Parallelization
+    # Parallelization (scan mode)
     extraction_workers: int = 8       # Number of parallel extraction workers
     embed_batch_size: int = 256       # Cross-file embedding batch size
     image_workers: int = 8            # Number of parallel image API workers
     parallel_scan: bool = True        # Enable parallel scanning
 
+    # Watch mode batching
+    watch_workers: int = 4            # Parallel extraction workers for watch
+    watch_batch_size: int = 10        # Max files per batch before processing
+    watch_batch_timeout: float = 5.0  # Seconds before processing partial batch
+    watch_image_workers: int = 4      # Parallel image workers for watch
+
     # MCP
     mcp_transport: str = "stdio"
+
+    # Logging (audit trail)
+    log_dir: str = "logs"                      # Directory for log files (relative to cwd or absolute)
+    scan_log_file: str | None = None           # Scan log file path (supports {date}, {datetime})
+    watch_log_file: str | None = None          # Watch log file path (supports {date}, {datetime})
+    log_level: str = "INFO"                    # Log level: DEBUG, INFO, WARNING, ERROR
+    enable_scan_logging: bool = False          # Auto-enable logging for scan command
+    enable_watch_logging: bool = False         # Auto-enable logging for watch command
 
     @staticmethod
     def from_toml(path: str | Path) -> "VaultConfig":
@@ -217,6 +231,20 @@ class VaultConfig:
         if faiss_nprobe < 1 or faiss_nprobe > 1000:
             raise ValueError(f"Invalid faiss_nprobe: {faiss_nprobe}. Must be between 1 and 1000.")
 
+        # Parse logging configuration
+        logging_config = data.get("logging", {})
+        log_dir = logging_config.get("dir", "logs")
+        scan_log_file = logging_config.get("scan_log_file")
+        watch_log_file = logging_config.get("watch_log_file")
+        log_level = logging_config.get("level", "INFO").upper()
+        enable_scan_logging = bool(logging_config.get("enable_scan_logging", False))
+        enable_watch_logging = bool(logging_config.get("enable_watch_logging", False))
+
+        # Validate log level
+        valid_log_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        if log_level not in valid_log_levels:
+            raise ValueError(f"Invalid log_level: {log_level}. Must be one of: {valid_log_levels}")
+
         return VaultConfig(
             vault_root=vault_root,
             index_dir=index_dir,
@@ -267,7 +295,17 @@ class VaultConfig:
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
             image_workers=int(indexing.get("image_workers", 8)),
             parallel_scan=bool(indexing.get("parallel_scan", True)),
+            watch_workers=int(indexing.get("watch_workers", 4)),
+            watch_batch_size=int(indexing.get("watch_batch_size", 10)),
+            watch_batch_timeout=float(indexing.get("watch_batch_timeout", 5.0)),
+            watch_image_workers=int(indexing.get("watch_image_workers", 4)),
             mcp_transport=mcp.get("transport", "stdio"),
+            log_dir=log_dir,
+            scan_log_file=scan_log_file,
+            watch_log_file=watch_log_file,
+            log_level=log_level,
+            enable_scan_logging=enable_scan_logging,
+            enable_watch_logging=enable_watch_logging,
         )
 
 
@@ -349,11 +387,17 @@ class MultiVaultConfig:
     rerank_device: str = "cpu"
     rerank_top_k: int = 10
 
-    # Parallelization
+    # Parallelization (scan mode)
     extraction_workers: int = 8
     embed_batch_size: int = 256
     image_workers: int = 8
     parallel_scan: bool = True
+
+    # Watch mode batching
+    watch_workers: int = 4            # Parallel extraction workers for watch
+    watch_batch_size: int = 10        # Max files per batch before processing
+    watch_batch_timeout: float = 5.0  # Seconds before processing partial batch
+    watch_image_workers: int = 4      # Parallel image workers for watch
 
     # MCP
     mcp_transport: str = "stdio"
@@ -509,6 +553,10 @@ class MultiVaultConfig:
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
             image_workers=int(indexing.get("image_workers", 8)),
             parallel_scan=bool(indexing.get("parallel_scan", True)),
+            watch_workers=int(indexing.get("watch_workers", 4)),
+            watch_batch_size=int(indexing.get("watch_batch_size", 10)),
+            watch_batch_timeout=float(indexing.get("watch_batch_timeout", 5.0)),
+            watch_image_workers=int(indexing.get("watch_image_workers", 4)),
             mcp_transport=mcp.get("transport", "stdio"),
         )
 

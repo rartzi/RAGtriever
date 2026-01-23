@@ -131,16 +131,30 @@ RAGtriever uses parallel processing to significantly speed up full vault scans (
 **Configuration:**
 ```toml
 [indexing]
+# Scan mode (full vault indexing)
 extraction_workers = 10   # Parallel file extraction (CPU-bound)
 embed_batch_size = 256    # Cross-file embedding batch size
 image_workers = 10        # Parallel image API calls (I/O-bound)
 parallel_scan = true      # Enable/disable parallelization
+
+# Watch mode (continuous indexing)
+watch_workers = 4         # Parallel extraction workers for watch
+watch_batch_size = 10     # Max files per batch before processing
+watch_batch_timeout = 5.0 # Seconds before processing partial batch
+watch_image_workers = 4   # Parallel image workers for watch
 ```
 
 **CLI Overrides:**
 ```bash
+# Scan mode
 ragtriever scan --full --workers 10     # Override extraction workers
 ragtriever scan --full --no-parallel    # Disable all parallelization
+
+# Watch mode (batched by default)
+ragtriever watch                        # Batched mode (default)
+ragtriever watch --batch-size 20        # Override batch size
+ragtriever watch --batch-timeout 10     # Override timeout
+ragtriever watch --no-batch             # Legacy serial mode
 ```
 
 **Performance Characteristics:**
@@ -153,6 +167,124 @@ ragtriever scan --full --no-parallel    # Disable all parallelization
 - Sequential: ~180s estimated
 - Parallel (10 workers): 49s actual
 - Speedup: **3.7x**
+
+### Unified Processing Pipeline
+
+Both scan and watch modes use a shared `_process_file()` method for file processing. This ensures consistent behavior and simplifies maintenance.
+
+**Core Method:**
+```python
+def _process_file(self, abs_path: Path) -> ProcessResult:
+    """Process a single file: extract, chunk, and prepare for embedding.
+
+    Thread-safe, no DB writes - returns ProcessResult with chunks and image tasks.
+    """
+```
+
+**ProcessResult Dataclass:**
+```python
+@dataclass
+class ProcessResult:
+    abs_path: Path
+    rel_path: str
+    doc_id: str
+    vault_id: str
+    file_type: str
+    content_hash: str
+    mtime: int
+    size: int
+    chunks: list[ChunkData]      # Ready for embedding
+    image_tasks: list[ImageTask]  # Ready for image processing
+    links: list[tuple[str, str]]  # (target, link_type)
+    error: str | None = None
+    skipped: bool = False
+    # Enriched metadata...
+```
+
+**Processing Flow:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Unified _process_file() Method                  │
+│                                                             │
+│   ┌──────────┐   ┌──────────┐   ┌───────────────────────┐  │
+│   │ Validate │──▶│ Extract  │──▶│ Chunk + Build Metadata│  │
+│   │ (file?)  │   │ (by type)│   │ + ImageTasks + Links  │  │
+│   └──────────┘   └──────────┘   └───────────────────────┘  │
+│                                                             │
+│   Returns: ProcessResult (no DB writes, thread-safe)        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+            ┌─────────────────┴─────────────────┐
+            ▼                                   ▼
+    ┌───────────────────┐              ┌───────────────────┐
+    │   scan_parallel() │              │  watch_batched()  │
+    │   - Parallel      │              │  - BatchCollector │
+    │     extraction    │              │  - Parallel       │
+    │   - Batch embed   │              │    extraction     │
+    │   - Batch store   │              │  - Batch embed    │
+    └───────────────────┘              └───────────────────┘
+```
+
+**Watch Mode Batching:**
+
+The `watch_batched()` method (default since v1.x) uses a `BatchCollector` to accumulate filesystem events:
+
+```python
+# BatchCollector accumulates jobs until:
+# - Batch reaches watch_batch_size files (default: 10)
+# - watch_batch_timeout seconds elapsed (default: 5.0)
+
+collector = BatchCollector(max_batch_size=10, batch_timeout_seconds=5.0)
+batch = collector.add_job(job)  # Returns batch when ready
+batch = collector.flush_if_timeout()  # Check for timeout trigger
+```
+
+**Batch Processing Flow:**
+1. Group jobs by type (delete, move, upsert)
+2. Process deletes first (remove from index)
+3. Process moves (delete old path, add new to upserts)
+4. Parallel extraction via `_process_file()` (watch_workers)
+5. Batch embed and store
+6. Parallel image processing (watch_image_workers)
+
+**Key Benefits:**
+- **Single code path** for file processing logic
+- **Thread-safe** design (no shared mutable state, no DB writes)
+- **Error isolation** (returns error in result, doesn't raise)
+- **Deterministic IDs** (same file = same doc_id/chunk_ids)
+
+**Code Reference:**
+- `src/ragtriever/indexer/parallel_types.py`: `ProcessResult`, `ChunkData`, `ImageTask`
+- `src/ragtriever/indexer/indexer.py:_process_file()`: Unified processing method
+
+### Logging for Auditability
+
+Both scan and watch modes emit structured log messages for auditability and debugging.
+
+**Scan Mode Log Messages (INFO level):**
+| Log Message | Description |
+|-------------|-------------|
+| `[scan] Found N files to process` | Discovery complete |
+| `[scan] Deleted: path` | File removed from index |
+| `[scan] Phase 0: Removed N deleted file(s)` | Reconciliation complete |
+| `[scan] Failed: path - error` | Extraction error |
+| `[scan] Worker crashed: path - error` | Unexpected exception |
+| `[scan] Phase 1: N files extracted, M failed` | Extraction complete |
+| `[scan] Phase 2: N chunks, M embeddings` | Embedding complete |
+| `[scan] Phase 3: N images processed` | Image analysis complete |
+| `[scan] Complete: N files indexed in Xs` | Scan finished |
+
+**Watch Mode Log Messages (INFO level):**
+| Log Message | Description |
+|-------------|-------------|
+| `[watch] Starting file watcher on: path` | Watcher initialized |
+| `[watch] File created: path` | New file detected |
+| `[watch] File modified: path` | File changed |
+| `[watch] File deleted: path` | File removed |
+| `[watch] File moved: old -> new` | File renamed/moved |
+| `[watch] Batch processed: N files, M chunks` | Batch complete |
+
+**Debug Level:** Additional details like debounce events, ignored files, individual chunk IDs.
 
 ### Core Protocols (in `**/base.py`)
 The codebase uses Python Protocol classes for pluggable adapters:
