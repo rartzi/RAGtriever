@@ -1132,7 +1132,13 @@ class Indexer:
         import queue
 
         q = JobQueue()
-        detector = ChangeDetector(root=self.cfg.vault_root, q=q, ignore=self.cfg.ignore)
+        detector = ChangeDetector(
+            root=self.cfg.vault_root,
+            q=q,
+            store=self.store,
+            vault_id=self.vault_id,
+            ignore=self.cfg.ignore
+        )
 
         # Start detector in background thread
         detector_thread = threading.Thread(target=detector.watch, daemon=True)
@@ -1192,7 +1198,13 @@ class Indexer:
 
         logger = logging.getLogger(__name__)
         q = JobQueue()
-        detector = ChangeDetector(root=self.cfg.vault_root, q=q, ignore=self.cfg.ignore)
+        detector = ChangeDetector(
+            root=self.cfg.vault_root,
+            q=q,
+            store=self.store,
+            vault_id=self.vault_id,
+            ignore=self.cfg.ignore
+        )
 
         # Create batch collector with config values
         collector = BatchCollector(
@@ -1837,7 +1849,13 @@ class MultiVaultIndexer:
         from .change_detector import ChangeDetector
 
         q = JobQueue()
-        detector = ChangeDetector(root=indexer.cfg.vault_root, q=q, ignore=indexer.cfg.ignore)
+        detector = ChangeDetector(
+            root=indexer.cfg.vault_root,
+            q=q,
+            store=indexer.store,
+            vault_id=indexer.vault_id,
+            ignore=indexer.cfg.ignore
+        )
 
         # Start detector in background
         import threading

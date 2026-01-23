@@ -293,6 +293,27 @@ class LibSqlStore:
         ).fetchall()
         return {row["rel_path"] for row in rows}
 
+    def get_files_under_path(self, vault_id: str, path_prefix: str) -> list[str]:
+        """Get all indexed files under a directory path prefix.
+
+        Args:
+            vault_id: The vault identifier
+            path_prefix: Directory path (e.g., "folder/subfolder")
+
+        Returns:
+            List of rel_paths for files under the directory
+        """
+        # Ensure path_prefix ends with / for proper matching
+        if path_prefix and not path_prefix.endswith("/"):
+            path_prefix = path_prefix + "/"
+
+        # Query files where rel_path starts with the prefix
+        rows = self._conn.execute(
+            "SELECT rel_path FROM documents WHERE vault_id=? AND deleted=0 AND rel_path LIKE ?",
+            (vault_id, f"{path_prefix}%")
+        ).fetchall()
+        return [row["rel_path"] for row in rows]
+
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
         cur = self._conn.cursor()
         for cid, vec in zip(chunk_ids, vectors, strict=False):

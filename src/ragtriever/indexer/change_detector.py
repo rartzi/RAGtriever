@@ -4,9 +4,13 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 import time
+from typing import TYPE_CHECKING
 
 from .queue import Job, JobQueue
 from .reconciler import matches_ignore_pattern
+
+if TYPE_CHECKING:
+    from ..store.base import Store
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,8 @@ class ChangeDetector:
     """
     root: Path
     q: JobQueue
+    store: Store
+    vault_id: str
     ignore: list[str] = field(default_factory=list)
     debounce_ms: int = 500
 
@@ -127,11 +133,29 @@ class ChangeDetector:
                 self.outer.q.put(Job(kind="upsert", rel_path=rel))
 
             def on_deleted(self, event):  # noqa
-                if event.is_directory:
-                    logger.debug(f"Directory deleted: {event.src_path}")
-                    return
                 p = Path(event.src_path)
                 rel = str(p.relative_to(root)).replace("\\", "/")
+
+                if event.is_directory:
+                    # Directory deleted: find all indexed files under this path
+                    logger.info(f"Directory deleted: {rel}")
+                    try:
+                        files_under = self.outer.store.get_files_under_path(
+                            self.outer.vault_id, rel
+                        )
+                        if files_under:
+                            for file_rel in files_under:
+                                if not self._should_ignore(file_rel):
+                                    self.outer.q.put(Job(kind="delete", rel_path=file_rel))
+                            logger.info(
+                                f"Directory deleted: {rel} - queued {len(files_under)} files for deletion"
+                            )
+                        else:
+                            logger.debug(f"Directory deleted: {rel} - no indexed files found")
+                    except Exception as e:
+                        logger.error(f"Error handling directory deletion {rel}: {e}")
+                    return
+
                 if self._should_ignore(rel):
                     logger.debug(f"Ignoring deleted file (matches pattern): {rel}")
                     return
@@ -139,13 +163,47 @@ class ChangeDetector:
                 self.outer.q.put(Job(kind="delete", rel_path=rel))
 
             def on_moved(self, event):  # noqa
-                if event.is_directory:
-                    logger.debug(f"Directory moved: {event.src_path} -> {event.dest_path}")
-                    return
                 src = Path(event.src_path)
                 dst = Path(event.dest_path)
                 rel_src = str(src.relative_to(root)).replace("\\", "/")
                 rel_dst = str(dst.relative_to(root)).replace("\\", "/")
+
+                if event.is_directory:
+                    # Directory moved: find all indexed files under source path
+                    logger.info(f"Directory moved: {rel_src} -> {rel_dst}")
+                    try:
+                        files_under = self.outer.store.get_files_under_path(
+                            self.outer.vault_id, rel_src
+                        )
+                        if files_under:
+                            for file_rel in files_under:
+                                # Compute new path by replacing source prefix with dest prefix
+                                new_file_rel = file_rel.replace(rel_src, rel_dst, 1)
+
+                                # Check ignore patterns for old and new paths
+                                src_ignored = self._should_ignore(file_rel)
+                                dst_ignored = self._should_ignore(new_file_rel)
+
+                                if src_ignored and dst_ignored:
+                                    continue
+                                elif src_ignored:
+                                    # Moving from ignored to non-ignored = treat as create
+                                    self.outer.q.put(Job(kind="upsert", rel_path=new_file_rel))
+                                elif dst_ignored:
+                                    # Moving from non-ignored to ignored = treat as delete
+                                    self.outer.q.put(Job(kind="delete", rel_path=file_rel))
+                                else:
+                                    # Normal move
+                                    self.outer.q.put(Job(kind="move", rel_path=file_rel, new_rel_path=new_file_rel))
+
+                            logger.info(
+                                f"Directory moved: {rel_src} -> {rel_dst} - queued {len(files_under)} files"
+                            )
+                        else:
+                            logger.debug(f"Directory moved: {rel_src} -> {rel_dst} - no indexed files found")
+                    except Exception as e:
+                        logger.error(f"Error handling directory move {rel_src} -> {rel_dst}: {e}")
+                    return
 
                 # Check if source or destination should be ignored
                 src_ignored = self._should_ignore(rel_src)
