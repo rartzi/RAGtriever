@@ -22,3 +22,7 @@ class JobQueue:
 
     def task_done(self) -> None:
         self._q.task_done()
+
+    def empty(self) -> bool:
+        """Return True if the queue is empty, False otherwise."""
+        return self._q.empty()
