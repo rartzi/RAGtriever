@@ -507,7 +507,7 @@ provider = "aigateway"
 url = "https://your-gateway.azure.com"  # or set AI_GATEWAY_URL env var
 key = "your-api-key"  # or set AI_GATEWAY_KEY env var
 model = "gemini-2.5-flash"
-timeout = 90000  # Request timeout in milliseconds (default: 90000 = 90s)
+timeout = 60000  # Request timeout in milliseconds (default: 60s)
 endpoint_path = "vertex-ai-express"  # Path suffix appended to URL (default: vertex-ai-express)
 ```
 
@@ -563,6 +563,53 @@ provider = "off"
 - **Large vaults (>100 images)**: Maximize image workers (10-20), consider costs
 - **Offline/Privacy**: Use tesseract (local only)
 - **Enterprise**: Use vertex_ai (GCP) or aigateway (Microsoft) for compliance/governance
+
+### Image Analysis Resilience
+
+All API-based image providers (gemini, vertex_ai, aigateway) include built-in resilience features to handle transient failures gracefully without hanging or crashing scans.
+
+**Features:**
+- **Configurable timeouts**: Prevent hanging on unresponsive APIs (default: 30s)
+- **Retry with exponential backoff**: Automatically retry transient errors (1s, 2s, 4s)
+- **Circuit breaker**: Stop hammering broken APIs after consecutive failures
+- **Smart error classification**: Different handling for different error types
+
+**Error Classification:**
+
+| Error Type | Behavior | Trips Circuit Breaker |
+|------------|----------|----------------------|
+| 429 Rate Limit | Retry with backoff, respect `Retry-After` header | No |
+| 500/502/503/504 Server Error | Retry up to 3x | Yes (after threshold) |
+| Connection/Timeout | Retry up to 3x | Yes (after threshold) |
+| 400 Bad Request | Skip image (invalid) | No |
+| 401/403 Auth Error | Skip immediately | Yes (immediately) |
+| JSON Parse Error | Skip image (LLM fluke) | No |
+
+**Circuit Breaker:**
+- Trips after 5 consecutive transient failures (configurable)
+- Auto-resets after 60 seconds (configurable)
+- Thread-safe for parallel workers
+- Auth failures (401/403) trip immediately
+
+**Configuration:**
+```toml
+[image_analysis]
+provider = "aigateway"  # or gemini, vertex_ai
+timeout = 60000              # 60s timeout (ms)
+max_retries = 3              # Retry transient errors up to 3x
+retry_backoff = 1000         # Base backoff 1s, doubles each retry
+circuit_threshold = 5        # Trip breaker after 5 consecutive failures
+circuit_reset = 60           # Auto-reset breaker after 60s
+```
+
+**Logging:**
+- Retry attempts logged at INFO level
+- Circuit breaker state changes logged at WARNING level
+- All errors include source file path and provider name for debugging
+
+**Code Reference:**
+- `src/ragtriever/extractors/resilience.py`: Core resilience module (ErrorCategory, CircuitBreaker, ResilientClient)
+- `src/ragtriever/extractors/image.py`: Integration with image extractors
 
 ## Security Notes
 

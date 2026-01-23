@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import logging
@@ -9,6 +9,7 @@ import os
 import re
 
 from .base import Extracted
+from .resilience import ResilientClient, get_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +117,26 @@ class GeminiImageExtractor:
     api_key: str | None = None
     model: str = "gemini-2.0-flash"
 
+    # Resilience settings
+    timeout: int = 30000  # Timeout in milliseconds
+    max_retries: int = 3
+    retry_backoff: int = 1000  # Base backoff in ms
+
+    _client: ResilientClient = field(init=False, repr=False)
+
     def __post_init__(self) -> None:
         # Try to get API key from environment if not provided
         if self.api_key is None:
             self.api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+        # Initialize resilient client
+        self._client = ResilientClient(
+            timeout_ms=self.timeout,
+            max_retries=self.max_retries,
+            backoff_base_ms=self.retry_backoff,
+            circuit_breaker=get_circuit_breaker(),
+            provider="gemini",
+        )
 
     def extract(self, path: Path) -> Extracted:
         """Extract image content using Gemini vision model."""
@@ -136,8 +153,8 @@ class GeminiImageExtractor:
         # Read image bytes for Gemini
         image_bytes = path.read_bytes()
 
-        # Analyze with Gemini
-        analysis = self._analyze_with_gemini(image_bytes, path.suffix)
+        # Analyze with Gemini (using resilient client)
+        analysis = self._analyze_with_gemini(image_bytes, path.suffix, path)
 
         # Build the text content for indexing
         text_parts = []
@@ -171,8 +188,8 @@ class GeminiImageExtractor:
 
         return Extracted(text=text, metadata=meta)
 
-    def _analyze_with_gemini(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
-        """Call Gemini API to analyze the image."""
+    def _analyze_with_gemini(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
+        """Call Gemini API to analyze the image with retry/circuit breaker."""
         if not self.api_key:
             logger.warning(
                 "No Gemini API key found. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable. "
@@ -180,30 +197,44 @@ class GeminiImageExtractor:
             )
             return {}
 
-        try:
-            from google import genai  # type: ignore
-            from google.genai import types  # type: ignore
-        except ImportError:
+        import importlib.util
+        if importlib.util.find_spec("google.genai") is None:
             logger.warning(
                 "google-genai not installed. Install with: pip install google-genai"
             )
             return {}
 
-        try:
-            client = genai.Client(api_key=self.api_key)
+        # Use resilient client to wrap the API call
+        result = self._client.call(
+            self._raw_gemini_call,
+            image_bytes,
+            suffix,
+            source_path=source_path,
+        )
+        return result or {}
 
-            # Determine mime type
-            mime_map = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".webp": "image/webp",
-                ".gif": "image/gif",
-            }
-            mime_type = mime_map.get(suffix.lower(), "image/png")
+    def _raw_gemini_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Raw Gemini API call (wrapped by ResilientClient)."""
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
 
-            # Create the prompt for structured analysis
-            prompt = """Analyze this image and provide a structured response in JSON format with these fields:
+        client = genai.Client(
+            api_key=self.api_key,
+            http_options=types.HttpOptions(timeout=self.timeout),
+        )
+
+        # Determine mime type
+        mime_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }
+        mime_type = mime_map.get(suffix.lower(), "image/png")
+
+        # Create the prompt for structured analysis
+        prompt = """Analyze this image and provide a structured response in JSON format with these fields:
 
 1. "description": A detailed description of what the image shows (2-3 sentences)
 2. "visible_text": Any text visible in the image, transcribed accurately
@@ -213,38 +244,30 @@ class GeminiImageExtractor:
 
 Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
-            response = client.models.generate_content(
-                model=self.model,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt,
-                ],  # type: ignore[arg-type]
-            )
+        response = client.models.generate_content(
+            model=self.model,
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                prompt,
+            ],  # type: ignore[arg-type]
+        )
 
-            # Parse the JSON response
-            response_text = (response.text or "").strip()
-            # Remove markdown code block if present
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                # Remove first line (```json) and last line (```)
-                response_text = "\n".join(lines[1:-1])
+        # Parse the JSON response
+        response_text = (response.text or "").strip()
+        # Remove markdown code block if present
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            # Remove first line (```json) and last line (```)
+            response_text = "\n".join(lines[1:-1])
 
-            # Try parsing as-is first, then with escape fixes
-            try:
-                result = json.loads(response_text)
-            except json.JSONDecodeError:
-                # Fix invalid escape sequences and retry
-                fixed_text = _fix_json_escapes(response_text)
-                result = json.loads(fixed_text)
-            return result
-
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse Gemini response as JSON: {e}")
-            # Try to extract what we can from non-JSON response
-            return {"description": (response.text or "")[:500] if 'response' in locals() else ""}
-        except Exception as e:
-            logger.warning(f"Gemini analysis failed: {e}")
-            return {}
+        # Try parsing as-is first, then with escape fixes
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Fix invalid escape sequences and retry
+            fixed_text = _fix_json_escapes(response_text)
+            result = json.loads(fixed_text)
+        return result
 
 
 @dataclass
@@ -264,12 +287,28 @@ class VertexAIImageExtractor:
     credentials_file: str | None = None
     model: str = "gemini-2.0-flash-exp"
 
+    # Resilience settings
+    timeout: int = 30000  # Timeout in milliseconds
+    max_retries: int = 3
+    retry_backoff: int = 1000  # Base backoff in ms
+
+    _client: ResilientClient = field(init=False, repr=False)
+
     def __post_init__(self) -> None:
         # Try to get values from environment if not provided
         if self.project_id is None:
             self.project_id = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
         if self.credentials_file is None:
             self.credentials_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+        # Initialize resilient client
+        self._client = ResilientClient(
+            timeout_ms=self.timeout,
+            max_retries=self.max_retries,
+            backoff_base_ms=self.retry_backoff,
+            circuit_breaker=get_circuit_breaker(),
+            provider="vertex_ai",
+        )
 
     def extract(self, path: Path) -> Extracted:
         """Extract image content using Vertex AI vision model."""
@@ -286,8 +325,8 @@ class VertexAIImageExtractor:
         # Read image bytes for Vertex AI
         image_bytes = path.read_bytes()
 
-        # Analyze with Vertex AI
-        analysis = self._analyze_with_vertex_ai(image_bytes, path.suffix)
+        # Analyze with Vertex AI (using resilient client)
+        analysis = self._analyze_with_vertex_ai(image_bytes, path.suffix, path)
 
         # Build the text content for indexing
         text_parts = []
@@ -321,10 +360,8 @@ class VertexAIImageExtractor:
 
         return Extracted(text=text, metadata=meta)
 
-    def _analyze_with_vertex_ai(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
-        """Call Vertex AI API to analyze the image using service account credentials."""
-        logger.info(f"Starting Vertex AI analysis (image size: {len(image_bytes)} bytes)")
-
+    def _analyze_with_vertex_ai(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
+        """Call Vertex AI API to analyze the image with retry/circuit breaker."""
         if not self.project_id:
             logger.warning(
                 "No Google Cloud project ID found. Set project_id in config or GOOGLE_CLOUD_PROJECT environment variable. "
@@ -339,49 +376,57 @@ class VertexAIImageExtractor:
             )
             return {}
 
-        try:
-            import vertexai  # type: ignore
-            from vertexai.generative_models import GenerativeModel, Part  # type: ignore
-            from google.oauth2 import service_account  # type: ignore
-        except ImportError:
+        import importlib.util
+        if importlib.util.find_spec("vertexai") is None or importlib.util.find_spec("google.oauth2") is None:
             logger.warning(
                 "vertexai or google-auth not installed. Install with: pip install google-cloud-aiplatform google-auth"
             )
             return {}
 
-        try:
-            # Security: Log at debug level to avoid exposing credentials path
-            logger.debug(f"Loading credentials from: {self.credentials_file}")
-            logger.info("Loading Vertex AI credentials from configured file")
-            # Load credentials from JSON file
-            credentials = service_account.Credentials.from_service_account_file(
-                self.credentials_file,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
+        # Use resilient client to wrap the API call
+        result = self._client.call(
+            self._raw_vertex_ai_call,
+            image_bytes,
+            suffix,
+            source_path=source_path,
+        )
+        return result or {}
 
-            # Security: Log at debug level to avoid exposing project ID
-            logger.debug(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
-            logger.info(f"Initializing Vertex AI in region: {self.location}")
-            # Initialize Vertex AI
-            vertexai.init(
-                project=self.project_id,
-                location=self.location,
-                credentials=credentials
-            )
-            logger.info("Vertex AI initialized successfully")
+    def _raw_vertex_ai_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Raw Vertex AI API call (wrapped by ResilientClient)."""
+        import vertexai  # type: ignore
+        from vertexai.generative_models import GenerativeModel, Part  # type: ignore
+        from google.oauth2 import service_account  # type: ignore
 
-            # Determine mime type
-            mime_map = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".webp": "image/webp",
-                ".gif": "image/gif",
-            }
-            mime_type = mime_map.get(suffix.lower(), "image/png")
+        # Security: Log at debug level to avoid exposing credentials path
+        logger.debug(f"Loading credentials from: {self.credentials_file}")
+        # Load credentials from JSON file
+        credentials = service_account.Credentials.from_service_account_file(
+            self.credentials_file,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
 
-            # Create the prompt for structured analysis
-            prompt = """Analyze this image and provide a structured response in JSON format with these fields:
+        # Security: Log at debug level to avoid exposing project ID
+        logger.debug(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
+        # Initialize Vertex AI
+        vertexai.init(
+            project=self.project_id,
+            location=self.location,
+            credentials=credentials
+        )
+
+        # Determine mime type
+        mime_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }
+        mime_type = mime_map.get(suffix.lower(), "image/png")
+
+        # Create the prompt for structured analysis
+        prompt = """Analyze this image and provide a structured response in JSON format with these fields:
 
 1. "description": A detailed description of what the image shows (2-3 sentences)
 2. "visible_text": Any text visible in the image, transcribed accurately
@@ -391,68 +436,45 @@ class VertexAIImageExtractor:
 
 Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
-            # Create model instance
-            logger.info(f"Creating model instance: {self.model}")
-            model = GenerativeModel(self.model)
+        # Create model instance
+        model = GenerativeModel(self.model)
 
-            # Create image part
-            logger.info(f"Creating image part with mime type: {mime_type}")
-            image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
+        # Create image part
+        image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
 
-            # Generate content
-            logger.info("Sending request to Vertex AI...")
-            response = model.generate_content([image_part, prompt])
-            logger.info("Received response from Vertex AI")
+        # Generate content
+        response = model.generate_content([image_part, prompt])
 
-            # Parse the JSON response
-            # Handle both single-part and multi-part responses
-            try:
-                response_text = response.text.strip()
-            except ValueError:
-                # Multi-part response (e.g., from gemini-3-pro-image-preview)
-                logger.info("Multi-part response detected, concatenating non-thought parts...")
-                parts = []
-                for candidate in response.candidates:
-                    for part in candidate.content.parts:
-                        # Skip thought parts - only use actual response
-                        if hasattr(part, 'thought') and part.thought:
-                            continue
-                        if hasattr(part, 'text') and part.text:
-                            parts.append(part.text)
-                response_text = "".join(parts).strip()  # Use empty string join to avoid adding newlines
+        # Parse the JSON response
+        # Handle both single-part and multi-part responses
+        try:
+            response_text = response.text.strip()
+        except ValueError:
+            # Multi-part response (e.g., from gemini-3-pro-image-preview)
+            parts = []
+            for candidate in response.candidates:
+                for part in candidate.content.parts:
+                    # Skip thought parts - only use actual response
+                    if hasattr(part, 'thought') and part.thought:
+                        continue
+                    if hasattr(part, 'text') and part.text:
+                        parts.append(part.text)
+            response_text = "".join(parts).strip()
 
-            logger.info(f"Response text length: {len(response_text)}")
-            # Remove markdown code block if present
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                # Remove first line (```json) and last line (```)
-                response_text = "\n".join(lines[1:-1])
+        # Remove markdown code block if present
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            # Remove first line (```json) and last line (```)
+            response_text = "\n".join(lines[1:-1])
 
-            # Try parsing as-is first, then with escape fixes
-            try:
-                result = json.loads(response_text)
-            except json.JSONDecodeError:
-                # Fix invalid escape sequences and retry
-                fixed_text = _fix_json_escapes(response_text)
-                result = json.loads(fixed_text)
-            return result
-
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse Vertex AI response as JSON: {e}")
-            # Try to extract what we can from non-JSON response
-            return {"description": response_text[:500] if response_text else ""}
-        except (FileNotFoundError, PermissionError) as e:
-            logger.error(f"Credentials file error: {type(e).__name__}")
-            logger.debug(f"Credentials file error details: {e}")
-            return {}
-        except ImportError as e:
-            logger.error(f"Missing required library: {e}")
-            return {}
-        except Exception as e:
-            # Catch-all for unexpected errors, but log the type for debugging
-            logger.error(f"Vertex AI analysis failed: {type(e).__name__}")
-            logger.debug(f"Vertex AI analysis error details: {e}")
-            return {}
+        # Try parsing as-is first, then with escape fixes
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Fix invalid escape sequences and retry
+            fixed_text = _fix_json_escapes(response_text)
+            result = json.loads(fixed_text)
+        return result
 
 
 @dataclass
@@ -476,8 +498,14 @@ class AIGatewayImageExtractor:
     gateway_url: str | None = None
     gateway_key: str | None = None
     model: str = "gemini-2.5-flash"
-    timeout: int = 90000  # Timeout in milliseconds
+    timeout: int = 30000  # Timeout in milliseconds
     endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
+
+    # Resilience settings
+    max_retries: int = 3
+    retry_backoff: int = 1000  # Base backoff in ms
+
+    _client: ResilientClient = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Try to get values from environment if not provided
@@ -485,6 +513,15 @@ class AIGatewayImageExtractor:
             self.gateway_url = os.environ.get("AI_GATEWAY_URL")
         if self.gateway_key is None:
             self.gateway_key = os.environ.get("AI_GATEWAY_KEY")
+
+        # Initialize resilient client
+        self._client = ResilientClient(
+            timeout_ms=self.timeout,
+            max_retries=self.max_retries,
+            backoff_base_ms=self.retry_backoff,
+            circuit_breaker=get_circuit_breaker(),
+            provider="aigateway",
+        )
 
     def extract(self, path: Path) -> Extracted:
         """Extract image content using Microsoft AI Gateway proxy to Gemini."""
@@ -537,7 +574,7 @@ class AIGatewayImageExtractor:
         return Extracted(text=text, metadata=meta)
 
     def _analyze_with_aigateway(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
-        """Call Microsoft AI Gateway to access Gemini API for image analysis."""
+        """Call Microsoft AI Gateway to access Gemini API with retry/circuit breaker."""
         if not self.gateway_url:
             logger.warning(
                 "No AI Gateway URL found. Set aigateway_url in config or AI_GATEWAY_URL environment variable. "
@@ -552,41 +589,52 @@ class AIGatewayImageExtractor:
             )
             return {}
 
-        try:
-            from google import genai  # type: ignore
-            from google.genai import types  # type: ignore
-        except ImportError:
+        import importlib.util
+        if importlib.util.find_spec("google.genai") is None:
             logger.warning(
                 "google-genai not installed. Install with: pip install google-genai"
             )
             return {}
 
-        try:
-            # Configure client to use Microsoft AI Gateway endpoint
-            # Append endpoint_path to base URL (configurable, default: vertex-ai-express)
-            endpoint = f"{self.gateway_url}/{self.endpoint_path}"
-            client = genai.Client(
-                http_options=types.HttpOptions(
-                    base_url=endpoint,
-                    api_version="v1",
-                    timeout=self.timeout,  # Configurable timeout to prevent hanging
-                ),
-                api_key=self.gateway_key,
-                vertexai=True
-            )
+        # Use resilient client to wrap the API call
+        result = self._client.call(
+            self._raw_aigateway_call,
+            image_bytes,
+            suffix,
+            source_path=source_path,
+        )
+        return result or {}
 
-            # Determine mime type
-            mime_map = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".webp": "image/webp",
-                ".gif": "image/gif",
-            }
-            mime_type = mime_map.get(suffix.lower(), "image/png")
+    def _raw_aigateway_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Raw AI Gateway API call (wrapped by ResilientClient)."""
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
 
-            # Create the prompt for structured analysis (same as GeminiImageExtractor)
-            prompt = """Analyze this image and provide a structured response in JSON format with these fields:
+        # Configure client to use Microsoft AI Gateway endpoint
+        # Append endpoint_path to base URL (configurable, default: vertex-ai-express)
+        endpoint = f"{self.gateway_url}/{self.endpoint_path}"
+        client = genai.Client(
+            http_options=types.HttpOptions(
+                base_url=endpoint,
+                api_version="v1",
+                timeout=self.timeout,  # Configurable timeout to prevent hanging
+            ),
+            api_key=self.gateway_key,
+            vertexai=True
+        )
+
+        # Determine mime type
+        mime_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }
+        mime_type = mime_map.get(suffix.lower(), "image/png")
+
+        # Create the prompt for structured analysis
+        prompt = """Analyze this image and provide a structured response in JSON format with these fields:
 
 1. "description": A detailed description of what the image shows (2-3 sentences)
 2. "visible_text": Any text visible in the image, transcribed accurately
@@ -596,34 +644,25 @@ class AIGatewayImageExtractor:
 
 Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
-            response = client.models.generate_content(
-                model=self.model,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    types.Part.from_text(text=prompt),
-                ],  # type: ignore[arg-type]
-            )
+        response = client.models.generate_content(
+            model=self.model,
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(text=prompt),
+            ],  # type: ignore[arg-type]
+        )
 
-            # Parse the JSON response (same pattern as GeminiImageExtractor)
-            response_text = (response.text or "").strip()
-            # Remove markdown code block if present
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                response_text = "\n".join(lines[1:-1])
+        # Parse the JSON response
+        response_text = (response.text or "").strip()
+        # Remove markdown code block if present
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            response_text = "\n".join(lines[1:-1])
 
-            # Try parsing as-is first, then with escape fixes
-            try:
-                result = json.loads(response_text)
-            except json.JSONDecodeError:
-                fixed_text = _fix_json_escapes(response_text)
-                result = json.loads(fixed_text)
-            return result
-
-        except json.JSONDecodeError as e:
-            source_info = f" [source: {source_path}]" if source_path else ""
-            logger.warning(f"Failed to parse AI Gateway response as JSON: {e}{source_info}")
-            return {"description": (response.text or "")[:500] if 'response' in locals() else ""}
-        except Exception as e:
-            source_info = f" [source: {source_path}]" if source_path else ""
-            logger.warning(f"AI Gateway analysis failed: {e}{source_info}")
-            return {}
+        # Try parsing as-is first, then with escape fixes
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            fixed_text = _fix_json_escapes(response_text)
+            result = json.loads(fixed_text)
+        return result

@@ -83,8 +83,19 @@ class VaultConfig:
     aigateway_url: str | None = None
     aigateway_key: str | None = None
     aigateway_model: str = "gemini-2.5-flash"
-    aigateway_timeout: int = 90000  # Timeout in milliseconds
+    aigateway_timeout: int = 30000  # Timeout in milliseconds (default, can override)
     aigateway_endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
+
+    # Image analysis resilience settings
+    image_timeout: int = 30000  # Default timeout for all providers (ms)
+    image_max_retries: int = 3  # Number of retries for transient errors
+    image_retry_backoff: int = 1000  # Base backoff in ms (doubles each retry)
+    image_circuit_threshold: int = 5  # Consecutive failures to trip breaker
+    image_circuit_reset: int = 60  # Seconds before breaker auto-resets
+
+    # Per-provider timeout overrides (0 = use image_timeout default)
+    gemini_timeout: int = 0
+    vertex_ai_timeout: int = 0
 
     # Retrieval
     k_vec: int = 40
@@ -236,8 +247,15 @@ class VaultConfig:
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
-            aigateway_timeout=int(aigateway.get("timeout", 90000)),
+            aigateway_timeout=int(aigateway.get("timeout", 0)),  # 0 = use image_timeout
             aigateway_endpoint_path=aigateway.get("endpoint_path", "vertex-ai-express"),
+            image_timeout=int(img.get("timeout", 30000)),
+            image_max_retries=int(img.get("max_retries", 3)),
+            image_retry_backoff=int(img.get("retry_backoff", 1000)),
+            image_circuit_threshold=int(img.get("circuit_threshold", 5)),
+            image_circuit_reset=int(img.get("circuit_reset", 60)),
+            gemini_timeout=int(data.get("gemini", {}).get("timeout", 0)),
+            vertex_ai_timeout=int(vertex.get("timeout", 0)),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
@@ -308,8 +326,19 @@ class MultiVaultConfig:
     aigateway_url: str | None = None
     aigateway_key: str | None = None
     aigateway_model: str = "gemini-2.5-flash"
-    aigateway_timeout: int = 90000  # Timeout in milliseconds
+    aigateway_timeout: int = 30000  # Timeout in milliseconds (default, can override)
     aigateway_endpoint_path: str = "vertex-ai-express"  # Path suffix to append to URL
+
+    # Image analysis resilience settings
+    image_timeout: int = 30000  # Default timeout for all providers (ms)
+    image_max_retries: int = 3  # Number of retries for transient errors
+    image_retry_backoff: int = 1000  # Base backoff in ms (doubles each retry)
+    image_circuit_threshold: int = 5  # Consecutive failures to trip breaker
+    image_circuit_reset: int = 60  # Seconds before breaker auto-resets
+
+    # Per-provider timeout overrides (0 = use image_timeout default)
+    gemini_timeout: int = 0
+    vertex_ai_timeout: int = 0
 
     # Retrieval
     k_vec: int = 40
@@ -460,8 +489,15 @@ class MultiVaultConfig:
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
-            aigateway_timeout=int(aigateway.get("timeout", 90000)),
+            aigateway_timeout=int(aigateway.get("timeout", 0)),  # 0 = use image_timeout
             aigateway_endpoint_path=aigateway.get("endpoint_path", "vertex-ai-express"),
+            image_timeout=int(img.get("timeout", 30000)),
+            image_max_retries=int(img.get("max_retries", 3)),
+            image_retry_backoff=int(img.get("retry_backoff", 1000)),
+            image_circuit_threshold=int(img.get("circuit_threshold", 5)),
+            image_circuit_reset=int(img.get("circuit_reset", 60)),
+            gemini_timeout=int(data.get("gemini", {}).get("timeout", 0)),
+            vertex_ai_timeout=int(vertex.get("timeout", 0)),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
