@@ -70,6 +70,50 @@ class ImageTask:
 
 
 @dataclass
+class ProcessResult:
+    """Result from processing a single file (extraction + chunking).
+
+    This is the unified result type used by both scan and watch pipelines.
+    Thread-safe, no DB writes - just pure file processing.
+    """
+
+    abs_path: Path
+    rel_path: str
+    doc_id: str
+    vault_id: str
+    file_type: str
+    content_hash: str
+    mtime: int
+    size: int
+    chunks: list[ChunkData] = field(default_factory=list)
+    image_tasks: list["ImageTask"] = field(default_factory=list)
+    links: list[tuple[str, str]] = field(default_factory=list)  # (target, link_type)
+    error: str | None = None
+    skipped: bool = False
+    # Enriched metadata for faster operations
+    full_path: str = ""
+    vault_root: str = ""
+    vault_name: str = ""
+    file_name: str = ""
+    file_extension: str = ""
+    modified_at: str = ""
+    obsidian_uri: str = ""
+
+
+@dataclass
+class BatchStats:
+    """Statistics from a batch processing operation (watch mode)."""
+
+    files_processed: int = 0
+    files_deleted: int = 0
+    files_failed: int = 0
+    chunks_created: int = 0
+    embeddings_created: int = 0
+    images_processed: int = 0
+    elapsed_seconds: float = 0.0
+
+
+@dataclass
 class ScanStats:
     """Statistics from a scan operation."""
 

@@ -128,11 +128,42 @@ use_rerank = false
 # Parallelization (3.6x speedup for full scans)
 # Parallel scanning is enabled by default
 [indexing]
+# Scan mode settings (ragtriever scan --full)
 extraction_workers = 8    # Parallel file extraction workers (default: 8)
 embed_batch_size = 256    # Cross-file embedding batch size (GPU efficiency)
 image_workers = 8         # Parallel image API workers (default: 8)
 parallel_scan = true      # Enable/disable parallel scanning
 # CLI overrides: --workers N, --no-parallel
 
+# Watch mode settings (ragtriever watch)
+# Batched mode is default - accumulates filesystem events for efficient batch processing
+watch_workers = 4         # Parallel extraction workers for watch (default: 4)
+watch_batch_size = 10     # Max files per batch before processing (default: 10)
+watch_batch_timeout = 5.0 # Seconds before processing partial batch (default: 5.0)
+watch_image_workers = 4   # Parallel image workers for watch (default: 4)
+# CLI overrides: --batch-size N, --batch-timeout N, --no-batch (for legacy serial mode)
+
 [mcp]
 transport = "stdio"
+
+# Logging (audit trail for scan and watch operations)
+[logging]
+# Log directory (relative to current working directory or absolute path)
+dir = "logs"
+
+# Log file paths with date/time patterns
+# Supported placeholders:
+#   {date}     = YYYYMMDD (e.g., 20260123)
+#   {datetime} = YYYYMMDD_HHMMSS (e.g., 20260123_142030)
+scan_log_file = "logs/scan_{date}.log"       # Scan log file pattern
+watch_log_file = "logs/watch_{datetime}.log" # Watch log file pattern
+
+# Log level: DEBUG (verbose), INFO (default), WARNING, ERROR
+level = "INFO"
+
+# Auto-enable logging (if true, logging always enabled; if false, use --log-file CLI flag)
+enable_scan_logging = false   # Set to true to always log scan operations
+enable_watch_logging = true   # Set to true to always log watch operations (recommended)
+
+# CLI overrides: --log-file PATH, --log-level LEVEL, --verbose (DEBUG)
+# Example:  ragtriever scan --log-file logs/my_scan.log --verbose

@@ -106,6 +106,165 @@ Before running any RAGtriever commands:
    ls ~/.cache/huggingface/hub/
    ```
 
+## Discovering CLI Options
+
+**IMPORTANT: Always check CLI help for current options instead of guessing:**
+
+```bash
+# Main help - shows all commands
+ragtriever --help
+
+# Command-specific help
+ragtriever scan --help
+ragtriever watch --help
+ragtriever query --help
+ragtriever init --help
+ragtriever mcp --help
+ragtriever status --help
+```
+
+**Why use --help:**
+- Always accurate (reflects current code)
+- Shows all available flags
+- Includes default values
+- Documents new features automatically
+
+**Example workflow:**
+```bash
+# User asks: "How do I enable logging for scan?"
+# Instead of guessing, check:
+ragtriever scan --help | grep -A 2 log
+
+# Output shows:
+#   --log-file TEXT    Log file path for audit trail
+#   --log-level TEXT   Log level: DEBUG, INFO, WARNING, ERROR
+#   --verbose, -v      Enable verbose (DEBUG) logging
+```
+
+## Managing the Watcher
+
+**The watcher automatically handles:**
+- Individual file changes (create, modify, delete, move)
+- Directory operations (delete entire folders, move/rename folders)
+- All files within deleted or moved directories are updated in the index
+- No manual intervention needed for vault reorganization
+
+### Check if Watcher is Running
+```bash
+# Check for running watcher process
+ps aux | grep -E "[r]agtriever watch"
+
+# Or more precise:
+pgrep -f "ragtriever watch"
+
+# If output: process is running
+# If no output: watcher is not running
+```
+
+### Start the Watcher
+```bash
+# Activate venv first
+source .venv/bin/activate
+
+# Start watcher (foreground)
+ragtriever watch --config config.toml
+
+# Start watcher (background with logging)
+nohup ragtriever watch --config config.toml > /dev/null 2>&1 &
+
+# Start watcher (background with config-driven logging)
+# (Logs automatically to watch_{date}.log if enable_watch_logging=true)
+nohup ragtriever watch --config config.toml &
+echo $! > logs/watcher.pid  # Save PID for later
+```
+
+### Stop the Watcher
+```bash
+# Method 1: Kill all ragtriever watch processes
+pkill -f "ragtriever watch"
+
+# Method 2: Kill specific PID (if you saved it)
+kill $(cat logs/watcher.pid)
+
+# Method 3: Find and kill interactively
+ps aux | grep "[r]agtriever watch"
+kill <PID>
+
+# Verify it stopped
+ps aux | grep -E "[r]agtriever watch" || echo "Watcher stopped"
+```
+
+### Restart the Watcher
+```bash
+# Stop existing watcher
+pkill -f "ragtriever watch"
+
+# Wait for graceful shutdown
+sleep 2
+
+# Start new watcher
+source .venv/bin/activate
+nohup ragtriever watch --config config.toml &
+echo $! > logs/watcher.pid
+
+# Verify it started
+ps aux | grep "[r]agtriever watch" && echo "Watcher running"
+```
+
+### Check Watcher Status
+```bash
+# Is it running?
+if pgrep -f "ragtriever watch" > /dev/null; then
+    echo "✓ Watcher is running"
+    ps aux | grep "[r]agtriever watch" | grep -v grep
+else
+    echo "✗ Watcher is not running"
+fi
+
+# Check recent activity (if logging enabled)
+tail -20 logs/watch_$(date +%Y%m%d).log
+```
+
+### Watcher Health Check
+```bash
+# 1. Check if process is running
+pgrep -f "ragtriever watch" > /dev/null || echo "ERROR: Watcher not running"
+
+# 2. Check if it's actually indexing (log activity in last 5 minutes)
+find logs/ -name "watch_*.log" -mmin -5 | grep -q . && echo "✓ Recent activity" || echo "⚠ No recent log activity"
+
+# 3. Check for errors in logs
+tail -100 logs/watch_$(date +%Y%m%d).log | grep -i error && echo "⚠ Errors found" || echo "✓ No recent errors"
+```
+
+### Watcher Management Script (Simplified)
+
+**For convenience, use the included management script:**
+
+```bash
+# Check status
+./scripts/manage_watcher.sh status
+
+# Start watcher
+./scripts/manage_watcher.sh start
+
+# Stop watcher
+./scripts/manage_watcher.sh stop
+
+# Restart watcher
+./scripts/manage_watcher.sh restart
+
+# Run health check
+./scripts/manage_watcher.sh health
+```
+
+**The script handles:**
+- Virtual environment activation
+- PID file management
+- Graceful shutdown
+- Health checks (process, logs, errors)
+- Log file detection
+
 ## Configuration Checklist
 
 When setting up or modifying `config.toml`:
@@ -189,6 +348,27 @@ ragtriever scan --config config.toml
 ragtriever watch --config config.toml
 ```
 
+### Scanning with Logging and Profiling
+```bash
+# Scan with logging to file
+ragtriever scan --config config.toml --full --log-file logs/scan.log
+
+# Scan with verbose (DEBUG) logging
+ragtriever scan --config config.toml --full --log-file logs/scan.log --verbose
+
+# Scan with profiling (performance analysis)
+ragtriever scan --config config.toml --full --profile logs/profile.txt
+
+# Scan with both logging and profiling
+ragtriever scan --config config.toml --full \
+    --log-file logs/scan.log \
+    --profile logs/profile.txt \
+    --verbose
+
+# Watch mode with logging
+ragtriever watch --config config.toml --log-file logs/watch.log --verbose
+```
+
 ### Parallel Scanning (3.6x faster)
 Parallel scanning is enabled by default. Configure in `config.toml`:
 ```toml
@@ -197,6 +377,37 @@ extraction_workers = 8    # Parallel file extraction workers (default: 8)
 embed_batch_size = 256    # Cross-file embedding batch size
 image_workers = 8         # Parallel image API workers (default: 8)
 parallel_scan = true      # Enable/disable parallel scanning
+```
+
+### Logging Configuration (Audit Trail)
+Configure automatic logging with date patterns in `config.toml`:
+```toml
+[logging]
+dir = "logs"                                # Log directory
+scan_log_file = "logs/scan_{date}.log"      # Daily rotation: scan_20260123.log
+watch_log_file = "logs/watch_{datetime}.log" # Per-run: watch_20260123_142030.log
+level = "INFO"                              # DEBUG, INFO, WARNING, ERROR
+enable_scan_logging = false                 # Auto-enable for scan (false = manual via CLI)
+enable_watch_logging = true                 # Auto-enable for watch (true = always log)
+```
+
+**Date patterns:**
+- `{date}` → `20260123` (YYYYMMDD - daily rotation)
+- `{datetime}` → `20260123_142030` (YYYYMMDD_HHMMSS - per-run logs)
+
+**Priority:** CLI flags > config settings > no logging
+
+**Example usage:**
+```bash
+# With config enable_watch_logging=true, watch automatically logs
+ragtriever watch  # → logs/watch_20260123.log
+
+# CLI flags override config
+ragtriever scan --full --log-file logs/custom.log
+
+# Check indexing results
+grep '\[scan\] Complete:' logs/scan_20260123.log
+grep '\[watch\] Indexed:' logs/watch_20260123.log
 ```
 
 ### Querying
@@ -344,17 +555,97 @@ ragtriever query --config config.toml "image description" --k 5
 # Verify results include image metadata
 ```
 
+## Verifying Successful Indexing
+
+### Scan Mode
+**Console output:**
+```
+Scan complete: 135 files, 963 chunks in 133.0s
+```
+
+**Log file (if logging enabled):**
+```bash
+# View summary
+grep '\[scan\] Complete:' logs/scan_20260123.log
+
+# Check phases
+grep '\[scan\] Phase' logs/scan_20260123.log
+
+# Output:
+# [scan] Phase 1: 135 files extracted, 0 failed
+# [scan] Phase 2: 963 chunks, 963 embeddings
+# [scan] Complete: 135 files indexed in 133.0s
+```
+
+### Watch Mode
+**Individual file indexing (INFO level):**
+```bash
+# List all indexed files
+grep '\[watch\] Indexed:' logs/watch_20260123.log
+
+# Output:
+# [watch] Indexed: path/to/file1.pdf
+# [watch] Indexed: path/to/file2.md
+# [watch] Indexed: image.jpg
+```
+
+**Batch writes (DEBUG level):**
+```bash
+# See database writes
+grep '\[batch\] Stored' logs/watch_20260123.log
+
+# Output:
+# [batch] Stored 8 docs, 335 chunks, 335 embeddings
+```
+
+**Real-time monitoring:**
+```bash
+# Terminal 1: Run watcher
+ragtriever watch
+
+# Terminal 2: Monitor indexing
+tail -f logs/watch_20260123.log | grep '\[watch\] Indexed:'
+```
+
+### Check for Failures
+```bash
+# Scan or watch failures
+grep -E 'Failed:|ERROR' logs/*.log
+
+# Count indexed files
+grep -c '\[watch\] Indexed:' logs/watch_20260123.log
+```
+
+### Verify in Database
+```bash
+ragtriever status
+# Output: Indexed files: 135, Indexed chunks: 963
+```
+
 ## Key Files Reference
 
+### Code
 - `src/ragtriever/extractors/image.py` - Image extractor implementations
-- `src/ragtriever/config.py` - Configuration management
+- `src/ragtriever/config.py` - Configuration management (includes [logging] support)
+- `src/ragtriever/cli.py` - CLI commands (scan, watch, query with logging/profiling)
 - `src/ragtriever/indexer/indexer.py` - Main indexer orchestration
 - `src/ragtriever/retrieval/retriever.py` - Hybrid search implementation
-- `examples/config.toml.example` - Configuration template
-- `docs/architecture.md` - Complete system architecture
+
+### Configuration
+- `examples/config.toml.example` - Configuration template with [logging] section
+- `config.toml` - User configuration
+
+### Documentation
+- `docs/ARCHITECTURE.md` - Complete system architecture
+- `docs/LOGGING_CONFIGURATION.md` - Logging setup and usage guide
+- `docs/WHERE_TO_SEE_INDEXING.md` - How to verify indexing success
+- `docs/SCAN_AND_WATCH_TESTING.md` - Testing guide with profiling
 - `docs/vertex_ai_setup.md` - Vertex AI setup guide
 - `docs/troubleshooting.md` - Detailed troubleshooting
-- `IMPROVEMENTS.md` - Planned enhancements (inc. Gemini 3)
+- `IMPROVEMENTS.md` - Planned enhancements
+
+### Testing Scripts
+- `scripts/test_scan_and_watch.sh` - Automated test with logging and profiling
 
 ## Architecture Quick Reference
 
@@ -412,6 +703,23 @@ sqlite3 ~/.ragtriever/indexes/myvault/vaultrag.sqlite \
 
 ## Quick Workflows
 
+### Test Scan & Watch (Automated)
+```bash
+# Automated test with logging, profiling, and watcher
+./scripts/test_scan_and_watch.sh
+
+# This will:
+# 1. Clean database
+# 2. Run full scan with 10 workers and profiling
+# 3. Show profiling summary
+# 4. Show scan log summary
+# 5. Prompt to test watcher
+
+# Logs saved to: logs/scan_YYYYMMDD_HHMMSS.log
+# Profile saved to: logs/scan_profile_YYYYMMDD_HHMMSS.txt
+# Watch logs: logs/watch_YYYYMMDD_HHMMSS.log
+```
+
 ### Setup New Vault (Tesseract)
 ```bash
 source .venv/bin/activate
@@ -443,7 +751,16 @@ ragtriever scan --config config.toml  # Only changed files
 ### Watch Mode (Background)
 ```bash
 source .venv/bin/activate
-nohup ragtriever watch --config config.toml > watch.log 2>&1 &
+
+# Start watcher in background
+nohup ragtriever watch --config config.toml &
+echo $! > logs/watcher.pid
+
+# Check if running
+pgrep -f "ragtriever watch" && echo "✓ Watcher running"
+
+# Stop watcher later
+pkill -f "ragtriever watch"
 ```
 
 ## Additional Resources
@@ -462,13 +779,41 @@ When helping users with RAGtriever:
 1. **ALWAYS search vault content first** - When user asks questions, use `ragtriever query` to search indexed vault
 2. **ALWAYS cite sources** - Every response MUST end with a "Sources" section listing file paths and locations
 3. **Vault content ≠ RAGtriever code** - Don't confuse searching the vault (user's content) with RAGtriever repository code
-4. **Always check config first** - Most issues stem from configuration
-5. **Verify virtual environment** - Commands fail if venv not activated
-6. **Check file paths** - Use absolute paths, expand ~
-7. **Office temp files** - First thing to check if PPTX extraction fails
-8. **Offline mode** - Corporate users need this; verify model is cached
-9. **Rate limits are OK** - 429 errors are expected with many images
-10. **Test incrementally** - Small vault first, then scale up
+4. **Use --help to discover options** - Run `ragtriever <command> --help` instead of guessing flags or parameters
+5. **Check if watcher is running** - Use `pgrep -f "ragtriever watch"` before starting/restarting
+6. **Always check config first** - Most issues stem from configuration (now includes [logging] section)
+7. **Verify virtual environment** - Commands fail if venv not activated
+8. **Check file paths** - Use absolute paths, expand ~
+9. **Office temp files** - First thing to check if PPTX extraction fails
+10. **Offline mode** - Corporate users need this; verify model is cached
+11. **Rate limits are OK** - 429 errors are expected with many images
+12. **Test incrementally** - Small vault first, then scale up
+13. **Use logging for debugging** - Enable `--log-file` to trace indexing issues
+14. **Verify indexing success** - Check `[scan] Complete:` or `[watch] Indexed:` in logs
+15. **Profile performance** - Use `--profile` to identify bottlenecks
+16. **Enable watch logging by default** - Set `enable_watch_logging = true` for production
+17. **Restart watcher when needed** - After config changes, code updates, or if it stops responding
+
+### Watcher Management Workflow
+
+When user mentions watcher issues:
+```bash
+# 1. Check if running
+pgrep -f "ragtriever watch" || echo "Not running"
+
+# 2. If not running, start it
+source .venv/bin/activate
+nohup ragtriever watch --config config.toml &
+
+# 3. If running but needs restart
+pkill -f "ragtriever watch"
+sleep 2
+source .venv/bin/activate
+nohup ragtriever watch --config config.toml &
+
+# 4. Verify it's working
+tail -20 logs/watch_$(date +%Y%m%d).log
+```
 
 ## Notes
 

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
 from ..config import VaultConfig, MultiVaultConfig, VaultDefinition
-from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats
+from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats, ProcessResult, BatchStats
 from ..hashing import hash_file, blake2b_hex
 from ..paths import relpath
 from ..models import Document, Chunk
@@ -25,9 +26,104 @@ from ..chunking.boundary_chunker import BoundaryMarkerChunker
 from ..embeddings.sentence_transformers import SentenceTransformersEmbedder
 from ..embeddings.ollama import OllamaEmbedder
 from ..store.libsql_store import LibSqlStore
-from .queue import JobQueue
+from .queue import JobQueue, Job
 from .change_detector import ChangeDetector
 from .reconciler import Reconciler
+
+
+class BatchCollector:
+    """Collects filesystem events into batches for efficient processing.
+
+    Thread-safe accumulator that triggers batch processing when either:
+    - Batch reaches max_batch_size files
+    - Timeout expires since first job was added
+
+    Usage:
+        collector = BatchCollector(max_batch_size=10, batch_timeout_seconds=5.0)
+
+        # In event handler thread:
+        batch = collector.add_job(job)
+        if batch:
+            processor.process_batch(batch)
+
+        # In timeout checker thread:
+        batch = collector.flush_if_timeout()
+        if batch:
+            processor.process_batch(batch)
+    """
+
+    def __init__(
+        self,
+        max_batch_size: int = 10,
+        batch_timeout_seconds: float = 5.0,
+    ):
+        self.max_batch_size = max_batch_size
+        self.batch_timeout_seconds = batch_timeout_seconds
+        self._pending_jobs: list[Job] = []
+        self._first_job_time: float | None = None
+        self._lock = threading.Lock()
+        self._logger = logging.getLogger(__name__)
+
+    def add_job(self, job: Job) -> list[Job] | None:
+        """Add a job to the batch.
+
+        Returns the batch if ready (size threshold reached), else None.
+        """
+        with self._lock:
+            self._pending_jobs.append(job)
+
+            # Track when first job was added
+            if self._first_job_time is None:
+                self._first_job_time = time.time()
+
+            # Check if batch is full
+            if len(self._pending_jobs) >= self.max_batch_size:
+                return self._flush_locked()
+
+            return None
+
+    def flush_if_timeout(self) -> list[Job] | None:
+        """Flush pending jobs if timeout has expired.
+
+        Returns the batch if timeout triggered, else None.
+        Should be called periodically from a timer thread.
+        """
+        with self._lock:
+            if not self._pending_jobs:
+                return None
+
+            if self._first_job_time is None:
+                return None
+
+            elapsed = time.time() - self._first_job_time
+            if elapsed >= self.batch_timeout_seconds:
+                return self._flush_locked()
+
+            return None
+
+    def flush(self) -> list[Job] | None:
+        """Force flush all pending jobs.
+
+        Returns the batch if any jobs pending, else None.
+        """
+        with self._lock:
+            if not self._pending_jobs:
+                return None
+            return self._flush_locked()
+
+    def _flush_locked(self) -> list[Job]:
+        """Flush pending jobs (must hold lock)."""
+        batch = self._pending_jobs
+        self._pending_jobs = []
+        self._first_job_time = None
+        self._logger.debug(f"[batch] Flushed batch of {len(batch)} jobs")
+        return batch
+
+    def pending_count(self) -> int:
+        """Return number of pending jobs."""
+        with self._lock:
+            return len(self._pending_jobs)
+
 
 @dataclass
 class Indexer:
@@ -152,8 +248,10 @@ class Indexer:
     def scan_parallel(self, full: bool = False) -> ScanStats:
         """Parallel scan with batched embedding and writes.
 
+        Uses the unified _process_file() method for extraction/chunking.
+
         Phase 0: Detect and remove deleted files from index
-        Phase 1: Parallel extraction/chunking (ThreadPoolExecutor)
+        Phase 1: Parallel extraction/chunking via _process_file()
         Phase 2: Batched embedding across files
         Phase 3: Parallel image analysis (if enabled)
         """
@@ -163,7 +261,7 @@ class Indexer:
         # Discover files
         rec = Reconciler(self.cfg.vault_root, self.cfg.ignore)
         paths = rec.scan_files()
-        logger.info(f"Found {len(paths)} files to index")
+        logger.info(f"[scan] Found {len(paths)} files to process")
 
         # Phase 0: Detect and remove deleted files
         fs_files = {relpath(self.cfg.vault_root, p) for p in paths}
@@ -171,21 +269,21 @@ class Indexer:
         deleted_files = indexed_files - fs_files
         files_deleted = 0
         for rel_path in deleted_files:
-            logger.info(f"Detected deletion: {rel_path}")
+            logger.info(f"[scan] Deleted: {rel_path}")
             self.store.delete_document(self.vault_id, rel_path)
             files_deleted += 1
 
         if files_deleted > 0:
-            logger.info(f"Phase 0 complete: Removed {files_deleted} deleted file(s) from index")
+            logger.info(f"[scan] Phase 0: Removed {files_deleted} deleted file(s)")
 
-        # Phase 1: Parallel extraction and chunking
-        extraction_results: list[ExtractionResult] = []
+        # Phase 1: Parallel extraction and chunking using unified _process_file()
+        process_results: list[ProcessResult] = []
         image_tasks: list[ImageTask] = []
         files_failed = 0
 
         with ThreadPoolExecutor(max_workers=self.cfg.extraction_workers) as executor:
             futures = {
-                executor.submit(self._extract_and_chunk_one, p): p
+                executor.submit(self._process_file, p): p
                 for p in paths
             }
 
@@ -193,72 +291,53 @@ class Indexer:
                 path = futures[future]
                 try:
                     result = future.result()
-                    if result is None:
-                        continue  # Skipped file
 
+                    # Skip files that should be skipped
+                    if result.skipped:
+                        continue
+
+                    # Handle errors
                     if result.error:
-                        logger.warning(f"Extraction failed for {path}: {result.error}")
+                        logger.warning(f"[scan] Failed: {path} - {result.error}")
                         files_failed += 1
                         continue
 
-                    extraction_results.append(result)
+                    process_results.append(result)
 
-                    # Collect image tasks for Phase 3 (with enriched metadata)
-                    for img in result.embedded_images:
-                        image_tasks.append(ImageTask(
-                            parent_doc_id=result.doc_id,
-                            parent_path=result.rel_path,
-                            vault_id=result.vault_id,
-                            file_type=result.file_type,
-                            image_data=img,
-                            task_type="embedded",
-                            full_path=result.full_path,
-                            vault_root=result.vault_root,
-                            vault_name=result.vault_name,
-                            file_name=result.file_name,
-                            file_extension=result.file_extension,
-                            file_size_bytes=result.size,
-                            modified_at=result.modified_at,
-                            obsidian_uri=result.obsidian_uri,
-                        ))
-                    for ref in result.image_references:
-                        image_tasks.append(ImageTask(
-                            parent_doc_id=result.doc_id,
-                            parent_path=result.rel_path,
-                            vault_id=result.vault_id,
-                            file_type=result.file_type,
-                            image_data=ref,
-                            task_type="reference",
-                            full_path=result.full_path,
-                            vault_root=result.vault_root,
-                            vault_name=result.vault_name,
-                            file_name=result.file_name,
-                            file_extension=result.file_extension,
-                            file_size_bytes=result.size,
-                            modified_at=result.modified_at,
-                            obsidian_uri=result.obsidian_uri,
-                        ))
+                    # Collect image tasks (already built in ProcessResult)
+                    image_tasks.extend(result.image_tasks)
 
                 except Exception as e:
-                    logger.error(f"Worker crashed for {path}: {e}")
+                    logger.error(f"[scan] Worker crashed: {path} - {e}")
                     files_failed += 1
 
-        logger.info(f"Phase 1 complete: {len(extraction_results)} files extracted, {files_failed} failed")
+        logger.info(
+            f"[scan] Phase 1: {len(process_results)} files extracted, "
+            f"{files_failed} failed"
+        )
 
         # Phase 2: Batched embedding and storage
-        chunks_created, embeddings_created = self._batch_embed_and_store(extraction_results)
-        logger.info(f"Phase 2 complete: {chunks_created} chunks, {embeddings_created} embeddings")
+        chunks_created, embeddings_created = self._batch_embed_and_store_results(
+            process_results
+        )
+        logger.info(
+            f"[scan] Phase 2: {chunks_created} chunks, "
+            f"{embeddings_created} embeddings"
+        )
 
         # Phase 3: Parallel image analysis
         images_processed = 0
         if image_tasks and self.cfg.image_analysis_provider != "off":
             images_processed = self._parallel_process_images(image_tasks)
-            logger.info(f"Phase 3 complete: {images_processed} images processed")
+            logger.info(f"[scan] Phase 3: {images_processed} images processed")
 
         elapsed = time.time() - start
+        logger.info(
+            f"[scan] Complete: {len(process_results)} files indexed in {elapsed:.1f}s"
+        )
         return ScanStats(
             files_scanned=len(paths),
-            files_indexed=len(extraction_results),
+            files_indexed=len(process_results),
             files_deleted=files_deleted,
             files_failed=files_failed,
             chunks_created=chunks_created,
@@ -410,6 +489,206 @@ class Indexer:
                 error=str(e),
             )
 
+    def _process_file(self, abs_path: Path) -> ProcessResult:
+        """Process a single file: extract, chunk, and prepare for embedding.
+
+        This is the unified processing method used by both scan and watch pipelines.
+        Thread-safe, no DB writes - returns ProcessResult with chunks and image tasks.
+
+        Returns:
+            ProcessResult with chunks ready for embedding and image tasks for processing.
+            On error, returns ProcessResult with error field set.
+            If file should be skipped (not a file, no suffix, no extractor), returns
+            ProcessResult with skipped=True.
+        """
+        # Build a minimal result for early returns
+        def skipped_result() -> ProcessResult:
+            return ProcessResult(
+                abs_path=abs_path,
+                rel_path="",
+                doc_id="",
+                vault_id=self.vault_id,
+                file_type="",
+                content_hash="",
+                mtime=0,
+                size=0,
+                skipped=True,
+            )
+
+        def error_result(rel: str, error: str) -> ProcessResult:
+            return ProcessResult(
+                abs_path=abs_path,
+                rel_path=rel,
+                doc_id="",
+                vault_id=self.vault_id,
+                file_type="",
+                content_hash="",
+                mtime=0,
+                size=0,
+                error=error,
+            )
+
+        # Early validations
+        if not abs_path.is_file():
+            return skipped_result()
+        if not abs_path.suffix:
+            return skipped_result()
+
+        extractor = self.extractors.get(abs_path)
+        if extractor is None:
+            return skipped_result()
+
+        rel = relpath(self.cfg.vault_root, abs_path)
+
+        try:
+            st = abs_path.stat()
+            chash = hash_file(abs_path)
+            doc_id = blake2b_hex(f"{self.vault_id}:{rel}".encode("utf-8"))[:24]
+            file_type = abs_path.suffix.lower().lstrip(".")
+
+            # Extract content
+            extracted = extractor.extract(abs_path)
+
+            # Determine chunker type label
+            if file_type == "md":
+                type_label = "markdown"
+            elif file_type in ("png", "jpg", "jpeg", "webp"):
+                type_label = "image"
+            else:
+                type_label = file_type
+
+            chunker = self.chunkers.get(type_label)
+            if chunker is None:
+                return skipped_result()
+
+            # Filter metadata for chunking (exclude image data)
+            chunking_metadata = {k: v for k, v in extracted.metadata.items()
+                                if k not in ("embedded_images", "image_references", "source_pdf")}
+
+            # Chunk
+            chunked = chunker.chunk(extracted.text, chunking_metadata)
+
+            # Pre-compute enriched metadata fields (shared across all chunks from this file)
+            full_path = str(abs_path)
+            vault_root = str(self.cfg.vault_root)
+            vault_name = self.cfg.vault_name or ""
+            file_name = abs_path.name
+            file_extension = abs_path.suffix.lower()
+            file_size_bytes = int(st.st_size)
+            modified_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
+
+            # Build Obsidian URI
+            obsidian_uri = ""
+            if vault_name:
+                encoded_path = quote(rel, safe="")
+                obsidian_uri = f"obsidian://open?vault={quote(vault_name, safe='')}&file={encoded_path}"
+
+            # Build chunk data objects
+            chunks: list[ChunkData] = []
+            for c in chunked:
+                text_norm = c.text.strip()
+                if not text_norm:
+                    continue
+                th = blake2b_hex(text_norm.encode("utf-8"))
+                cid = blake2b_hex(f"{doc_id}:{c.anchor_type}:{c.anchor_ref}:{th}".encode("utf-8"))[:32]
+                meta = dict(c.metadata or {})
+                meta.update({
+                    # Original fields
+                    "rel_path": rel,
+                    "file_type": type_label,
+                    "anchor_type": c.anchor_type,
+                    "anchor_ref": c.anchor_ref,
+                    # Enriched metadata for faster operations
+                    "full_path": full_path,
+                    "vault_root": vault_root,
+                    "vault_name": vault_name,
+                    "vault_id": self.vault_id,
+                    "file_name": file_name,
+                    "file_extension": file_extension,
+                    "file_size_bytes": file_size_bytes,
+                    "modified_at": modified_at,
+                    "obsidian_uri": obsidian_uri,
+                })
+                chunks.append(ChunkData(
+                    chunk_id=cid,
+                    doc_id=doc_id,
+                    vault_id=self.vault_id,
+                    anchor_type=c.anchor_type,
+                    anchor_ref=c.anchor_ref,
+                    text=text_norm,
+                    text_hash=th,
+                    metadata=meta,
+                ))
+
+            # Collect links
+            links: list[tuple[str, str]] = []
+            if type_label == "markdown":
+                for link in extracted.metadata.get("wikilinks", []):
+                    links.append((link, "wikilink"))
+
+            # Build ImageTask objects for embedded images and references
+            image_tasks: list[ImageTask] = []
+            for img in extracted.metadata.get("embedded_images", []):
+                image_tasks.append(ImageTask(
+                    parent_doc_id=doc_id,
+                    parent_path=rel,
+                    vault_id=self.vault_id,
+                    file_type=type_label,
+                    image_data=img,
+                    task_type="embedded",
+                    full_path=full_path,
+                    vault_root=vault_root,
+                    vault_name=vault_name,
+                    file_name=file_name,
+                    file_extension=file_extension,
+                    file_size_bytes=file_size_bytes,
+                    modified_at=modified_at,
+                    obsidian_uri=obsidian_uri,
+                ))
+            for ref in extracted.metadata.get("image_references", []):
+                image_tasks.append(ImageTask(
+                    parent_doc_id=doc_id,
+                    parent_path=rel,
+                    vault_id=self.vault_id,
+                    file_type=type_label,
+                    image_data=ref,
+                    task_type="reference",
+                    full_path=full_path,
+                    vault_root=vault_root,
+                    vault_name=vault_name,
+                    file_name=file_name,
+                    file_extension=file_extension,
+                    file_size_bytes=file_size_bytes,
+                    modified_at=modified_at,
+                    obsidian_uri=obsidian_uri,
+                ))
+
+            return ProcessResult(
+                abs_path=abs_path,
+                rel_path=rel,
+                doc_id=doc_id,
+                vault_id=self.vault_id,
+                file_type=type_label,
+                content_hash=chash,
+                mtime=int(st.st_mtime),
+                size=file_size_bytes,
+                chunks=chunks,
+                image_tasks=image_tasks,
+                links=links,
+                error=None,
+                skipped=False,
+                full_path=full_path,
+                vault_root=vault_root,
+                vault_name=vault_name,
+                file_name=file_name,
+                file_extension=file_extension,
+                modified_at=modified_at,
+                obsidian_uri=obsidian_uri,
+            )
+
+        except Exception as e:
+            return error_result(rel, str(e))
+
     def _batch_embed_and_store(self, results: list[ExtractionResult]) -> tuple[int, int]:
         """Batch embed chunks across files and write to store.
 
@@ -473,6 +752,217 @@ class Indexer:
                 embeddings_created += len(batch_ids)
 
         return len(all_chunks), embeddings_created
+
+    def _batch_embed_and_store_results(
+        self, results: list[ProcessResult]
+    ) -> tuple[int, int]:
+        """Batch embed chunks from ProcessResult objects and write to store.
+
+        This is the unified batch method used by both scan and watch pipelines.
+
+        Args:
+            results: List of ProcessResult from _process_file()
+
+        Returns:
+            (chunks_created, embeddings_created)
+        """
+        from ..models import Document, Chunk
+
+        logger = logging.getLogger(__name__)
+
+        # Collect all documents, chunks, and texts
+        all_docs: list[Document] = []
+        all_chunks: list[Chunk] = []
+        all_texts: list[str] = []
+        all_chunk_ids: list[str] = []
+
+        for result in results:
+            doc = Document(
+                doc_id=result.doc_id,
+                vault_id=result.vault_id,
+                rel_path=result.rel_path,
+                file_type=result.file_type,
+                mtime=result.mtime,
+                size=result.size,
+                content_hash=result.content_hash,
+                deleted=False,
+                metadata={"extractor_version": self.cfg.extractor_version},
+            )
+            all_docs.append(doc)
+
+            for chunk_data in result.chunks:
+                chunk = Chunk(
+                    chunk_id=chunk_data.chunk_id,
+                    doc_id=chunk_data.doc_id,
+                    vault_id=chunk_data.vault_id,
+                    anchor_type=chunk_data.anchor_type,
+                    anchor_ref=chunk_data.anchor_ref,
+                    text=chunk_data.text,
+                    text_hash=chunk_data.text_hash,
+                    metadata=chunk_data.metadata,
+                )
+                all_chunks.append(chunk)
+                all_texts.append(chunk_data.text)
+                all_chunk_ids.append(chunk_data.chunk_id)
+
+        # Batch write documents
+        for doc in all_docs:
+            self.store.upsert_document(doc)
+
+        # Batch write chunks
+        if all_chunks:
+            self.store.upsert_chunks(all_chunks)
+
+        # Batch embedding (cross-file) in chunks of embed_batch_size
+        embeddings_created = 0
+        if all_texts:
+            batch_size = self.cfg.embed_batch_size
+            for i in range(0, len(all_texts), batch_size):
+                batch_texts = all_texts[i:i + batch_size]
+                batch_ids = all_chunk_ids[i:i + batch_size]
+
+                vectors = self.embedder.embed_texts(batch_texts)
+                self.store.upsert_embeddings(
+                    batch_ids, model_id=self.embedder.model_id, vectors=vectors
+                )
+                embeddings_created += len(batch_ids)
+
+        logger.debug(
+            f"[batch] Stored {len(all_docs)} docs, {len(all_chunks)} chunks, "
+            f"{embeddings_created} embeddings"
+        )
+        return len(all_chunks), embeddings_created
+
+    def _process_batch(self, jobs: list[Job]) -> BatchStats:
+        """Process a batch of jobs using the unified pipeline.
+
+        This is the core batch processing method for watch mode:
+        1. Group jobs by type (delete, upsert, move)
+        2. Handle deletes first
+        3. Parallel extraction via _process_file()
+        4. Batch embed and store
+        5. Parallel image processing
+
+        Args:
+            jobs: List of Job objects from BatchCollector
+
+        Returns:
+            BatchStats with processing statistics
+        """
+        logger = logging.getLogger(__name__)
+        start = time.time()
+
+        # Group jobs by type
+        delete_jobs: list[Job] = []
+        upsert_jobs: list[Job] = []
+        move_jobs: list[Job] = []
+
+        for job in jobs:
+            if job.kind == "delete":
+                delete_jobs.append(job)
+            elif job.kind == "upsert":
+                upsert_jobs.append(job)
+            elif job.kind == "move":
+                move_jobs.append(job)
+
+        files_deleted = 0
+        files_processed = 0
+        files_failed = 0
+        chunks_created = 0
+        embeddings_created = 0
+        images_processed = 0
+
+        # Step 1: Handle deletes first
+        for job in delete_jobs:
+            try:
+                logger.info(f"[watch] Deleted: {job.rel_path}")
+                self.store.delete_document(self.vault_id, job.rel_path)
+                files_deleted += 1
+            except Exception as e:
+                logger.warning(f"[watch] Delete failed: {job.rel_path} - {e}")
+                files_failed += 1
+
+        # Step 2: Handle moves (delete old, add new to upsert list)
+        for job in move_jobs:
+            try:
+                logger.info(f"[watch] Moved: {job.rel_path} -> {job.new_rel_path}")
+                self.store.delete_document(self.vault_id, job.rel_path)
+                files_deleted += 1
+                # Add new path as upsert
+                if job.new_rel_path:
+                    upsert_jobs.append(Job(kind="upsert", rel_path=job.new_rel_path))
+            except Exception as e:
+                logger.warning(f"[watch] Move failed: {job.rel_path} - {e}")
+                files_failed += 1
+
+        # Step 3: Parallel extraction for upserts
+        if upsert_jobs:
+            process_results: list[ProcessResult] = []
+            image_tasks: list[ImageTask] = []
+
+            paths = [self.cfg.vault_root / job.rel_path for job in upsert_jobs]
+
+            with ThreadPoolExecutor(max_workers=self.cfg.watch_workers) as executor:
+                futures = {
+                    executor.submit(self._process_file, p): p
+                    for p in paths
+                }
+
+                for future in as_completed(futures):
+                    path = futures[future]
+                    try:
+                        result = future.result()
+
+                        if result.skipped:
+                            continue
+
+                        if result.error:
+                            logger.warning(f"[watch] Failed: {path} - {result.error}")
+                            files_failed += 1
+                            continue
+
+                        process_results.append(result)
+                        image_tasks.extend(result.image_tasks)
+                        logger.info(f"[watch] Indexed: {result.rel_path}")
+
+                    except Exception as e:
+                        logger.error(f"[watch] Worker crashed: {path} - {e}")
+                        files_failed += 1
+
+            files_processed = len(process_results)
+
+            # Step 4: Batch embed and store
+            if process_results:
+                chunks_created, embeddings_created = self._batch_embed_and_store_results(
+                    process_results
+                )
+
+            # Step 5: Parallel image processing
+            if image_tasks and self.cfg.image_analysis_provider != "off":
+                # Use watch-specific image worker count
+                original_workers = self.cfg.image_workers
+                try:
+                    # Temporarily override image workers for watch mode
+                    object.__setattr__(self.cfg, 'image_workers', self.cfg.watch_image_workers)
+                    images_processed = self._parallel_process_images(image_tasks)
+                finally:
+                    object.__setattr__(self.cfg, 'image_workers', original_workers)
+
+        elapsed = time.time() - start
+        logger.info(
+            f"[watch] Batch complete: {files_processed} files, {chunks_created} chunks, "
+            f"{files_deleted} deleted in {elapsed:.1f}s"
+        )
+
+        return BatchStats(
+            files_processed=files_processed,
+            files_deleted=files_deleted,
+            files_failed=files_failed,
+            chunks_created=chunks_created,
+            embeddings_created=embeddings_created,
+            images_processed=images_processed,
+            elapsed_seconds=elapsed,
+        )
 
     def _parallel_process_images(self, tasks: list[ImageTask]) -> int:
         """Process images in parallel using thread pool.
@@ -642,7 +1132,13 @@ class Indexer:
         import queue
 
         q = JobQueue()
-        detector = ChangeDetector(root=self.cfg.vault_root, q=q, ignore=self.cfg.ignore)
+        detector = ChangeDetector(
+            root=self.cfg.vault_root,
+            q=q,
+            store=self.store,
+            vault_id=self.vault_id,
+            ignore=self.cfg.ignore
+        )
 
         # Start detector in background thread
         detector_thread = threading.Thread(target=detector.watch, daemon=True)
@@ -687,6 +1183,78 @@ class Indexer:
             print("\nStopping watch mode...")
             # Give detector thread a moment to clean up
             detector_thread.join(timeout=2.0)
+
+    def watch_batched(self) -> None:
+        """Watch loop with batched processing for better efficiency.
+
+        Uses BatchCollector to accumulate filesystem events and processes
+        them in batches using parallel extraction and batched embedding.
+
+        Batches are processed when either:
+        - Batch reaches watch_batch_size files
+        - watch_batch_timeout seconds have elapsed since first job
+        """
+        import queue as queue_module
+
+        logger = logging.getLogger(__name__)
+        q = JobQueue()
+        detector = ChangeDetector(
+            root=self.cfg.vault_root,
+            q=q,
+            store=self.store,
+            vault_id=self.vault_id,
+            ignore=self.cfg.ignore
+        )
+
+        # Create batch collector with config values
+        collector = BatchCollector(
+            max_batch_size=self.cfg.watch_batch_size,
+            batch_timeout_seconds=self.cfg.watch_batch_timeout,
+        )
+
+        # Start detector in background thread
+        detector_thread = threading.Thread(target=detector.watch, daemon=True)
+        detector_thread.start()
+
+        logger.info(f"[watch] Starting batched watch on: {self.cfg.vault_root}")
+        logger.info(
+            f"[watch] Batch config: size={self.cfg.watch_batch_size}, "
+            f"timeout={self.cfg.watch_batch_timeout}s, "
+            f"workers={self.cfg.watch_workers}"
+        )
+        print(f"Watching {self.cfg.vault_root} for changes (batched mode). Press Ctrl+C to stop.")
+
+        def process_batch_if_ready(batch: list[Job] | None) -> None:
+            """Process batch if available."""
+            if batch:
+                self._process_batch(batch)
+
+        try:
+            while True:
+                try:
+                    # Check for new jobs with short timeout
+                    job = q.get(timeout=0.5)
+                    q.task_done()
+
+                    # Add to collector, process if batch is ready
+                    batch = collector.add_job(job)
+                    process_batch_if_ready(batch)
+
+                except queue_module.Empty:
+                    # No new jobs - check for timeout flush
+                    batch = collector.flush_if_timeout()
+                    process_batch_if_ready(batch)
+
+        except KeyboardInterrupt:
+            # Flush any remaining jobs
+            batch = collector.flush()
+            if batch:
+                logger.info(f"[watch] Flushing {len(batch)} remaining jobs...")
+                self._process_batch(batch)
+
+            print("\nStopping watch mode...")
+            detector_thread.join(timeout=2.0)
+            logger.info("[watch] Watch mode stopped")
 
     def _index_one(self, abs_path: Path, force: bool = False) -> None:
         if not abs_path.is_file():
@@ -1281,7 +1849,13 @@ class MultiVaultIndexer:
         from .change_detector import ChangeDetector
 
         q = JobQueue()
-        detector = ChangeDetector(root=indexer.cfg.vault_root, q=q, ignore=indexer.cfg.ignore)
+        detector = ChangeDetector(
+            root=indexer.cfg.vault_root,
+            q=q,
+            store=indexer.store,
+            vault_id=indexer.vault_id,
+            ignore=indexer.cfg.ignore
+        )
 
         # Start detector in background
         import threading

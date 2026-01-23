@@ -92,32 +92,45 @@ vault/
 
 **What:** Converts files into searchable chunks
 **Code:** `src/ragtriever/indexer/indexer.py`
-**Entry Point:** `Indexer.scan()`
+**Entry Point:** `Indexer.scan()` or `Indexer.watch()`
 
-**Pipeline:**
+**Unified Processing (`_process_file()`):**
+
+Both scan and watch modes use a shared `_process_file()` method that:
+- Is thread-safe (no DB writes, no shared mutable state)
+- Returns a `ProcessResult` with chunks and image tasks
+- Handles errors gracefully (returns error in result, doesn't raise)
+- Generates deterministic IDs (same file = same doc_id/chunk_ids)
+
 ```python
-for file in vault:
-    1. Extract  → text + metadata + images  (MarkdownExtractor, PDFExtractor, ImageExtractor)
-       ├─ Text content from document
-       ├─ Metadata (frontmatter, page count, etc.)
-       └─ Embedded images (PDFs, PPTX) or image references (Markdown)
+# Single file processing (thread-safe, no DB writes)
+result = indexer._process_file(abs_path)  # → ProcessResult
 
-    2. Chunk    → segments                  (MarkdownChunker, BoundaryMarkerChunker)
-       └─ Text chunks with anchor types
+# ProcessResult contains:
+# - chunks: list[ChunkData]      # Ready for embedding
+# - image_tasks: list[ImageTask] # Ready for image processing
+# - links: list[tuple]           # Wikilinks for graph
+# - error: str | None            # If processing failed
+# - skipped: bool                # If file should be skipped
+```
 
-    3. Process embedded images              (ImageExtractor via temp files)
-       ├─ Extract image bytes from PDFs (PyMuPDF)
-       ├─ Extract image bytes from PPTX slides (python-pptx)
-       ├─ Resolve Markdown image references
-       └─ Analyze with Tesseract/Gemini/Vertex AI
+**Pipeline Phases:**
+```
+Phase 0: Reconciliation (detect deleted files)
+Phase 1: Parallel extraction via _process_file()
+    - ThreadPoolExecutor(extraction_workers)
+    - Each worker: validate → extract → chunk → build metadata
+    - Returns ProcessResult with chunks + image_tasks
 
-    4. Embed    → vectors                   (SentenceTransformers, Ollama)
-       ├─ Text chunks → embeddings
-       └─ Image analysis text → embeddings
+Phase 2: Batched embedding and storage
+    - Collect chunks across files
+    - Batch embed (embed_batch_size chunks)
+    - Batch write to SQLite
 
-    5. Store    → SQLite + FTS5             (LibSqlStore)
-       ├─ Text chunks linked to documents
-       └─ Image chunks linked to parent documents
+Phase 3: Parallel image analysis
+    - ThreadPoolExecutor(image_workers)
+    - Process embedded/referenced images
+    - Create additional searchable chunks
 ```
 
 **Pluggable via Protocol classes:**
@@ -468,13 +481,16 @@ def on_deleted(event):
 
 **File Lifecycle Handling:**
 
-Both scan and watch modes handle the complete file lifecycle:
+Both scan and watch modes handle the complete file lifecycle, including directory-level operations:
 
 | Event | Scan Mode | Watch Mode |
 |-------|-----------|------------|
-| **Add** | Indexed on scan | Indexed immediately |
-| **Change** | Re-indexed on scan | Re-indexed immediately |
-| **Delete** | Detected via reconciliation | Detected via filesystem event |
+| **File Add** | Indexed on scan | Indexed immediately |
+| **File Change** | Re-indexed on scan | Re-indexed immediately |
+| **File Delete** | Detected via reconciliation | Detected via filesystem event |
+| **Directory Add** | All files indexed on scan | All files indexed immediately |
+| **Directory Delete** | Files detected via reconciliation | Queries DB for files under path, removes all |
+| **Directory Move** | Old paths deleted, new paths added | Queries DB for files, updates all paths atomically |
 
 **Deletion Detection (Scan Mode):**
 ```python
@@ -482,13 +498,33 @@ Both scan and watch modes handle the complete file lifecycle:
 fs_files = {rel_path for p in scan_files()}  # Files on disk
 indexed_files = store.get_indexed_files(vault_id)  # Files in DB
 
-# Find deleted files
+# Find deleted files (works for individual files and entire directories)
 deleted = indexed_files - fs_files
 for rel_path in deleted:
     store.delete_document(vault_id, rel_path)  # Full cleanup
 ```
 
-**What Gets Cleaned Up:**
+**Directory Operations (Watch Mode):**
+```python
+# Directory deletion
+def on_deleted(event):
+    if event.is_directory:
+        # Query all indexed files under directory path
+        files_under = store.get_files_under_path(vault_id, rel_path)
+        for file_rel in files_under:
+            queue.put(Job(kind="delete", rel_path=file_rel))
+
+# Directory move
+def on_moved(event):
+    if event.is_directory:
+        # Query all indexed files and update their paths
+        files_under = store.get_files_under_path(vault_id, old_rel_path)
+        for file_rel in files_under:
+            new_file_rel = file_rel.replace(old_rel_path, new_rel_path, 1)
+            queue.put(Job(kind="move", rel_path=file_rel, new_rel_path=new_file_rel))
+```
+
+**What Gets Cleaned Up on Deletion:**
 - Document marked as `deleted=1`
 - All chunks removed
 - All embeddings removed
