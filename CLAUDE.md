@@ -323,11 +323,73 @@ src/ragtriever/
 - `src/ragtriever/store/faiss_index.py`: Optional FAISS index for approximate NN search (enabled via `use_faiss = true`)
 - `src/ragtriever/chunking/markdown_chunker.py`: v2 chunker with overlap support for context preservation
 
-### Hybrid Retrieval Strategy
-1. Lexical candidates via SQLite FTS5
-2. Semantic candidates via vector search
-3. Merge + dedupe with configurable weights
-4. Optional graph boost (backlinks) and rerank
+### Hybrid Retrieval & Ranking
+
+RAGtriever uses a multi-stage ranking pipeline to produce high-quality search results:
+
+**Stage 1: Candidate Retrieval**
+- Lexical candidates via SQLite FTS5 (k_lex results)
+- Semantic candidates via vector search (k_vec results)
+
+**Stage 2: Fusion (RRF or Weighted)**
+
+Default: Reciprocal Rank Fusion (RRF) - score-agnostic rank-based fusion that handles different score scales automatically.
+
+```
+RRF_score = Σ(1 / (k + rank)) where k=60
+```
+
+Why RRF:
+- Score-agnostic: handles different scales from lexical vs vector
+- Well-researched: standard in information retrieval
+- No tuning: k=60 works universally
+
+Alternative: Weighted scoring (legacy) with configurable w_vec/w_lex weights.
+
+**Stage 3: Score Boosting**
+
+After fusion, scores can be boosted by document signals:
+
+| Signal | Default | Effect |
+|--------|---------|--------|
+| **Backlinks** | 10% per link (max 2x) | Hub documents rank higher |
+| **Recency** | Tiered (fresh/recent/old) | Fresh docs get 20% boost |
+
+Recency tiers (configurable):
+- Fresh (<14 days): 1.20x boost
+- Recent (<60 days): 1.10x boost
+- Standard (<180 days): 1.00x (no change)
+- Old (>180 days): 0.95x (slight penalty)
+
+**Stage 4: Optional Reranking**
+
+Cross-encoder reranking with `use_rerank = true` for final quality improvement.
+
+**Configuration:**
+```toml
+[retrieval]
+# Fusion
+fusion_algorithm = "rrf"  # "rrf" (default) or "weighted"
+rrf_k = 60
+
+# Boosts
+backlink_boost_enabled = true
+backlink_boost_weight = 0.1
+backlink_boost_cap = 10
+recency_boost_enabled = true
+recency_fresh_days = 14
+recency_recent_days = 60
+recency_old_days = 180
+
+# Reranking (optional)
+use_rerank = false
+```
+
+**Code Reference:**
+- `src/ragtriever/retrieval/hybrid.py`: RRF and weighted fusion
+- `src/ragtriever/retrieval/boosts.py`: Backlink and recency boosting
+- `src/ragtriever/retrieval/reranker.py`: Cross-encoder reranking
+- `src/ragtriever/retrieval/retriever.py`: Pipeline orchestration
 
 ### File Lifecycle Management
 

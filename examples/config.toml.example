@@ -125,6 +125,58 @@ use_rerank = false
 #   "cross-encoder/ms-marco-MiniLM-L-6-v2"   - Balanced (100-200ms, 80MB) ✅ Default
 #   "cross-encoder/ms-marco-electra-base"    - Accurate (200-400ms, 400MB)
 
+# Fusion Algorithm
+# Controls how vector and lexical search results are merged
+#
+# "rrf" (default): Reciprocal Rank Fusion - robust rank-based fusion
+#   score = sum(1 / (k + rank_i)) for each list containing the doc
+#   Doesn't require score calibration, works well across different scales
+#
+# "weighted": Score-based weighted average
+#   score = vec_weight * vec_score + lex_weight * lex_score
+#   Requires normalized scores, sensitive to score distributions
+#
+fusion_algorithm = "rrf"
+rrf_k = 60  # RRF constant (higher = more uniform weighting across ranks)
+
+# Backlink Boost
+# Boosts documents that have more incoming links from other documents
+# Implements a simplified PageRank-like authority signal
+#
+# How it works:
+#   - Each backlink adds backlink_boost_weight to the document score
+#   - Maximum boost = backlink_boost_weight * backlink_boost_cap
+#   - Example: 5 backlinks with weight=0.1 adds 0.5 (50%) to the score
+#
+# When to enable:
+#   - Knowledge bases where well-linked notes are more authoritative
+#   - Zettelkasten-style vaults with dense cross-references
+#   - When important "hub" documents should rank higher
+#
+backlink_boost_enabled = true
+backlink_boost_weight = 0.1  # Score boost per backlink (10%)
+backlink_boost_cap = 10      # Maximum backlinks counted (caps boost at 100%)
+
+# Recency Boost
+# Boosts recently modified documents, decaying with age
+# Useful when fresh information is more relevant
+#
+# How it works:
+#   - Files modified within fresh_days: full boost (e.g., +20%)
+#   - Files modified within recent_days: partial boost (e.g., +10%)
+#   - Files modified within old_days: no change
+#   - Files older than old_days: slight penalty (e.g., -5%)
+#
+# When to enable:
+#   - Active projects where recent edits matter more
+#   - News/research vaults where freshness indicates relevance
+#   - Disable for reference material where age doesn't matter
+#
+recency_boost_enabled = true
+recency_fresh_days = 14   # Files this recent get max boost
+recency_recent_days = 60  # Files this recent get medium boost
+recency_old_days = 180    # Files older than this get slight penalty
+
 # Parallelization (3.6x speedup for full scans)
 # Parallel scanning is enabled by default
 [indexing]

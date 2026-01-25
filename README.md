@@ -30,6 +30,9 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 ## Features
 
 - **Hybrid Retrieval** - Combines vector embeddings with full-text search for superior results
+- **RRF Fusion** - Reciprocal Rank Fusion for robust score-agnostic result merging
+- **Backlink Boost** - Hub documents with more incoming links rank higher (configurable)
+- **Recency Boost** - Fresh documents get priority with tiered time-based boosting
 - **Chunk Overlap (v1.0+)** - Context preservation with configurable 200-char overlap between chunks
 - **Query Instruction Prefix (v1.0+)** - Asymmetric retrieval for better BGE model performance
 - **Cross-Encoder Reranking (Optional)** - Refine search results with cross-encoder for 20-30% quality improvement

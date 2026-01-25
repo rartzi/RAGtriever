@@ -106,6 +106,21 @@ class VaultConfig:
     rerank_device: str = "cpu"  # cpu|cuda|mps
     rerank_top_k: int = 10
 
+    # Fusion algorithm
+    fusion_algorithm: str = "rrf"  # "rrf" (Reciprocal Rank Fusion) or "weighted"
+    rrf_k: int = 60  # RRF constant (controls rank importance decay)
+
+    # Backlink boost
+    backlink_boost_enabled: bool = True
+    backlink_boost_weight: float = 0.1  # Score boost per backlink (10%)
+    backlink_boost_cap: int = 10  # Maximum backlinks counted for boost
+
+    # Recency boost
+    recency_boost_enabled: bool = True
+    recency_fresh_days: int = 14  # Files modified within this many days get max boost
+    recency_recent_days: int = 60  # Files modified within this many days get medium boost
+    recency_old_days: int = 180  # Files older than this get penalty
+
     # Parallelization (scan mode)
     extraction_workers: int = 8       # Number of parallel extraction workers
     embed_batch_size: int = 256       # Cross-file embedding batch size
@@ -178,6 +193,39 @@ class VaultConfig:
             raise ValueError(f"Invalid rerank_device: {rerank_device}. Must be one of: cpu, cuda, mps.")
         if rerank_top_k < 1 or rerank_top_k > 1000:
             raise ValueError(f"Invalid rerank_top_k: {rerank_top_k}. Must be between 1 and 1000.")
+
+        # Validate fusion algorithm parameters
+        fusion_algorithm = ret.get("fusion_algorithm", "rrf")
+        if fusion_algorithm not in ("rrf", "weighted"):
+            raise ValueError(f"Invalid fusion_algorithm: {fusion_algorithm}. Must be one of: rrf, weighted.")
+        rrf_k = int(ret.get("rrf_k", 60))
+        if rrf_k < 1 or rrf_k > 1000:
+            raise ValueError(f"Invalid rrf_k: {rrf_k}. Must be between 1 and 1000.")
+
+        # Validate backlink boost parameters
+        backlink_boost_enabled = bool(ret.get("backlink_boost_enabled", True))
+        backlink_boost_weight = float(ret.get("backlink_boost_weight", 0.1))
+        if backlink_boost_weight < 0.0 or backlink_boost_weight > 1.0:
+            raise ValueError(f"Invalid backlink_boost_weight: {backlink_boost_weight}. Must be between 0.0 and 1.0.")
+        backlink_boost_cap = int(ret.get("backlink_boost_cap", 10))
+        if backlink_boost_cap < 1 or backlink_boost_cap > 100:
+            raise ValueError(f"Invalid backlink_boost_cap: {backlink_boost_cap}. Must be between 1 and 100.")
+
+        # Validate recency boost parameters
+        recency_boost_enabled = bool(ret.get("recency_boost_enabled", True))
+        recency_fresh_days = int(ret.get("recency_fresh_days", 14))
+        recency_recent_days = int(ret.get("recency_recent_days", 60))
+        recency_old_days = int(ret.get("recency_old_days", 180))
+        if recency_fresh_days < 1 or recency_fresh_days > 365:
+            raise ValueError(f"Invalid recency_fresh_days: {recency_fresh_days}. Must be between 1 and 365.")
+        if recency_recent_days < 1 or recency_recent_days > 730:
+            raise ValueError(f"Invalid recency_recent_days: {recency_recent_days}. Must be between 1 and 730.")
+        if recency_old_days < 1 or recency_old_days > 3650:
+            raise ValueError(f"Invalid recency_old_days: {recency_old_days}. Must be between 1 and 3650.")
+        if recency_fresh_days >= recency_recent_days:
+            raise ValueError(f"recency_fresh_days ({recency_fresh_days}) must be less than recency_recent_days ({recency_recent_days}).")
+        if recency_recent_days >= recency_old_days:
+            raise ValueError(f"recency_recent_days ({recency_recent_days}) must be less than recency_old_days ({recency_old_days}).")
 
         # Validate and resolve Vertex AI credentials file if specified
         vertex_ai_credentials_file = None
@@ -291,6 +339,15 @@ class VaultConfig:
             rerank_model=rerank_model,
             rerank_device=rerank_device,
             rerank_top_k=rerank_top_k,
+            fusion_algorithm=fusion_algorithm,
+            rrf_k=rrf_k,
+            backlink_boost_enabled=backlink_boost_enabled,
+            backlink_boost_weight=backlink_boost_weight,
+            backlink_boost_cap=backlink_boost_cap,
+            recency_boost_enabled=recency_boost_enabled,
+            recency_fresh_days=recency_fresh_days,
+            recency_recent_days=recency_recent_days,
+            recency_old_days=recency_old_days,
             extraction_workers=int(indexing.get("extraction_workers", 8)),
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
             image_workers=int(indexing.get("image_workers", 8)),
@@ -386,6 +443,21 @@ class MultiVaultConfig:
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     rerank_device: str = "cpu"
     rerank_top_k: int = 10
+
+    # Fusion algorithm
+    fusion_algorithm: str = "rrf"  # "rrf" (Reciprocal Rank Fusion) or "weighted"
+    rrf_k: int = 60  # RRF constant (controls rank importance decay)
+
+    # Backlink boost
+    backlink_boost_enabled: bool = True
+    backlink_boost_weight: float = 0.1  # Score boost per backlink (10%)
+    backlink_boost_cap: int = 10  # Maximum backlinks counted for boost
+
+    # Recency boost
+    recency_boost_enabled: bool = True
+    recency_fresh_days: int = 14  # Files modified within this many days get max boost
+    recency_recent_days: int = 60  # Files modified within this many days get medium boost
+    recency_old_days: int = 180  # Files older than this get penalty
 
     # Parallelization (scan mode)
     extraction_workers: int = 8
@@ -500,6 +572,39 @@ class MultiVaultConfig:
             os.environ.setdefault("HF_HUB_OFFLINE", "1")
             os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+        # Validate fusion algorithm parameters
+        fusion_algorithm = ret.get("fusion_algorithm", "rrf")
+        if fusion_algorithm not in ("rrf", "weighted"):
+            raise ValueError(f"Invalid fusion_algorithm: {fusion_algorithm}. Must be one of: rrf, weighted.")
+        rrf_k = int(ret.get("rrf_k", 60))
+        if rrf_k < 1 or rrf_k > 1000:
+            raise ValueError(f"Invalid rrf_k: {rrf_k}. Must be between 1 and 1000.")
+
+        # Validate backlink boost parameters
+        backlink_boost_enabled = bool(ret.get("backlink_boost_enabled", True))
+        backlink_boost_weight = float(ret.get("backlink_boost_weight", 0.1))
+        if backlink_boost_weight < 0.0 or backlink_boost_weight > 1.0:
+            raise ValueError(f"Invalid backlink_boost_weight: {backlink_boost_weight}. Must be between 0.0 and 1.0.")
+        backlink_boost_cap = int(ret.get("backlink_boost_cap", 10))
+        if backlink_boost_cap < 1 or backlink_boost_cap > 100:
+            raise ValueError(f"Invalid backlink_boost_cap: {backlink_boost_cap}. Must be between 1 and 100.")
+
+        # Validate recency boost parameters
+        recency_boost_enabled = bool(ret.get("recency_boost_enabled", True))
+        recency_fresh_days = int(ret.get("recency_fresh_days", 14))
+        recency_recent_days = int(ret.get("recency_recent_days", 60))
+        recency_old_days = int(ret.get("recency_old_days", 180))
+        if recency_fresh_days < 1 or recency_fresh_days > 365:
+            raise ValueError(f"Invalid recency_fresh_days: {recency_fresh_days}. Must be between 1 and 365.")
+        if recency_recent_days < 1 or recency_recent_days > 730:
+            raise ValueError(f"Invalid recency_recent_days: {recency_recent_days}. Must be between 1 and 730.")
+        if recency_old_days < 1 or recency_old_days > 3650:
+            raise ValueError(f"Invalid recency_old_days: {recency_old_days}. Must be between 1 and 3650.")
+        if recency_fresh_days >= recency_recent_days:
+            raise ValueError(f"recency_fresh_days ({recency_fresh_days}) must be less than recency_recent_days ({recency_recent_days}).")
+        if recency_recent_days >= recency_old_days:
+            raise ValueError(f"recency_recent_days ({recency_recent_days}) must be less than recency_old_days ({recency_old_days}).")
+
         return MultiVaultConfig(
             vaults=vaults,
             index_dir=index_dir,
@@ -549,6 +654,15 @@ class MultiVaultConfig:
             rerank_model=ret.get("rerank_model", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             rerank_device=ret.get("rerank_device", "cpu"),
             rerank_top_k=int(ret.get("rerank_top_k", 10)),
+            fusion_algorithm=fusion_algorithm,
+            rrf_k=rrf_k,
+            backlink_boost_enabled=backlink_boost_enabled,
+            backlink_boost_weight=backlink_boost_weight,
+            backlink_boost_cap=backlink_boost_cap,
+            recency_boost_enabled=recency_boost_enabled,
+            recency_fresh_days=recency_fresh_days,
+            recency_recent_days=recency_recent_days,
+            recency_old_days=recency_old_days,
             extraction_workers=int(indexing.get("extraction_workers", 8)),
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
             image_workers=int(indexing.get("image_workers", 8)),
