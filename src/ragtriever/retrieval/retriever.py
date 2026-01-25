@@ -48,6 +48,9 @@ class Retriever:
             recency_fresh_days=self.cfg.recency_fresh_days,
             recency_recent_days=self.cfg.recency_recent_days,
             recency_old_days=self.cfg.recency_old_days,
+            tag_boost_enabled=self.cfg.tag_boost_enabled,
+            tag_boost_weight=self.cfg.tag_boost_weight,
+            tag_boost_cap=self.cfg.tag_boost_cap,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
 
@@ -79,12 +82,15 @@ class Retriever:
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
         # Apply boosts (backlinks, recency)
-        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+        if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
+            or self.cfg.tag_boost_enabled):
             # Fetch backlink counts if needed
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
-            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+            merged = self.boost_adjuster.apply_boosts(
+                merged, backlink_counts=backlink_counts, query=query
+            )
 
         # Rerank if enabled (final pass)
         if self.reranker:
@@ -142,6 +148,9 @@ class MultiVaultRetriever:
             recency_fresh_days=cfg.recency_fresh_days,
             recency_recent_days=cfg.recency_recent_days,
             recency_old_days=cfg.recency_old_days,
+            tag_boost_enabled=cfg.tag_boost_enabled,
+            tag_boost_weight=cfg.tag_boost_weight,
+            tag_boost_cap=cfg.tag_boost_cap,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
 
@@ -216,12 +225,15 @@ class MultiVaultRetriever:
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
         # Apply boosts (backlinks, recency)
-        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+        if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
+            or self.cfg.tag_boost_enabled):
             # Fetch backlink counts if needed
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
-            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+            merged = self.boost_adjuster.apply_boosts(
+                merged, backlink_counts=backlink_counts, query=query
+            )
 
         # Rerank if enabled (final pass)
         if self.reranker:

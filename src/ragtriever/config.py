@@ -121,6 +121,11 @@ class VaultConfig:
     recency_recent_days: int = 60  # Files modified within this many days get medium boost
     recency_old_days: int = 180  # Files older than this get penalty
 
+    # Tag boost
+    tag_boost_enabled: bool = True
+    tag_boost_weight: float = 0.15  # Score boost per matching tag (15%)
+    tag_boost_cap: int = 3  # Maximum tags counted for boost (caps at 45%)
+
     # Parallelization (scan mode)
     extraction_workers: int = 8       # Number of parallel extraction workers
     embed_batch_size: int = 256       # Cross-file embedding batch size
