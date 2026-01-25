@@ -35,6 +35,12 @@ class BoostConfig:
     recency_recent_boost: float = 1.10  # 10% boost for recent
     recency_old_penalty: float = 0.95  # 5% penalty for old
 
+    # Title/heading boost
+    heading_boost_enabled: bool = True
+    heading_h1_boost: float = 1.30  # 30% boost for H1 (title)
+    heading_h2_boost: float = 1.15  # 15% boost for H2
+    heading_h3_boost: float = 1.08  # 8% boost for H3
+
 
 @dataclass
 class BoostAdjuster:
@@ -82,6 +88,14 @@ class BoostAdjuster:
                     recency_boost = self._calculate_recency_boost(mtime)
                     score *= recency_boost
                     boost_info["recency_boost"] = recency_boost
+
+            # Heading boost
+            if self.config.heading_boost_enabled:
+                heading_boost, heading_level = self._calculate_heading_boost(r)
+                if heading_boost > 1.0:
+                    score *= heading_boost
+                    boost_info["heading_boost"] = heading_boost
+                    boost_info["heading_level"] = heading_level
 
             # Create boosted result with updated metadata
             new_metadata = {**r.metadata, "original_score": r.score, **boost_info}
@@ -137,3 +151,33 @@ class BoostAdjuster:
             return 1.0  # Standard, no boost or penalty
         else:
             return self.config.recency_old_penalty
+
+    def _calculate_heading_boost(self, result: SearchResult) -> tuple[float, int | None]:
+        """Calculate boost based on heading level.
+
+        Args:
+            result: Search result to check for heading metadata
+
+        Returns:
+            Tuple of (boost_multiplier, heading_level)
+        """
+        if not self.config.heading_boost_enabled:
+            return 1.0, None
+
+        # Check metadata for heading level (preferred)
+        level = result.metadata.get("level")
+        if level is not None:
+            try:
+                level = int(level)
+                if level == 1:
+                    return self.config.heading_h1_boost, level
+                elif level == 2:
+                    return self.config.heading_h2_boost, level
+                elif level == 3:
+                    return self.config.heading_h3_boost, level
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback: check anchor_type for heading markers
+        anchor_type = result.metadata.get("anchor_type", "")
+        if "heading" in str(anchor_type).lower():

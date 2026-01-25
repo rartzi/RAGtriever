@@ -121,6 +121,12 @@ class VaultConfig:
     recency_recent_days: int = 60  # Files modified within this many days get medium boost
     recency_old_days: int = 180  # Files older than this get penalty
 
+    # Title/heading boost
+    heading_boost_enabled: bool = True
+    heading_h1_boost: float = 1.30  # 30% boost for H1 (title) chunks
+    heading_h2_boost: float = 1.15  # 15% boost for H2 chunks
+    heading_h3_boost: float = 1.08  # 8% boost for H3 chunks
+
     # Parallelization (scan mode)
     extraction_workers: int = 8       # Number of parallel extraction workers
     embed_batch_size: int = 256       # Cross-file embedding batch size
