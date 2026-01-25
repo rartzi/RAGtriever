@@ -12,6 +12,7 @@ from ..store.libsql_store import LibSqlStore
 from .hybrid import HybridRanker
 from .boosts import BoostAdjuster, BoostConfig
 from .reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
+from .diversity import MMRDiversifier, DiversityConfig
 
 @dataclass
 class Retriever:
@@ -62,6 +63,14 @@ class Retriever:
 
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
+
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -100,6 +109,9 @@ class Retriever:
             merged = self.boost_adjuster.apply_boosts(
                 merged, backlink_counts=backlink_counts, query=query
             )
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:
@@ -166,6 +178,14 @@ class MultiVaultRetriever:
             tag_boost_cap=cfg.tag_boost_cap,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -247,6 +267,9 @@ class MultiVaultRetriever:
             merged = self.boost_adjuster.apply_boosts(
                 merged, backlink_counts=backlink_counts, query=query
             )
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:

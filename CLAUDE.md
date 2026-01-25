@@ -354,12 +354,32 @@ After fusion, scores can be boosted by document signals:
 |--------|---------|--------|
 | **Backlinks** | 10% per link (max 2x) | Hub documents rank higher |
 | **Recency** | Tiered (fresh/recent/old) | Fresh docs get 20% boost |
+| **Heading Level** | H1: 30%, H2: 15%, H3: 8% | Title/heading chunks rank higher |
+| **Tag Matches** | 15% per tag (max 3) | Chunks with matching tags rank higher |
 
+**Backlink Boost:**
+Documents with many incoming links (hub documents) receive higher scores, as they're likely to be more important or central to the vault's knowledge graph.
+
+**Recency Boost:**
 Recency tiers (configurable):
 - Fresh (<14 days): 1.20x boost
 - Recent (<60 days): 1.10x boost
 - Standard (<180 days): 1.00x (no change)
 - Old (>180 days): 0.95x (slight penalty)
+
+**Heading Boost:**
+Chunks from section titles and headings receive higher scores based on their hierarchy level:
+- H1 (document title): 30% boost
+- H2 (major sections): 15% boost
+- H3 (subsections): 8% boost
+
+This helps surface high-level overviews and key sections in search results.
+
+**Tag Boost:**
+Chunks whose tags match query terms receive a boost:
+- 15% boost per matching tag (up to 3 tags counted)
+- Tags are normalized (# prefix removed, hyphens/underscores treated as spaces)
+- Example: query "machine learning" matches tag `#machine-learning`
 
 **Stage 4: Optional Reranking**
 
@@ -376,10 +396,20 @@ rrf_k = 60
 backlink_boost_enabled = true
 backlink_boost_weight = 0.1
 backlink_boost_cap = 10
+
 recency_boost_enabled = true
 recency_fresh_days = 14
 recency_recent_days = 60
 recency_old_days = 180
+
+heading_boost_enabled = true
+heading_h1_boost = 1.30  # 30% boost for H1 (title)
+heading_h2_boost = 1.15  # 15% boost for H2
+heading_h3_boost = 1.08  # 8% boost for H3
+
+tag_boost_enabled = true
+tag_boost_weight = 0.15  # 15% boost per matching tag
+tag_boost_cap = 3        # Max 3 tags counted (caps at 45% boost)
 
 # Reranking (optional)
 use_rerank = false
@@ -387,9 +417,52 @@ use_rerank = false
 
 **Code Reference:**
 - `src/ragtriever/retrieval/hybrid.py`: RRF and weighted fusion
-- `src/ragtriever/retrieval/boosts.py`: Backlink and recency boosting
+- `src/ragtriever/retrieval/boosts.py`: Backlink, recency, heading, and tag boosting
 - `src/ragtriever/retrieval/reranker.py`: Cross-encoder reranking
 - `src/ragtriever/retrieval/retriever.py`: Pipeline orchestration
+
+### Result Diversity (MMR)
+
+RAGtriever uses Maximal Marginal Relevance (MMR) to ensure diverse search results by limiting the number of chunks returned from the same document. This prevents a single highly-relevant document from dominating all results.
+
+**How It Works:**
+
+1. **Document Limit**: By default, at most 2 chunks per document are returned (configurable via `max_per_document`)
+2. **Relevance Preservation**: Results maintain their original relevance ordering within the diversity constraint
+3. **Backfill Behavior**: If limiting chunks per document produces fewer than k results, remaining slots are filled from skipped results
+
+**Why MMR:**
+- **Broader coverage**: Users see information from multiple documents rather than many chunks from one file
+- **Better exploration**: Exposes diverse perspectives and related concepts across the vault
+- **Reduced redundancy**: Avoids showing near-duplicate content from the same document
+
+**Example:**
+
+Without MMR (top 10 results):
+- Document A: chunks 1, 2, 3, 4, 5
+- Document B: chunks 1, 2, 3
+- Document C: chunks 1, 2
+
+With MMR (max_per_document=2):
+- Document A: chunks 1, 2
+- Document B: chunks 1, 2
+- Document C: chunks 1, 2
+- Document D: chunks 1, 2
+- Document E: chunks 1, 2
+
+**Configuration:**
+
+```toml
+[retrieval]
+diversity_enabled = true       # Enable MMR diversity
+max_per_document = 2           # Max chunks from same document
+```
+
+**Disabling:**
+Set `diversity_enabled = false` to return all top-k results regardless of source document.
+
+**Code Reference:**
+- `src/ragtriever/retrieval/diversity.py`: MMR diversification implementation
 
 ### File Lifecycle Management
 
@@ -519,7 +592,7 @@ TOML-based config (see `examples/config.toml.example`):
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/aigateway/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[aigateway]`: url, key, model, timeout, endpoint_path (for Microsoft AI Gateway proxy to Gemini)
-- `[retrieval]`: k_vec, k_lex, top_k, use_rerank
+- `[retrieval]`: k_vec, k_lex, top_k, use_rerank, fusion_algorithm (rrf/weighted), boost settings (backlinks, recency, heading, tag), diversity_enabled, max_per_document
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
 
