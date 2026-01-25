@@ -26,14 +26,25 @@ class BoostConfig:
     backlink_weight: float = 0.1  # 10% per backlink
     backlink_cap: int = 10  # Max backlinks to count (caps at 2x boost)
 
-    # Recency boost (tiered)
+    # Recency boost (tiered) - SUBTLE nudge for fresh content
     recency_enabled: bool = True
     recency_fresh_days: int = 14  # < 14 days = fresh
     recency_recent_days: int = 60  # < 60 days = recent
     recency_old_days: int = 180  # > 180 days = old
-    recency_fresh_boost: float = 1.20  # 20% boost for fresh
-    recency_recent_boost: float = 1.10  # 10% boost for recent
-    recency_old_penalty: float = 0.95  # 5% penalty for old
+    recency_fresh_boost: float = 1.10  # 10% boost for fresh
+    recency_recent_boost: float = 1.05  # 5% boost for recent
+    recency_old_penalty: float = 0.98  # 2% penalty for old
+
+    # Title/heading boost - DISABLED (content/semantics matter most!)
+    heading_boost_enabled: bool = False
+    heading_h1_boost: float = 1.05  # 5% boost for H1 (title)
+    heading_h2_boost: float = 1.03  # 3% boost for H2
+    heading_h3_boost: float = 1.02  # 2% boost for H3
+
+    # Tag boost - DISABLED (content/semantics matter most!)
+    tag_boost_enabled: bool = False
+    tag_boost_weight: float = 0.03  # 3% boost per matching tag
+    tag_boost_cap: int = 3  # Max tags counted (caps at 9% boost)
 
 
 @dataclass
@@ -46,12 +57,14 @@ class BoostAdjuster:
         self,
         results: list[SearchResult],
         backlink_counts: dict[str, int] | None = None,
+        query: str | None = None,
     ) -> list[SearchResult]:
         """Apply configured boosts to search results.
 
         Args:
             results: Search results to boost
             backlink_counts: Pre-fetched backlink counts by doc_id (optional)
+            query: Original search query for tag matching (optional)
 
         Returns:
             Results with adjusted scores, re-sorted by boosted score
@@ -82,6 +95,22 @@ class BoostAdjuster:
                     recency_boost = self._calculate_recency_boost(mtime)
                     score *= recency_boost
                     boost_info["recency_boost"] = recency_boost
+
+            # Heading boost
+            if self.config.heading_boost_enabled:
+                heading_boost, heading_level = self._calculate_heading_boost(r)
+                if heading_boost > 1.0:
+                    score *= heading_boost
+                    boost_info["heading_boost"] = heading_boost
+                    boost_info["heading_level"] = heading_level
+
+            # Tag boost
+            if self.config.tag_boost_enabled and query:
+                tag_boost, tag_matches = self._calculate_tag_boost(r, query)
+                if tag_boost > 1.0:
+                    score *= tag_boost
+                    boost_info["tag_boost"] = tag_boost
+                    boost_info["tag_matches"] = tag_matches
 
             # Create boosted result with updated metadata
             new_metadata = {**r.metadata, "original_score": r.score, **boost_info}
@@ -137,3 +166,77 @@ class BoostAdjuster:
             return 1.0  # Standard, no boost or penalty
         else:
             return self.config.recency_old_penalty
+
+    def _calculate_heading_boost(self, result: SearchResult) -> tuple[float, int | None]:
+        """Calculate boost based on heading level.
+
+        Args:
+            result: Search result to check for heading metadata
+
+        Returns:
+            Tuple of (boost_multiplier, heading_level)
+        """
+        if not self.config.heading_boost_enabled:
+            return 1.0, None
+
+        # Check metadata for heading level (preferred)
+        level = result.metadata.get("level")
+        if level is not None:
+            try:
+                level = int(level)
+                if level == 1:
+                    return self.config.heading_h1_boost, level
+                elif level == 2:
+                    return self.config.heading_h2_boost, level
+                elif level == 3:
+                    return self.config.heading_h3_boost, level
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback: check anchor_type for heading markers
+        anchor_type = result.metadata.get("anchor_type", "")
+        if "heading" in str(anchor_type).lower():
+            # Heading chunk but no level info, apply moderate boost
+            return self.config.heading_h3_boost, None
+
+        return 1.0, None
+
+    def _calculate_tag_boost(self, result: SearchResult, query: str) -> tuple[float, int]:
+        """Calculate boost based on tag matches.
+
+        Args:
+            result: Search result to check for tags
+            query: Search query to match against tags
+
+        Returns:
+            Tuple of (boost_multiplier, number_of_matching_tags)
+        """
+        if not self.config.tag_boost_enabled:
+            return 1.0, 0
+
+        # Get tags from metadata - can be list or string
+        tags = result.metadata.get("tags", [])
+        if not tags:
+            return 1.0, 0
+
+        # Normalize tags to list if string
+        if isinstance(tags, str):
+            tags = [tags]
+
+        # Tokenize query into words (lowercase)
+        query_terms = set(query.lower().split())
+
+        # Count matching tags
+        matches = 0
+        for tag in tags:
+            # Normalize tag: remove # prefix, replace hyphens/underscores with spaces
+            tag_lower = str(tag).lower().lstrip("#").replace("-", " ").replace("_", " ")
+            tag_terms = set(tag_lower.split())
+            if query_terms & tag_terms:  # Any overlap
+                matches += 1
+
+        if matches == 0:
+            return 1.0, 0
+
+        capped_matches = min(matches, self.config.tag_boost_cap)
+        return 1.0 + (self.config.tag_boost_weight * capped_matches), matches

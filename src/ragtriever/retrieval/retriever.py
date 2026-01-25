@@ -12,6 +12,7 @@ from ..store.libsql_store import LibSqlStore
 from .hybrid import HybridRanker
 from .boosts import BoostAdjuster, BoostConfig
 from .reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
+from .diversity import MMRDiversifier, DiversityConfig
 
 @dataclass
 class Retriever:
@@ -48,8 +49,28 @@ class Retriever:
             recency_fresh_days=self.cfg.recency_fresh_days,
             recency_recent_days=self.cfg.recency_recent_days,
             recency_old_days=self.cfg.recency_old_days,
+            heading_boost_enabled=self.cfg.heading_boost_enabled,
+            heading_h1_boost=self.cfg.heading_h1_boost,
+            heading_h2_boost=self.cfg.heading_h2_boost,
+            heading_h3_boost=self.cfg.heading_h3_boost,
+            tag_boost_enabled=self.cfg.tag_boost_enabled,
+            tag_boost_weight=self.cfg.tag_boost_weight,
+            tag_boost_cap=self.cfg.tag_boost_cap,
+
+
+
+
+
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
+
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -78,13 +99,19 @@ class Retriever:
         # Merge with RRF or weighted scoring
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
-        # Apply boosts (backlinks, recency)
-        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+        # Apply boosts (backlinks, recency, headings, tags)
+        if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
+            or self.cfg.heading_boost_enabled or self.cfg.tag_boost_enabled):
             # Fetch backlink counts if needed
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
-            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+            merged = self.boost_adjuster.apply_boosts(
+                merged, backlink_counts=backlink_counts, query=query
+            )
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:
@@ -142,8 +169,23 @@ class MultiVaultRetriever:
             recency_fresh_days=cfg.recency_fresh_days,
             recency_recent_days=cfg.recency_recent_days,
             recency_old_days=cfg.recency_old_days,
+            heading_boost_enabled=cfg.heading_boost_enabled,
+            heading_h1_boost=cfg.heading_h1_boost,
+            heading_h2_boost=cfg.heading_h2_boost,
+            heading_h3_boost=cfg.heading_h3_boost,
+            tag_boost_enabled=cfg.tag_boost_enabled,
+            tag_boost_weight=cfg.tag_boost_weight,
+            tag_boost_cap=cfg.tag_boost_cap,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -215,13 +257,19 @@ class MultiVaultRetriever:
         # Merge with RRF or weighted scoring
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
-        # Apply boosts (backlinks, recency)
-        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+        # Apply boosts (backlinks, recency, headings, tags)
+        if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
+            or self.cfg.heading_boost_enabled or self.cfg.tag_boost_enabled):
             # Fetch backlink counts if needed
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
-            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+            merged = self.boost_adjuster.apply_boosts(
+                merged, backlink_counts=backlink_counts, query=query
+            )
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:

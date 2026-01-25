@@ -177,6 +177,78 @@ recency_fresh_days = 14   # Files this recent get max boost
 recency_recent_days = 60  # Files this recent get medium boost
 recency_old_days = 180    # Files older than this get slight penalty
 
+# Heading/Title Boost (DISABLED by default)
+# Boosts chunks that are document titles or section headings (H1, H2, H3)
+#
+# WARNING: Can create file-type bias favoring markdown over PDFs/PPTX
+# Content and semantic relevance should generally matter most!
+#
+# How it works:
+#   - H1 (document title): heading_h1_boost multiplier (e.g., 1.05 = +5%)
+#   - H2 (major sections): heading_h2_boost multiplier (e.g., 1.03 = +3%)
+#   - H3 (subsections): heading_h3_boost multiplier (e.g., 1.02 = +2%)
+#   - These multiply with other boosts (can compound unexpectedly!)
+#
+# When to enable:
+#   - You want overviews/summaries to rank higher than details
+#   - Your vault has well-structured markdown with clear heading hierarchy
+#   - You're okay with markdown files ranking higher than PDFs/presentations
+#
+# When to DISABLE (default):
+#   - Policy/compliance questions where authoritative PDFs matter most
+#   - Mixed content (markdown notes + official docs) where file type shouldn't matter
+#   - You want pure semantic relevance without structural bias
+#
+heading_boost_enabled = false
+# heading_h1_boost = 1.05  # 5% boost for H1 (title) chunks
+# heading_h2_boost = 1.03  # 3% boost for H2 chunks
+# heading_h3_boost = 1.02  # 2% boost for H3 chunks
+
+# Tag Boost (DISABLED by default)
+# Boosts chunks from documents whose tags match query terms
+#
+# WARNING: Can create file-type bias favoring tagged markdown over PDFs/PPTX
+# Content and semantic relevance should generally matter most!
+#
+# How it works:
+#   - For each tag matching a query term: adds tag_boost_weight
+#   - Maximum boost = tag_boost_weight * tag_boost_cap
+#   - Tags normalized: #machine-learning matches "machine learning" query
+#   - Multiplies with other boosts (can compound unexpectedly!)
+#
+# When to enable:
+#   - Your vault uses consistent, meaningful tags
+#   - Tags indicate topical relevance (e.g., #ai-gateway, #kubernetes)
+#   - You want tagged notes to rank slightly higher
+#
+# When to DISABLE (default):
+#   - Mixed content where only some files have tags
+#   - You want pure semantic relevance without tag bias
+#   - Official docs (PDFs) don't have tags but are authoritative
+#
+tag_boost_enabled = false
+# tag_boost_weight = 0.03  # 3% boost per matching tag
+# tag_boost_cap = 3        # Max 3 tags counted (caps at 9% boost)
+
+# Result Diversity (MMR - Maximal Marginal Relevance)
+# Limits chunks per document to ensure diverse results
+#
+# How it works:
+#   - Returns at most max_per_document chunks from each document
+#   - Fills remaining slots from other documents
+#   - Prevents one highly-relevant doc from dominating all results
+#
+# When to enable (default):
+#   - You want to see information from multiple sources
+#   - Prevent result redundancy (many chunks from same file)
+#
+# When to disable:
+#   - You want all top-k results regardless of source
+#   - Single document deep-dive scenarios
+#
+diversity_enabled = true
+max_per_document = 2  # Maximum chunks from same document
+
 # Parallelization (3.6x speedup for full scans)
 # Parallel scanning is enabled by default
 [indexing]

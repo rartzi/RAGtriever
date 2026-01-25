@@ -348,18 +348,60 @@ Alternative: Weighted scoring (legacy) with configurable w_vec/w_lex weights.
 
 **Stage 3: Score Boosting**
 
-After fusion, scores can be boosted by document signals:
+After fusion, scores can be boosted by document signals. **Content and semantic relevance are primary** - boosts provide subtle signals, not deterministic ranking.
 
-| Signal | Default | Effect |
-|--------|---------|--------|
-| **Backlinks** | 10% per link (max 2x) | Hub documents rank higher |
-| **Recency** | Tiered (fresh/recent/old) | Fresh docs get 20% boost |
+| Signal | Default Status | Effect |
+|--------|---------------|--------|
+| **Backlinks** | ✅ Enabled | Hub documents rank higher (+10% per link, max 2x) |
+| **Recency** | ✅ Enabled | Fresh docs get subtle boost (+10% for <14 days) |
+| **Heading Level** | ❌ Disabled | Title/heading chunks rank higher (when enabled) |
+| **Tag Matches** | ❌ Disabled | Tagged chunks rank higher (when enabled) |
 
-Recency tiers (configurable):
-- Fresh (<14 days): 1.20x boost
-- Recent (<60 days): 1.10x boost
+**Backlink Boost (Enabled):**
+Documents with many incoming links (hub documents) receive higher scores, as they're likely to be more important or central to the vault's knowledge graph. This is file-type agnostic and works for all documents.
+
+**Recency Boost (Enabled):**
+Recently modified documents receive a subtle boost:
+- Fresh (<14 days): 1.10x boost (10%)
+- Recent (<60 days): 1.05x boost (5%)
 - Standard (<180 days): 1.00x (no change)
-- Old (>180 days): 0.95x (slight penalty)
+- Old (>180 days): 0.98x (2% penalty)
+
+**Heading Boost (DISABLED by default):**
+⚠️ **WARNING: Can create file-type bias favoring markdown over PDFs/PPTX**
+
+When enabled, chunks from section titles and headings receive boosts:
+- H1 (document title): +5% boost
+- H2 (major sections): +3% boost
+- H3 (subsections): +2% boost
+
+**When to enable:**
+- You want overviews/summaries to rank higher than details
+- Your vault is primarily well-structured markdown
+- You're okay with markdown ranking higher than authoritative PDFs
+
+**When to DISABLE (default):**
+- Policy/compliance questions where authoritative PDFs matter most
+- Mixed content (markdown notes + official docs) where file type shouldn't matter
+- You want pure semantic relevance without structural bias
+
+**Tag Boost (DISABLED by default):**
+⚠️ **WARNING: Can create file-type bias favoring tagged markdown over PDFs/PPTX**
+
+When enabled, chunks whose tags match query terms receive boosts:
+- +3% boost per matching tag (up to 3 tags counted, max 9%)
+- Tags are normalized (# prefix removed, hyphens/underscores treated as spaces)
+- Example: query "machine learning" matches tag `#machine-learning`
+
+**When to enable:**
+- Your vault uses consistent, meaningful tags
+- Tags indicate topical relevance
+- You want tagged notes to rank slightly higher
+
+**When to DISABLE (default):**
+- Mixed content where only some files have tags
+- Official docs (PDFs) don't have tags but are authoritative
+- You want pure semantic relevance without tag bias
 
 **Stage 4: Optional Reranking**
 
@@ -372,14 +414,29 @@ Cross-encoder reranking with `use_rerank = true` for final quality improvement.
 fusion_algorithm = "rrf"  # "rrf" (default) or "weighted"
 rrf_k = 60
 
-# Boosts
-backlink_boost_enabled = true
+# Boosts (ENABLED by default - file-type agnostic)
+backlink_boost_enabled = true   # Hub documents with many links
 backlink_boost_weight = 0.1
 backlink_boost_cap = 10
-recency_boost_enabled = true
+
+recency_boost_enabled = true    # Recently modified documents
 recency_fresh_days = 14
 recency_recent_days = 60
 recency_old_days = 180
+
+# Boosts (DISABLED by default - can create file-type bias)
+heading_boost_enabled = false   # ⚠️ Can favor markdown over PDFs
+# heading_h1_boost = 1.05       # 5% boost for H1 (when enabled)
+# heading_h2_boost = 1.03       # 3% boost for H2 (when enabled)
+# heading_h3_boost = 1.02       # 2% boost for H3 (when enabled)
+
+tag_boost_enabled = false       # ⚠️ Can favor markdown over PDFs
+# tag_boost_weight = 0.03       # 3% boost per tag (when enabled)
+# tag_boost_cap = 3             # Max 3 tags (when enabled)
+
+# Diversity (limits chunks per document)
+diversity_enabled = true
+max_per_document = 2
 
 # Reranking (optional)
 use_rerank = false
@@ -387,9 +444,52 @@ use_rerank = false
 
 **Code Reference:**
 - `src/ragtriever/retrieval/hybrid.py`: RRF and weighted fusion
-- `src/ragtriever/retrieval/boosts.py`: Backlink and recency boosting
+- `src/ragtriever/retrieval/boosts.py`: Backlink, recency, heading, and tag boosting
 - `src/ragtriever/retrieval/reranker.py`: Cross-encoder reranking
 - `src/ragtriever/retrieval/retriever.py`: Pipeline orchestration
+
+### Result Diversity (MMR)
+
+RAGtriever uses Maximal Marginal Relevance (MMR) to ensure diverse search results by limiting the number of chunks returned from the same document. This prevents a single highly-relevant document from dominating all results.
+
+**How It Works:**
+
+1. **Document Limit**: By default, at most 2 chunks per document are returned (configurable via `max_per_document`)
+2. **Relevance Preservation**: Results maintain their original relevance ordering within the diversity constraint
+3. **Backfill Behavior**: If limiting chunks per document produces fewer than k results, remaining slots are filled from skipped results
+
+**Why MMR:**
+- **Broader coverage**: Users see information from multiple documents rather than many chunks from one file
+- **Better exploration**: Exposes diverse perspectives and related concepts across the vault
+- **Reduced redundancy**: Avoids showing near-duplicate content from the same document
+
+**Example:**
+
+Without MMR (top 10 results):
+- Document A: chunks 1, 2, 3, 4, 5
+- Document B: chunks 1, 2, 3
+- Document C: chunks 1, 2
+
+With MMR (max_per_document=2):
+- Document A: chunks 1, 2
+- Document B: chunks 1, 2
+- Document C: chunks 1, 2
+- Document D: chunks 1, 2
+- Document E: chunks 1, 2
+
+**Configuration:**
+
+```toml
+[retrieval]
+diversity_enabled = true       # Enable MMR diversity
+max_per_document = 2           # Max chunks from same document
+```
+
+**Disabling:**
+Set `diversity_enabled = false` to return all top-k results regardless of source document.
+
+**Code Reference:**
+- `src/ragtriever/retrieval/diversity.py`: MMR diversification implementation
 
 ### File Lifecycle Management
 
@@ -519,7 +619,7 @@ TOML-based config (see `examples/config.toml.example`):
 - `[image_analysis]`: provider (tesseract/gemini/vertex_ai/aigateway/off), gemini_model for Gemini API
 - `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
 - `[aigateway]`: url, key, model, timeout, endpoint_path (for Microsoft AI Gateway proxy to Gemini)
-- `[retrieval]`: k_vec, k_lex, top_k, use_rerank
+- `[retrieval]`: k_vec, k_lex, top_k, use_rerank, fusion_algorithm (rrf/weighted), boost settings (backlinks, recency, heading, tag), diversity_enabled, max_per_document
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
 - `[mcp]`: transport (stdio)
 

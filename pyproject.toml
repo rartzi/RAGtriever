@@ -34,3 +34,8 @@ dev = [
 
 [project.scripts]
 ragtriever = "ragtriever.cli:app"
+
+[tool.pytest.ini_options]
+markers = [
+    "manual: marks tests as manual (require network access, long-running, etc.)",
+]
