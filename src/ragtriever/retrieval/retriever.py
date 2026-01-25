@@ -12,6 +12,7 @@ from ..store.libsql_store import LibSqlStore
 from .hybrid import HybridRanker
 from .boosts import BoostAdjuster, BoostConfig
 from .reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
+from .diversity import MMRDiversifier, DiversityConfig
 
 @dataclass
 class Retriever:
@@ -50,6 +51,14 @@ class Retriever:
             recency_old_days=self.cfg.recency_old_days,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
+
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -85,6 +94,9 @@ class Retriever:
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
             merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:
@@ -144,6 +156,14 @@ class MultiVaultRetriever:
             recency_old_days=cfg.recency_old_days,
         )
         self.boost_adjuster = BoostAdjuster(config=boost_config)
+
+        # Initialize diversity (MMR)
+        diversity_config = DiversityConfig(
+            enabled=True,
+            lambda_param=0.7,
+            max_per_document=2,
+        )
+        self.diversifier = MMRDiversifier(config=diversity_config)
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -222,6 +242,9 @@ class MultiVaultRetriever:
             if self.cfg.backlink_boost_enabled:
                 backlink_counts = self.store.get_backlink_counts()
             merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+
+        # Apply diversity (MMR)
+        merged = self.diversifier.diversify(merged, k=k)
 
         # Rerank if enabled (final pass)
         if self.reranker:
