@@ -5,7 +5,7 @@ Common issues and solutions when using RAGtriever.
 ## Table of Contents
 - [Office Temp Files](#office-temp-files)
 - [Offline Mode Issues](#offline-mode-issues)
-- [Gemini service account Authentication](#vertex-ai-authentication)
+- [Gemini service account Authentication](#gemini-service-account-authentication)
 - [Image Analysis](#image-analysis)
 - [Query Issues](#query-issues)
 - [Performance](#performance)
