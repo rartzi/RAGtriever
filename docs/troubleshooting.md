@@ -5,7 +5,7 @@ Common issues and solutions when using RAGtriever.
 ## Table of Contents
 - [Office Temp Files](#office-temp-files)
 - [Offline Mode Issues](#offline-mode-issues)
-- [Vertex AI Authentication](#vertex-ai-authentication)
+- [Gemini service account Authentication](#vertex-ai-authentication)
 - [Image Analysis](#image-analysis)
 - [Query Issues](#query-issues)
 - [Performance](#performance)
@@ -94,13 +94,13 @@ ls ~/.cache/huggingface/hub/
 
 ---
 
-## Vertex AI Authentication
+## Gemini service account Authentication
 
 ### Problem: Credentials Not Found
 
 **Symptoms:**
 ```
-Vertex AI credentials file not found
+Gemini service account credentials file not found
 ```
 
 **Solution:**
@@ -109,7 +109,7 @@ Vertex AI credentials file not found
 ls -l $GOOGLE_APPLICATION_CREDENTIALS
 
 # Check path is absolute in config.toml
-[vertex_ai]
+[gemini_service_account]
 credentials_file = "/absolute/path/to/service-account.json"  # Not relative!
 ```
 
@@ -158,7 +158,7 @@ gcloud ai models list --region=global
 
 **Symptoms:**
 ```
-Vertex AI analysis failed: TooManyRequests
+Gemini service account analysis failed: TooManyRequests
 ```
 
 **Expected Behavior:**
@@ -177,7 +177,7 @@ Vertex AI analysis failed: TooManyRequests
 # https://console.cloud.google.com/apis/api/aiplatform.googleapis.com/quotas
 
 # Consider using a different region with higher quota
-[vertex_ai]
+[gemini_service_account]
 location = "us-central1"  # Try different regions
 ```
 
@@ -194,7 +194,7 @@ Model 'gemini-2.0-flash-exp' not found in region 'europe-west4'
 gcloud ai models list --region=europe-west4
 
 # Use 'global' for automatic routing
-[vertex_ai]
+[gemini_service_account]
 location = "global"
 ```
 
@@ -206,7 +206,7 @@ UserWarning: This feature is deprecated as of June 24, 2025
 ```
 
 **Status:**
-- This is a known warning from Vertex AI SDK
+- This is a known warning from Gemini service account SDK
 - Does not affect functionality
 - Will be addressed in future updates (see IMPROVEMENTS.md)
 
@@ -293,7 +293,7 @@ ragtriever query "CDK4/6 inhibitor"
    ```toml
    [image_analysis]
    provider = "tesseract"  # Fastest (local OCR)
-   # provider = "vertex_ai"  # Slower (API calls) but better quality
+   # provider = "gemini-service-account"  # Slower (API calls) but better quality
    ```
 
 ### Problem: High Memory Usage
@@ -338,7 +338,7 @@ If you encounter an issue not covered here:
    python -c "from sentence_transformers import SentenceTransformer; \
               SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
-   # Test Vertex AI only
+   # Test Gemini service account only
    gcloud ai models list --region=global
    ```
 

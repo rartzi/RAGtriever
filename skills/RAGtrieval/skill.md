@@ -13,7 +13,7 @@ Claude Code skill for working with RAGtriever (local-first vault indexer with hy
 
 - **Answering questions about vault content** - Always use RAGtriever to search indexed content
 - Setting up RAGtriever for a new vault
-- Configuring image analysis (Tesseract, Gemini API, or Vertex AI)
+- Configuring image analysis (Tesseract, Gemini API, or Gemini service account)
 - Troubleshooting scanning or indexing issues
 - Testing search and retrieval functionality
 - Working with embeddings and offline mode
@@ -293,19 +293,19 @@ gemini_model = "gemini-2.0-flash"
 # Set GEMINI_API_KEY environment variable
 ```
 
-#### For Vertex AI (Best quality, Service account):
+#### For Gemini service account (Best quality, Service account):
 ```toml
 [image_analysis]
-provider = "vertex_ai"
+provider = "gemini-service-account"
 
-[vertex_ai]
+[gemini_service_account]
 project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT
 location = "global"  # Recommended for model availability
 credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS
 model = "gemini-2.0-flash-exp"
 ```
 
-**Vertex AI Checklist:**
+**Gemini service account Checklist:**
 - [ ] Credentials file exists and is readable
 - [ ] Use `location = "global"` for best model availability
 - [ ] Unset `GEMINI_API_KEY` to avoid conflicts
@@ -477,9 +477,9 @@ ls ~/.cache/huggingface/hub/
 # Update config.toml to use one of the cached models
 ```
 
-### Issue: Vertex AI Rate Limits (429 errors)
+### Issue: Gemini service account Rate Limits (429 errors)
 
-**Symptom:** `Vertex AI analysis failed: TooManyRequests`
+**Symptom:** `Gemini service account analysis failed: TooManyRequests`
 
 **Expected Behavior:** This is normal with multiple images. The scan continues and processes other files.
 
@@ -488,7 +488,7 @@ ls ~/.cache/huggingface/hub/
 - Re-run scan - successful images are cached
 - Consider using Gemini API or Tesseract for large image sets
 
-### Issue: Vertex AI Authentication Errors
+### Issue: Gemini service account Authentication Errors
 
 **Solution:**
 1. Verify credentials file exists:
@@ -500,7 +500,7 @@ ls ~/.cache/huggingface/hub/
    echo $GOOGLE_APPLICATION_CREDENTIALS
    echo $GOOGLE_CLOUD_PROJECT
    ```
-3. Ensure `GEMINI_API_KEY` is **unset** (conflicts with Vertex AI):
+3. Ensure `GEMINI_API_KEY` is **unset** (conflicts with Gemini service account):
    ```bash
    unset GEMINI_API_KEY
    ```
@@ -640,7 +640,7 @@ ragtriever status
 - `docs/LOGGING_CONFIGURATION.md` - Logging setup and usage guide
 - `docs/WHERE_TO_SEE_INDEXING.md` - How to verify indexing success
 - `docs/SCAN_AND_WATCH_TESTING.md` - Testing guide with profiling
-- `docs/vertex_ai_setup.md` - Vertex AI setup guide
+- `docs/gemini_service_account_setup.md` - Gemini service account setup guide
 - `docs/troubleshooting.md` - Detailed troubleshooting
 - `IMPROVEMENTS.md` - Planned enhancements
 
@@ -663,7 +663,7 @@ Vault (filesystem)
 ### Image Analysis Pipeline
 ```
 Image file
-  → ImageExtractor (Tesseract/Gemini/Vertex AI)
+  → ImageExtractor (Tesseract/Gemini/Gemini service account)
   → Structured analysis (description, OCR, topics, entities)
   → Chunking
   → Indexing
@@ -729,7 +729,7 @@ ragtriever scan --config config.toml --full
 ragtriever query --config config.toml "test query" --k 5
 ```
 
-### Setup with Vertex AI
+### Setup with Gemini service account
 ```bash
 source .venv/bin/activate
 export GOOGLE_CLOUD_PROJECT="your-project-id"
@@ -737,7 +737,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/creds.json"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 unset GEMINI_API_KEY
 ragtriever init --vault ~/vault --index ~/.ragtriever/indexes/myvault
-# Edit config.toml: configure [vertex_ai] section
+# Edit config.toml: configure [gemini_service_account] section
 ragtriever scan --config config.toml --full
 ragtriever query --config config.toml "image content" --k 5
 ```
@@ -768,7 +768,7 @@ pkill -f "ragtriever watch"
 - **README.md**: User guide and quick start
 - **CLAUDE.md**: Project architecture for Claude Code
 - **docs/architecture.md**: Complete system documentation
-- **docs/vertex_ai_setup.md**: Vertex AI service account setup
+- **docs/gemini_service_account_setup.md**: Gemini service account service account setup
 - **docs/troubleshooting.md**: Comprehensive troubleshooting guide
 - **IMPROVEMENTS.md**: Planned features (Gemini 3, better error handling, etc.)
 

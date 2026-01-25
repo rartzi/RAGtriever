@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add retry logic, circuit breaker, and timeout handling to image analysis providers (Gemini, Vertex AI, AI Gateway) to prevent scan hangs and gracefully handle API failures.
+Add retry logic, circuit breaker, and timeout handling to image analysis providers (Gemini, Gemini service account, AI Gateway) to prevent scan hangs and gracefully handle API failures.
 
 ## Goals
 
@@ -65,7 +65,7 @@ circuit_reset = 60           # Seconds
 [aigateway]
 timeout = 30000
 
-[vertex_ai]
+[gemini_service_account]
 timeout = 45000
 
 [gemini]
@@ -110,4 +110,4 @@ Unit tests in `tests/test_resilience.py`:
 
 Integration tests:
 - `tests/test_aigateway_resilience.py` - test with AI Gateway
-- `tests/test_vertex_ai_resilience.py` - test with Vertex AI
+- `tests/test_gemini_sa_resilience.py` - test with Gemini service account

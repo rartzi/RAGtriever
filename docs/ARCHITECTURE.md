@@ -57,7 +57,7 @@ KEY FLOWS:
 
 **Design Principles:**
 1. **Filesystem is source of truth** - Index can always be rebuilt
-2. **Local-only** - No data leaves machine (unless you choose Gemini/Vertex AI)
+2. **Local-only** - No data leaves machine (unless you choose Gemini/Gemini service account)
 3. **Pluggable** - Swap extractors, embedders, chunkers via Protocol classes
 4. **Obsidian-aware** - Parses `[[wikilinks]]`, `#tags`, YAML frontmatter
 
@@ -139,7 +139,7 @@ Phase 3: Parallel image analysis
   - PDF/PPTX extractors store image metadata for post-processing
 - **Chunkers:** Split text semantically (by heading, by page, etc.)
 - **Embedders:** Generate vector representations (local or API)
-- **Image Analyzers:** Process images via Tesseract OCR, Gemini, or Vertex AI
+- **Image Analyzers:** Process images via Tesseract OCR, Gemini, or Gemini service account
 
 ### 3. Store (Persistence Layer)
 
@@ -670,7 +670,7 @@ for result in results:
 │ Extractor    │ MarkdownExtractor (frontmatter, wikilinks, tags, image refs)
 │ (by type)    │ PDFExtractor (pdfplumber + image metadata)
 │              │ PPTXExtractor (python-pptx + image bytes)
-│              │ ImageExtractor (Tesseract/Gemini/Vertex AI)
+│              │ ImageExtractor (Tesseract/Gemini/Gemini service account)
 └─────┬────────┘
       │ Extracted(text, metadata{embedded_images, image_references})
       ▼
@@ -698,7 +698,7 @@ for result in results:
 │ Process      │ For each embedded image:
 │ Embedded     │ 1. Extract bytes (PyMuPDF for PDF, direct for PPTX)
 │ Images       │ 2. Save to temp file
-│              │ 3. Pass to ImageExtractor (Tesseract/Gemini/Vertex AI)
+│              │ 3. Pass to ImageExtractor (Tesseract/Gemini/Gemini service account)
 │              │ 4. Create separate chunk (anchor_type: pdf_image/pptx_image/markdown_image)
 │              │ 5. Link to parent document via doc_id
 │              │ 6. Embed image analysis text
@@ -1068,7 +1068,7 @@ config.toml
     │   └── provider ──────────▶ Extractor selection:
     │       ├── tesseract ─────▶ TesseractImageExtractor (local OCR)
     │       ├── gemini ────────▶ GeminiImageExtractor (API, OAuth2)
-    │       └── vertex_ai ─────▶ VertexAIImageExtractor (service account)
+    │       └── gemini-service-account ─────▶ GeminiServiceAccountImageExtractor (service account)
     │
     │   Note: Automatically processes:
     │   • Images embedded in PDFs (extracted via PyMuPDF)
@@ -1077,7 +1077,7 @@ config.toml
     │   • Standalone image files (.png, .jpg, .jpeg, .webp, .gif)
     │   Creates separate searchable chunks linked to parent documents.
     │
-    ├── [vertex_ai]           (if provider = vertex_ai)
+    ├── [gemini_service_account]           (if provider = gemini-service-account)
     │   ├── project_id
     │   ├── credentials_file
     │   ├── location
@@ -1097,7 +1097,7 @@ config.toml
 - **Embedder device:** `mps` (Mac M1/M2) > `cuda` (NVIDIA) > `cpu`
 - **Batch size:** Larger = faster (if you have RAM)
 - **Model size:** `all-MiniLM-L6-v2` (384d) faster than `bge-base` (768d)
-- **Image analysis:** `tesseract` (local) > `vertex_ai` (API calls)
+- **Image analysis:** `tesseract` (local) > `gemini-service-account` (API calls)
 
 ### Query Speed Factors
 - **Vector search:** Brute-force (slow for >10K chunks)
@@ -1113,7 +1113,7 @@ config.toml
 
 ## Next Steps
 
-- **Setup Guide:** [vertex_ai_setup.md](vertex_ai_setup.md)
+- **Setup Guide:** [gemini_sa_setup.md](gemini_sa_setup.md)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)
 - **Improvements:** [../IMPROVEMENTS.md](../IMPROVEMENTS.md)
 - **User Guide:** [../README.md](../README.md)

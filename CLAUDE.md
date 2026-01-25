@@ -12,6 +12,27 @@ RAGtriever Local is a local-first vault indexer + hybrid retrieval system with M
 - Obsidian-aware parsing (YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, `#tags`) without Obsidian dependency
 - Pluggable adapters via Protocol classes for extractors, chunkers, embedders, and stores
 
+## Migration Guide (v2.0.0)
+
+⚠️ **Breaking Change**: The `vertex_ai` image analysis provider has been renamed to `gemini-service-account` to better reflect the authentication method.
+
+**Update your config.toml:**
+```toml
+# Before (v0.1.0)
+[image_analysis]
+provider = "vertex_ai"
+[vertex_ai]
+project_id = "your-project"
+
+# After (v2.0.0)
+[image_analysis]
+provider = "gemini-service-account"
+[gemini_service_account]
+project_id = "your-project"
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for complete migration details.
+
 ## Commands
 
 ```bash
@@ -616,8 +637,8 @@ TOML-based config (see `examples/config.toml.example`):
 - `[index]`: index directory, extractor_version, chunker_version (v2 adds overlap support)
 - `[chunking]`: overlap_chars (default: 200), max_chunk_size, preserve_heading_metadata
 - `[embeddings]`: provider (sentence_transformers/ollama), model, device (cpu/cuda/mps), batch_size, offline_mode (default: true), use_query_prefix (asymmetric retrieval), use_faiss (approximate NN search)
-- `[image_analysis]`: provider (tesseract/gemini/vertex_ai/aigateway/off), gemini_model for Gemini API
-- `[vertex_ai]`: project_id, location, credentials_file, model (for Vertex AI with service account auth)
+- `[image_analysis]`: provider (tesseract/gemini/gemini-service-account/aigateway/off), gemini_model for Gemini API
+- `[gemini_service_account]`: project_id, location, credentials_file, model (for Gemini with GCP service account auth)
 - `[aigateway]`: url, key, model, timeout, endpoint_path (for Microsoft AI Gateway proxy to Gemini)
 - `[retrieval]`: k_vec, k_lex, top_k, use_rerank, fusion_algorithm (rrf/weighted), boost settings (backlinks, recency, heading, tag), diversity_enabled, max_per_document
 - `[indexing]`: extraction_workers, embed_batch_size, image_workers, parallel_scan (parallelization settings)
@@ -709,7 +730,7 @@ ragtriever scan --full --no-parallel   # Disable parallelization
 
 ### Image Analysis Providers
 
-RAGtriever supports multiple image analysis providers, each with different capabilities and use cases. All AI-powered providers (gemini, vertex_ai, aigateway) extract structured metadata including:
+RAGtriever supports multiple image analysis providers, each with different capabilities and use cases. All AI-powered providers (gemini, gemini-service-account, aigateway) extract structured metadata including:
 - **Description**: Detailed 2-3 sentence description of image content
 - **Visible Text**: OCR transcription of any text in the image
 - **Image Type**: Classification (screenshot, diagram, flowchart, photo, presentation_slide, document, chart, infographic, logo, ui_mockup, other)
@@ -779,7 +800,7 @@ gemini_model = "gemini-2.0-flash"  # or "gemini-2.5-flash"
 
 ---
 
-#### 3. Google Vertex AI (Service Account)
+#### 3. Gemini with Service Account
 **Use case**: Enterprise GCP deployments, service account auth, fine-grained IAM
 
 **Features:**
@@ -797,9 +818,9 @@ gemini_model = "gemini-2.0-flash"  # or "gemini-2.5-flash"
 **Configuration:**
 ```toml
 [image_analysis]
-provider = "vertex_ai"
+provider = "gemini-service-account"
 
-[vertex_ai]
+[gemini_service_account]
 project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT env var
 location = "global"  # or "us-central1", "us-east4", etc.
 credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS
@@ -889,7 +910,7 @@ provider = "off"
 |----------|------|----------|---------|------------------|----------|
 | **tesseract** | None | Local | ~100ms | Not critical | Offline OCR, text extraction only |
 | **gemini** | API key | Google Cloud | ~500ms | Critical | Personal projects, simple setup |
-| **vertex_ai** | Service account | GCP region | ~500ms | Critical | Enterprise GCP, IAM integration |
+| **gemini-service-account** | Service account | GCP region | ~500ms | Critical | Enterprise GCP, IAM integration |
 | **aigateway** | Gateway key | Microsoft + GCP | ~1000ms | Critical | Enterprise Microsoft, governance |
 | **off** | N/A | N/A | 0ms | N/A | Text-only, cost savings |
 
@@ -898,11 +919,11 @@ provider = "off"
 - **Medium vaults (20-100 images)**: Use 8-10 image workers for any API provider
 - **Large vaults (>100 images)**: Maximize image workers (10-20), consider costs
 - **Offline/Privacy**: Use tesseract (local only)
-- **Enterprise**: Use vertex_ai (GCP) or aigateway (Microsoft) for compliance/governance
+- **Enterprise**: Use gemini-service-account (GCP) or aigateway (Microsoft) for compliance/governance
 
 ### Image Analysis Resilience
 
-All API-based image providers (gemini, vertex_ai, aigateway) include built-in resilience features to handle transient failures gracefully without hanging or crashing scans.
+All API-based image providers (gemini, gemini-service-account, aigateway) include built-in resilience features to handle transient failures gracefully without hanging or crashing scans.
 
 **Features:**
 - **Configurable timeouts**: Prevent hanging on unresponsive APIs (default: 30s)
@@ -930,7 +951,7 @@ All API-based image providers (gemini, vertex_ai, aigateway) include built-in re
 **Configuration:**
 ```toml
 [image_analysis]
-provider = "aigateway"  # or gemini, vertex_ai
+provider = "aigateway"  # or gemini, gemini-service-account
 timeout = 60000              # 60s timeout (ms)
 max_retries = 3              # Retry transient errors up to 3x
 retry_backoff = 1000         # Base backoff 1s, doubles each retry

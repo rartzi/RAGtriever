@@ -55,7 +55,7 @@ faiss_nlist = 100  # Number of clusters (IVF only)
 faiss_nprobe = 10  # Number of clusters to search (IVF only, higher = more accurate but slower)
 
 [image_analysis]
-provider = "tesseract"  # tesseract|gemini|vertex_ai|aigateway|off
+provider = "tesseract"  # tesseract|gemini|gemini-service-account|aigateway|off
 # Automatically extracts and analyzes:
 # - Images embedded in PDFs (extracted via PyMuPDF)
 # - Images in PowerPoint slides (extracted via python-pptx)
@@ -63,16 +63,16 @@ provider = "tesseract"  # tesseract|gemini|vertex_ai|aigateway|off
 # - Standalone image files (.png, .jpg, .jpeg, .webp, .gif)
 #
 # Provider-specific requirements:
-#   tesseract:  pip install pytesseract + system tesseract-ocr
-#   gemini:     Set GEMINI_API_KEY env var (or gemini_api_key below)
-#   vertex_ai:  Configure [vertex_ai] section below
-#   aigateway:  Configure [aigateway] section below
-#   off:        No configuration needed
+#   tesseract:            pip install pytesseract + system tesseract-ocr
+#   gemini:               Set GEMINI_API_KEY env var (or gemini_api_key below)
+#   gemini-service-account: Configure [gemini_service_account] section below
+#   aigateway:            Configure [aigateway] section below
+#   off:                  No configuration needed
 #
 # gemini_api_key = ""  # or set GEMINI_API_KEY env var (recommended)
 gemini_model = "gemini-2.0-flash"  # Default for gemini/aigateway providers
 
-# Resilience settings (for API-based providers: gemini, vertex_ai, aigateway)
+# Resilience settings (for API-based providers: gemini, gemini-service-account, aigateway)
 # Prevents scans from hanging on unresponsive APIs with automatic retry and circuit breaker
 timeout = 60000           # Request timeout in milliseconds (default: 60s)
 max_retries = 3           # Retry transient errors up to 3x (default: 3)
@@ -80,8 +80,8 @@ retry_backoff = 1000      # Base backoff 1s, doubles each retry (default: 1000ms
 circuit_threshold = 5     # Trip breaker after N consecutive failures (default: 5)
 circuit_reset = 60        # Auto-reset breaker after N seconds (default: 60)
 
-# Vertex AI configuration (for provider = "vertex_ai")
-[vertex_ai]
+# Gemini with service account configuration (for provider = "gemini-service-account")
+[gemini_service_account]
 # project_id = "your-gcp-project-id"  # or set GOOGLE_CLOUD_PROJECT env var
 # location = "global"  # or us-central1, us-east4, etc. depending on model availability
 # credentials_file = "/path/to/service-account.json"  # or set GOOGLE_APPLICATION_CREDENTIALS env var

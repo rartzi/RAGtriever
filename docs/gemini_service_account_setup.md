@@ -1,10 +1,10 @@
-# Vertex AI Setup Guide
+# Gemini Service Account Setup Guide
 
-This guide walks through setting up Google Cloud Vertex AI for image analysis in RAGtriever.
+This guide walks through setting up Gemini with GCP service account authentication for image analysis in RAGtriever.
 
-## Why Vertex AI?
+## Why Gemini with Service Account?
 
-Vertex AI provides:
+Using Gemini via service account provides:
 - **Enterprise authentication** via service account JSON (no API keys in environment)
 - **Advanced vision models** including Gemini 2.0 and future Gemini 3 models
 - **Regional deployment** with data residency controls
@@ -13,7 +13,7 @@ Vertex AI provides:
 ## Prerequisites
 
 1. **Google Cloud Project** with billing enabled
-2. **Vertex AI API** enabled
+2. **Vertex AI API** enabled (Gemini models are accessed via Vertex AI)
 3. **Service Account** with appropriate permissions
 
 ## Step 1: Create a Service Account
@@ -52,9 +52,9 @@ Edit your `config.toml`:
 
 ```toml
 [image_analysis]
-provider = "vertex_ai"
+provider = "gemini-service-account"
 
-[vertex_ai]
+[gemini_service_account]
 project_id = "your-project-id"
 location = "global"  # or "us-central1", "europe-west4", etc.
 credentials_file = "/path/to/ragtriever-key.json"
@@ -72,9 +72,9 @@ Then in `config.toml`:
 
 ```toml
 [image_analysis]
-provider = "vertex_ai"
+provider = "gemini-service-account"
 
-[vertex_ai]
+[gemini_service_account]
 # Will use environment variables
 location = "global"
 model = "gemini-2.0-flash-exp"
@@ -158,7 +158,7 @@ gcloud projects get-iam-policy $PROJECT_ID \
 ### Performance Tips
 
 1. **Batch processing**: Images are processed during vault scanning, not query time
-2. **Rate limits**: Vertex AI handles ~60 images/minute with current settings
+2. **Rate limits**: Gemini API handles ~60 images/minute with current settings
 3. **Costs**: Monitor usage at [cloud.google.com/billing](https://cloud.google.com/billing)
 
 ## Security Best Practices

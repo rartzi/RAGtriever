@@ -11,7 +11,7 @@ This document tracks planned enhancements and technical improvements for RAGtrie
 **Complexity:** Medium
 
 #### Problem
-Current Vertex AI integration works with Gemini 2.0 models, but upcoming Gemini 3 models (gemini-3-pro-image, gemini-3-pro-image-preview) provide:
+Current Gemini service account integration works with Gemini 2.0 models, but upcoming Gemini 3 models (gemini-3-pro-image, gemini-3-pro-image-preview) provide:
 - Higher quality image analysis
 - More detailed structured responses
 - **Multi-part responses** with "thinking" sections that should be filtered out
@@ -43,7 +43,7 @@ except ValueError:
 
 **Phase 2: Model Configuration**
 ```toml
-[vertex_ai]
+[gemini_service_account]
 model = "gemini-3-pro-image"  # or gemini-3-pro-image-preview
 filter_thinking = true  # Default: true
 log_thinking = false    # Log thinking parts for debugging
@@ -263,7 +263,7 @@ Track and compare image analysis quality across providers.
 ```python
 @dataclass
 class AnalysisMetrics:
-    provider: str           # tesseract, gemini, vertex_ai
+    provider: str           # tesseract, gemini, gemini-service-account
     model: str             # Model name
     success_rate: float    # % of images analyzed
     avg_description_len: int
@@ -273,7 +273,7 @@ class AnalysisMetrics:
 ```
 
 #### Benefits
-- Compare Tesseract vs Gemini vs Vertex AI
+- Compare Tesseract vs Gemini vs Gemini service account
 - Justify cost of API-based analysis
 - Identify problematic image types
 

@@ -27,6 +27,8 @@
 
 RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retrieval system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness** for retrieval-augmented generation. All data stays local on your machine.
 
+> **⚠️ Breaking Change in v2.0.0**: The `vertex_ai` image provider has been renamed to `gemini-service-account`. Update your `config.toml`: change `provider = "vertex_ai"` to `provider = "gemini-service-account"` and rename `[vertex_ai]` section to `[gemini_service_account]`. See [CHANGELOG.md](CHANGELOG.md) for details.
+
 ## Features
 
 - **Hybrid Retrieval** - Combines vector embeddings with full-text search for superior results
@@ -103,10 +105,10 @@ model = "BAAI/bge-small-en-v1.5"
 device = "cpu"  # cpu | cuda | mps (Apple Silicon)
 
 [image_analysis]
-provider = "vertex_ai"  # tesseract | gemini | vertex_ai | off
+provider = "gemini-service-account"  # tesseract | gemini | gemini-service-account | off
 
-# For Vertex AI (recommended for production)
-[vertex_ai]
+# For Gemini with service account (recommended for production)
+[gemini_service_account]
 project_id = "your-gcp-project"
 location = "global"
 credentials_file = "~/.config/gcloud/service-account-key.json"
@@ -444,11 +446,11 @@ Vault (filesystem)
 | `[embeddings]` | `model` | Embedding model name | `BAAI/bge-small-en-v1.5` |
 | `[embeddings]` | `device` | `cpu`, `cuda`, or `mps` | `cpu` |
 | `[embeddings]` | `offline_mode` | Use cached models only | `true` |
-| `[image_analysis]` | `provider` | `tesseract`, `gemini`, `vertex_ai`, or `off` | `tesseract` |
-| `[vertex_ai]` | `project_id` | Google Cloud project ID | - |
-| `[vertex_ai]` | `location` | GCP region | `us-central1` |
-| `[vertex_ai]` | `credentials_file` | Service account JSON path | - |
-| `[vertex_ai]` | `model` | Vertex AI model name | `gemini-2.0-flash-exp` |
+| `[image_analysis]` | `provider` | `tesseract`, `gemini`, `gemini-service-account`, or `off` | `tesseract` |
+| `[gemini_service_account]` | `project_id` | Google Cloud project ID | - |
+| `[gemini_service_account]` | `location` | GCP region | `us-central1` |
+| `[gemini_service_account]` | `credentials_file` | Service account JSON path | - |
+| `[gemini_service_account]` | `model` | Gemini model name | `gemini-2.0-flash-exp` |
 | `[retrieval]` | `top_k` | Default number of results | `10` |
 | `[retrieval]` | `k_vec` | Vector search candidates | `40` |
 | `[retrieval]` | `k_lex` | Lexical search candidates | `40` |
@@ -485,7 +487,7 @@ mypy src/
 - [Architecture](docs/ARCHITECTURE.md) - Complete system architecture and components
 - [Testing Guide](docs/testing.md) - Comprehensive test suite documentation
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-- [Vertex AI Setup](docs/vertex_ai_setup.md) - Google Cloud Vertex AI configuration
+- [Gemini Service Account Setup](docs/gemini_service_account_setup.md) - Gemini with GCP service account configuration
 - [Improvements](IMPROVEMENTS.md) - Planned enhancements and roadmap
 - [RAGtrieval Skill](skills/RAGtrieval/skill.md) - Claude Code workflow skill
 - [MCP Tool Spec](docs/MCP_TOOL_SPEC.json) - MCP protocol specification

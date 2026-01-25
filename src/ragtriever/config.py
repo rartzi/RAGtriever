@@ -69,15 +69,15 @@ class VaultConfig:
     faiss_nprobe: int = 10  # Number of clusters to search (IVF)
 
     # Image analysis
-    image_analysis_provider: str = "tesseract"  # tesseract|gemini|vertex_ai|aigateway|off
+    image_analysis_provider: str = "tesseract"  # tesseract|gemini|gemini-service-account|aigateway|off
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
-    # Vertex AI (for image_analysis_provider="vertex_ai")
-    vertex_ai_project_id: str | None = None
-    vertex_ai_location: str = "global"
-    vertex_ai_credentials_file: str | None = None
-    vertex_ai_model: str = "gemini-2.0-flash-exp"
+    # Gemini Service Account (for image_analysis_provider="gemini-service-account")
+    gemini_sa_project_id: str | None = None
+    gemini_sa_location: str = "global"
+    gemini_sa_credentials_file: str | None = None
+    gemini_sa_model: str = "gemini-2.0-flash-exp"
 
     # Microsoft AI Gateway (for image_analysis_provider="aigateway")
     aigateway_url: str | None = None
@@ -95,7 +95,7 @@ class VaultConfig:
 
     # Per-provider timeout overrides (0 = use image_timeout default)
     gemini_timeout: int = 0
-    vertex_ai_timeout: int = 0
+    gemini_sa_timeout: int = 0
 
     # Retrieval
     k_vec: int = 40
@@ -163,7 +163,7 @@ class VaultConfig:
         chunking = data.get("chunking", {})
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
-        vertex = data.get("vertex_ai", {})
+        gemini_sa = data.get("gemini_service_account", {})
         aigateway = data.get("aigateway", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
@@ -238,20 +238,20 @@ class VaultConfig:
         if recency_recent_days >= recency_old_days:
             raise ValueError(f"recency_recent_days ({recency_recent_days}) must be less than recency_old_days ({recency_old_days}).")
 
-        # Validate and resolve Vertex AI credentials file if specified
-        vertex_ai_credentials_file = None
-        creds_file = vertex.get("credentials_file")
+        # Validate and resolve Gemini service account credentials file if specified
+        gemini_sa_credentials_file = None
+        creds_file = gemini_sa.get("credentials_file")
         if creds_file:
             creds_path = Path(_expand(creds_file)).resolve()
             # Security: Validate file exists and is a regular file
             if not creds_path.exists():
-                raise ValueError(f"Vertex AI credentials file not found: {creds_path}")
+                raise ValueError(f"Gemini service account credentials file not found: {creds_path}")
             if not creds_path.is_file():
-                raise ValueError(f"Vertex AI credentials path is not a file: {creds_path}")
+                raise ValueError(f"Gemini service account credentials path is not a file: {creds_path}")
             # Security: Check file is readable
             if not os.access(creds_path, os.R_OK):
-                raise ValueError(f"Vertex AI credentials file is not readable: {creds_path}")
-            vertex_ai_credentials_file = str(creds_path)
+                raise ValueError(f"Gemini service account credentials file is not readable: {creds_path}")
+            gemini_sa_credentials_file = str(creds_path)
 
         # Parse offline_mode from config or environment variable
         # Environment variable takes precedence if explicitly set
@@ -327,10 +327,10 @@ class VaultConfig:
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
-            vertex_ai_project_id=vertex.get("project_id"),
-            vertex_ai_location=vertex.get("location", "us-central1"),
-            vertex_ai_credentials_file=vertex_ai_credentials_file,
-            vertex_ai_model=vertex.get("model", "gemini-2.0-flash-exp"),
+            gemini_sa_project_id=gemini_sa.get("project_id"),
+            gemini_sa_location=gemini_sa.get("location", "us-central1"),
+            gemini_sa_credentials_file=gemini_sa_credentials_file,
+            gemini_sa_model=gemini_sa.get("model", "gemini-2.0-flash-exp"),
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
@@ -342,7 +342,7 @@ class VaultConfig:
             image_circuit_threshold=int(img.get("circuit_threshold", 5)),
             image_circuit_reset=int(img.get("circuit_reset", 60)),
             gemini_timeout=int(data.get("gemini", {}).get("timeout", 0)),
-            vertex_ai_timeout=int(vertex.get("timeout", 0)),
+            gemini_sa_timeout=int(gemini_sa.get("timeout", 0)),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,
@@ -422,11 +422,11 @@ class MultiVaultConfig:
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
-    # Vertex AI
-    vertex_ai_project_id: str | None = None
-    vertex_ai_location: str = "global"
-    vertex_ai_credentials_file: str | None = None
-    vertex_ai_model: str = "gemini-2.0-flash-exp"
+    # Gemini Service Account
+    gemini_sa_project_id: str | None = None
+    gemini_sa_location: str = "global"
+    gemini_sa_credentials_file: str | None = None
+    gemini_sa_model: str = "gemini-2.0-flash-exp"
 
     # Microsoft AI Gateway
     aigateway_url: str | None = None
@@ -444,7 +444,7 @@ class MultiVaultConfig:
 
     # Per-provider timeout overrides (0 = use image_timeout default)
     gemini_timeout: int = 0
-    vertex_ai_timeout: int = 0
+    gemini_sa_timeout: int = 0
 
     # Retrieval
     k_vec: int = 40
@@ -540,7 +540,7 @@ class MultiVaultConfig:
         chunking = data.get("chunking", {})
         emb = data.get("embeddings", {})
         img = data.get("image_analysis", {})
-        vertex = data.get("vertex_ai", {})
+        gemini_sa = data.get("gemini_service_account", {})
         aigateway = data.get("aigateway", {})
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
@@ -559,18 +559,18 @@ class MultiVaultConfig:
         k_lex = int(ret.get("k_lex", 40))
         top_k = int(ret.get("top_k", 10))
 
-        # Validate Vertex AI credentials if specified
-        vertex_ai_credentials_file = None
-        creds_file = vertex.get("credentials_file")
+        # Validate Gemini service account credentials if specified
+        gemini_sa_credentials_file = None
+        creds_file = gemini_sa.get("credentials_file")
         if creds_file:
             creds_path = Path(_expand(creds_file)).resolve()
             if not creds_path.exists():
-                raise ValueError(f"Vertex AI credentials file not found: {creds_path}")
+                raise ValueError(f"Gemini service account credentials file not found: {creds_path}")
             if not creds_path.is_file():
-                raise ValueError(f"Vertex AI credentials path is not a file: {creds_path}")
+                raise ValueError(f"Gemini service account credentials path is not a file: {creds_path}")
             if not os.access(creds_path, os.R_OK):
-                raise ValueError(f"Vertex AI credentials file is not readable: {creds_path}")
-            vertex_ai_credentials_file = str(creds_path)
+                raise ValueError(f"Gemini service account credentials file is not readable: {creds_path}")
+            gemini_sa_credentials_file = str(creds_path)
 
         # Handle offline mode
         offline_mode_env = os.environ.get("HF_OFFLINE_MODE")
@@ -642,10 +642,10 @@ class MultiVaultConfig:
             image_analysis_provider=img.get("provider", "tesseract"),
             gemini_api_key=img.get("gemini_api_key"),
             gemini_model=img.get("gemini_model", "gemini-2.0-flash"),
-            vertex_ai_project_id=vertex.get("project_id"),
-            vertex_ai_location=vertex.get("location", "us-central1"),
-            vertex_ai_credentials_file=vertex_ai_credentials_file,
-            vertex_ai_model=vertex.get("model", "gemini-2.0-flash-exp"),
+            gemini_sa_project_id=gemini_sa.get("project_id"),
+            gemini_sa_location=gemini_sa.get("location", "us-central1"),
+            gemini_sa_credentials_file=gemini_sa_credentials_file,
+            gemini_sa_model=gemini_sa.get("model", "gemini-2.0-flash-exp"),
             aigateway_url=aigateway.get("url") or os.environ.get("AI_GATEWAY_URL"),
             aigateway_key=aigateway.get("key") or os.environ.get("AI_GATEWAY_KEY"),
             aigateway_model=aigateway.get("model", "gemini-2.5-flash"),
@@ -657,7 +657,7 @@ class MultiVaultConfig:
             image_circuit_threshold=int(img.get("circuit_threshold", 5)),
             image_circuit_reset=int(img.get("circuit_reset", 60)),
             gemini_timeout=int(data.get("gemini", {}).get("timeout", 0)),
-            vertex_ai_timeout=int(vertex.get("timeout", 0)),
+            gemini_sa_timeout=int(gemini_sa.get("timeout", 0)),
             k_vec=k_vec,
             k_lex=k_lex,
             top_k=top_k,

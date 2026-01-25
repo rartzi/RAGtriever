@@ -127,11 +127,11 @@ During handling of the above exception, another exception occurred:
 │ │          │   image_analysis_provider='aigateway',                        │ │
 │ │          │   gemini_api_key=None,                                        │ │
 │ │          │   gemini_model='gemini-2.0-flash',                            │ │
-│ │          │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',       │ │
-│ │          │   vertex_ai_location='global',                                │ │
+│ │          │   gemini_sa_project_id='gcp-rnd-chatbot-1783-poc-ee44',       │ │
+│ │          │   gemini_sa_location='global',                                │ │
 │ │          │                                                               │ │
-│ │          vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/serv… │ │
-│ │          │   vertex_ai_model='gemini-3-pro-preview',                     │ │
+│ │          gemini_sa_credentials_file='/Users/kjzc236/.config/gcloud/serv… │ │
+│ │          │   gemini_sa_model='gemini-3-pro-preview',                     │ │
 │ │          │   aigateway_url='https://ai-gateway.astrazeneca.net',         │ │
 │ │          │                                                               │ │
 │ │          aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f… │ │
@@ -144,7 +144,7 @@ During handling of the above exception, another exception occurred:
 │ │          │   image_circuit_threshold=5,                                  │ │
 │ │          │   image_circuit_reset=60,                                     │ │
 │ │          │   gemini_timeout=0,                                           │ │
-│ │          │   vertex_ai_timeout=0,                                        │ │
+│ │          │   gemini_sa_timeout=0,                                        │ │
 │ │          │   k_vec=40,                                                   │ │
 │ │          │   k_lex=40,                                                   │ │
 │ │          │   top_k=10,                                                   │ │
@@ -213,11 +213,11 @@ During handling of the above exception, another exception occurred:
 │ │        │   image_analysis_provider='aigateway',                          │ │
 │ │        │   gemini_api_key=None,                                          │ │
 │ │        │   gemini_model='gemini-2.0-flash',                              │ │
-│ │        │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',         │ │
-│ │        │   vertex_ai_location='global',                                  │ │
+│ │        │   gemini_sa_project_id='gcp-rnd-chatbot-1783-poc-ee44',         │ │
+│ │        │   gemini_sa_location='global',                                  │ │
 │ │        │                                                                 │ │
-│ │        vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
-│ │        │   vertex_ai_model='gemini-3-pro-preview',                       │ │
+│ │        gemini_sa_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
+│ │        │   gemini_sa_model='gemini-3-pro-preview',                       │ │
 │ │        │   aigateway_url='https://ai-gateway.astrazeneca.net',           │ │
 │ │        │                                                                 │ │
 │ │        aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f3a… │ │
@@ -230,7 +230,7 @@ During handling of the above exception, another exception occurred:
 │ │        │   image_circuit_threshold=5,                                    │ │
 │ │        │   image_circuit_reset=60,                                       │ │
 │ │        │   gemini_timeout=0,                                             │ │
-│ │        │   vertex_ai_timeout=0,                                          │ │
+│ │        │   gemini_sa_timeout=0,                                          │ │
 │ │        │   k_vec=40,                                                     │ │
 │ │        │   k_lex=40,                                                     │ │
 │ │        │   top_k=10,                                                     │ │
@@ -291,11 +291,11 @@ During handling of the above exception, another exception occurred:
 │ │        │   │   image_analysis_provider='aigateway',                      │ │
 │ │        │   │   gemini_api_key=None,                                      │ │
 │ │        │   │   gemini_model='gemini-2.0-flash',                          │ │
-│ │        │   │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',     │ │
-│ │        │   │   vertex_ai_location='global',                              │ │
+│ │        │   │   gemini_sa_project_id='gcp-rnd-chatbot-1783-poc-ee44',     │ │
+│ │        │   │   gemini_sa_location='global',                              │ │
 │ │        │   │                                                             │ │
-│ │        vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
-│ │        │   │   vertex_ai_model='gemini-3-pro-preview',                   │ │
+│ │        gemini_sa_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
+│ │        │   │   gemini_sa_model='gemini-3-pro-preview',                   │ │
 │ │        │   │   aigateway_url='https://ai-gateway.astrazeneca.net',       │ │
 │ │        │   │                                                             │ │
 │ │        aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f3a… │ │
@@ -308,7 +308,7 @@ During handling of the above exception, another exception occurred:
 │ │        │   │   image_circuit_threshold=5,                                │ │
 │ │        │   │   image_circuit_reset=60,                                   │ │
 │ │        │   │   gemini_timeout=0,                                         │ │
-│ │        │   │   vertex_ai_timeout=0,                                      │ │
+│ │        │   │   gemini_sa_timeout=0,                                      │ │
 │ │        │   │   k_vec=40,                                                 │ │
 │ │        │   │   k_lex=40,                                                 │ │
 │ │        │   │   top_k=10,                                                 │ │
@@ -386,11 +386,11 @@ During handling of the above exception, another exception occurred:
 │ │           │   │   image_analysis_provider='aigateway',                   │ │
 │ │           │   │   gemini_api_key=None,                                   │ │
 │ │           │   │   gemini_model='gemini-2.0-flash',                       │ │
-│ │           │   │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',  │ │
-│ │           │   │   vertex_ai_location='global',                           │ │
+│ │           │   │   gemini_sa_project_id='gcp-rnd-chatbot-1783-poc-ee44',  │ │
+│ │           │   │   gemini_sa_location='global',                           │ │
 │ │           │   │                                                          │ │
-│ │           vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/ser… │ │
-│ │           │   │   vertex_ai_model='gemini-3-pro-preview',                │ │
+│ │           gemini_sa_credentials_file='/Users/kjzc236/.config/gcloud/ser… │ │
+│ │           │   │   gemini_sa_model='gemini-3-pro-preview',                │ │
 │ │           │   │   aigateway_url='https://ai-gateway.astrazeneca.net',    │ │
 │ │           │   │                                                          │ │
 │ │           aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499… │ │
@@ -403,7 +403,7 @@ During handling of the above exception, another exception occurred:
 │ │           │   │   image_circuit_threshold=5,                             │ │
 │ │           │   │   image_circuit_reset=60,                                │ │
 │ │           │   │   gemini_timeout=0,                                      │ │
-│ │           │   │   vertex_ai_timeout=0,                                   │ │
+│ │           │   │   gemini_sa_timeout=0,                                   │ │
 │ │           │   │   k_vec=40,                                              │ │
 │ │           │   │   k_lex=40,                                              │ │
 │ │           │   │   top_k=10,                                              │ │

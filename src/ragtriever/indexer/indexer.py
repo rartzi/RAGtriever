@@ -19,7 +19,7 @@ from ..extractors.markdown import MarkdownExtractor
 from ..extractors.pdf import PdfExtractor
 from ..extractors.pptx import PptxExtractor
 from ..extractors.xlsx import XlsxExtractor
-from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor, VertexAIImageExtractor, AIGatewayImageExtractor
+from ..extractors.image import TesseractImageExtractor, GeminiImageExtractor, GeminiServiceAccountImageExtractor, AIGatewayImageExtractor
 from ..chunking.base import ChunkerRegistry
 from ..chunking.markdown_chunker import MarkdownChunker
 from ..chunking.boundary_chunker import BoundaryMarkerChunker
@@ -153,12 +153,12 @@ class Indexer:
                 api_key=self.cfg.gemini_api_key,
                 model=self.cfg.gemini_model,
             ))
-        elif self.cfg.image_analysis_provider == "vertex_ai":
-            self.extractors.register(VertexAIImageExtractor(
-                project_id=self.cfg.vertex_ai_project_id,
-                location=self.cfg.vertex_ai_location,
-                credentials_file=self.cfg.vertex_ai_credentials_file,
-                model=self.cfg.vertex_ai_model,
+        elif self.cfg.image_analysis_provider == "gemini-service-account":
+            self.extractors.register(GeminiServiceAccountImageExtractor(
+                project_id=self.cfg.gemini_sa_project_id,
+                location=self.cfg.gemini_sa_location,
+                credentials_file=self.cfg.gemini_sa_credentials_file,
+                model=self.cfg.gemini_sa_model,
             ))
         elif self.cfg.image_analysis_provider == "aigateway":
             self.extractors.register(AIGatewayImageExtractor(
@@ -1714,10 +1714,10 @@ class MultiVaultIndexer:
             image_analysis_provider=self.cfg.image_analysis_provider,
             gemini_api_key=self.cfg.gemini_api_key,
             gemini_model=self.cfg.gemini_model,
-            vertex_ai_project_id=self.cfg.vertex_ai_project_id,
-            vertex_ai_location=self.cfg.vertex_ai_location,
-            vertex_ai_credentials_file=self.cfg.vertex_ai_credentials_file,
-            vertex_ai_model=self.cfg.vertex_ai_model,
+            gemini_sa_project_id=self.cfg.gemini_sa_project_id,
+            gemini_sa_location=self.cfg.gemini_sa_location,
+            gemini_sa_credentials_file=self.cfg.gemini_sa_credentials_file,
+            gemini_sa_model=self.cfg.gemini_sa_model,
             extraction_workers=self.cfg.extraction_workers,
             embed_batch_size=self.cfg.embed_batch_size,
             image_workers=self.cfg.image_workers,

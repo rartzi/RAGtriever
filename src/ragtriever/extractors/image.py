@@ -271,10 +271,10 @@ Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
 
 @dataclass
-class VertexAIImageExtractor:
-    """Image extractor using Google Vertex AI vision model with service account authentication.
+class GeminiServiceAccountImageExtractor:
+    """Image extractor using Gemini API with service account authentication.
 
-    Uses Vertex AI with JSON credential files to analyze images and extract:
+    Uses Gemini via GCP service account with JSON credential files to analyze images and extract:
     - Detailed description of the image content
     - Any text visible in the image (OCR)
     - Key topics/themes
@@ -307,11 +307,11 @@ class VertexAIImageExtractor:
             max_retries=self.max_retries,
             backoff_base_ms=self.retry_backoff,
             circuit_breaker=get_circuit_breaker(),
-            provider="vertex_ai",
+            provider="gemini-service-account",
         )
 
     def extract(self, path: Path) -> Extracted:
-        """Extract image content using Vertex AI vision model."""
+        """Extract image content using Gemini with service account authentication."""
         try:
             from PIL import Image  # type: ignore
         except ImportError:
@@ -322,11 +322,11 @@ class VertexAIImageExtractor:
             w, h = img.size
             img_format = img.format or path.suffix.lstrip(".").upper()
 
-        # Read image bytes for Vertex AI
+        # Read image bytes for Gemini analysis
         image_bytes = path.read_bytes()
 
-        # Analyze with Vertex AI (using resilient client)
-        analysis = self._analyze_with_vertex_ai(image_bytes, path.suffix, path)
+        # Analyze with Gemini (using resilient client)
+        analysis = self._analyze_with_gemini_sa(image_bytes, path.suffix, path)
 
         # Build the text content for indexing
         text_parts = []
@@ -355,13 +355,13 @@ class VertexAIImageExtractor:
             "topics": analysis.get("topics", []),
             "entities": analysis.get("entities", []),
             "analysis_model": self.model,
-            "analysis_provider": "vertex_ai",
+            "analysis_provider": "gemini-service-account",
         }
 
         return Extracted(text=text, metadata=meta)
 
-    def _analyze_with_vertex_ai(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
-        """Call Vertex AI API to analyze the image with retry/circuit breaker."""
+    def _analyze_with_gemini_sa(self, image_bytes: bytes, suffix: str, source_path: Path | None = None) -> dict[str, Any]:
+        """Call Gemini API with service account authentication to analyze the image with retry/circuit breaker."""
         if not self.project_id:
             logger.warning(
                 "No Google Cloud project ID found. Set project_id in config or GOOGLE_CLOUD_PROJECT environment variable. "
@@ -385,15 +385,15 @@ class VertexAIImageExtractor:
 
         # Use resilient client to wrap the API call
         result = self._client.call(
-            self._raw_vertex_ai_call,
+            self._raw_gemini_sa_call,
             image_bytes,
             suffix,
             source_path=source_path,
         )
         return result or {}
 
-    def _raw_vertex_ai_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
-        """Raw Vertex AI API call (wrapped by ResilientClient)."""
+    def _raw_gemini_sa_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
+        """Raw Gemini API call with service account (wrapped by ResilientClient)."""
         import vertexai  # type: ignore
         from vertexai.generative_models import GenerativeModel, Part  # type: ignore
         from google.oauth2 import service_account  # type: ignore

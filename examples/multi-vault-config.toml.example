@@ -66,7 +66,7 @@ query_prefix = "Represent this sentence for searching relevant passages: "
 # ============================================
 # IMAGE ANALYSIS
 # ============================================
-# Choose one provider: tesseract, gemini, vertex_ai, or off
+# Choose one provider: tesseract, gemini, gemini-service-account, or off
 
 [image_analysis]
 provider = "tesseract"  # Local OCR, no API needed
@@ -76,9 +76,9 @@ provider = "tesseract"  # Local OCR, no API needed
 # gemini_model = "gemini-2.0-flash"
 # Set GEMINI_API_KEY environment variable
 
-# For Vertex AI:
-# provider = "vertex_ai"
-# [vertex_ai]
+# For Gemini with service account:
+# provider = "gemini-service-account"
+# [gemini_service_account]
 # project_id = "your-gcp-project-id"
 # location = "global"
 # credentials_file = "/path/to/service-account.json"

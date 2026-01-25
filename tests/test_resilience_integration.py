@@ -20,7 +20,7 @@ import pytest
 
 from ragtriever.extractors.image import (
     AIGatewayImageExtractor,
-    VertexAIImageExtractor,
+    GeminiServiceAccountImageExtractor,
     GeminiImageExtractor,
 )
 from ragtriever.extractors.resilience import (
@@ -145,18 +145,18 @@ class TestAIGatewayResilience:
         print(f"\nBreaker state after invalid key: {breaker.state}")
 
 
-class TestVertexAIResilience:
-    """Integration tests for Vertex AI resilience."""
+class TestGeminiServiceAccountResilience:
+    """Integration tests for Gemini service account resilience."""
 
     @pytest.fixture
-    def vertex_extractor(self):
-        """Create Vertex AI extractor for testing."""
+    def gemini_sa_extractor(self):
+        """Create Gemini service account extractor for testing."""
         project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
         creds_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if not project_id or not creds_file:
             pytest.skip("GOOGLE_CLOUD_PROJECT and GOOGLE_APPLICATION_CREDENTIALS not set")
 
-        return VertexAIImageExtractor(
+        return GeminiServiceAccountImageExtractor(
             project_id=project_id,
             location="us-central1",
             credentials_file=creds_file,
@@ -166,17 +166,17 @@ class TestVertexAIResilience:
             retry_backoff=1000,
         )
 
-    def test_successful_extraction(self, vertex_extractor, test_image):
-        """Test successful image extraction with Vertex AI."""
-        result = vertex_extractor.extract(test_image)
+    def test_successful_extraction(self, gemini_sa_extractor, test_image):
+        """Test successful image extraction with Gemini service account."""
+        result = gemini_sa_extractor.extract(test_image)
 
         assert result.text, "Should extract some text"
-        assert result.metadata.get("analysis_provider") == "vertex_ai"
+        assert result.metadata.get("analysis_provider") == "gemini-service-account"
         print(f"\nExtracted text: {result.text[:200]}...")
 
-    def test_circuit_breaker_not_tripped_on_success(self, vertex_extractor, test_image):
+    def test_circuit_breaker_not_tripped_on_success(self, gemini_sa_extractor, test_image):
         """Circuit breaker should stay closed on success."""
-        vertex_extractor.extract(test_image)
+        gemini_sa_extractor.extract(test_image)
 
         breaker = get_circuit_breaker()
         assert not breaker.is_open(), "Breaker should be closed after success"
@@ -193,7 +193,7 @@ class TestVertexAIResilience:
             invalid_creds = f.name
 
         try:
-            extractor = VertexAIImageExtractor(
+            extractor = GeminiServiceAccountImageExtractor(
                 project_id=project_id,
                 credentials_file=invalid_creds,
                 timeout=10000,

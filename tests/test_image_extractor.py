@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 import os
 
-from ragtriever.extractors.image import TesseractImageExtractor, GeminiImageExtractor, VertexAIImageExtractor
+from ragtriever.extractors.image import TesseractImageExtractor, GeminiImageExtractor, GeminiServiceAccountImageExtractor
 
 def create_test_image() -> BytesIO:
     """Create a simple test image in memory."""
@@ -104,19 +104,19 @@ def test_gemini_image_extractor(tmp_path):
         os.environ.get("GOOGLE_CLOUD_PROJECT"),
         os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
     ]),
-    reason="Vertex AI credentials not configured (GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS)"
+    reason="Gemini service account credentials not configured (GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS)"
 )
-def test_vertex_ai_image_extractor(tmp_path):
-    """Test Vertex AI image extractor with service account authentication."""
-    # This is an integration test and requires valid Vertex AI credentials
+def test_gemini_service_account_image_extractor(tmp_path):
+    """Test Gemini service account image extractor with service account authentication."""
+    # This is an integration test and requires valid GCP service account credentials
 
     # Create a test image
     test_img = tmp_path / "test.png"
     buffer = create_test_image()
     test_img.write_bytes(buffer.read())
 
-    # Instantiate the extractor with Vertex AI
-    extractor = VertexAIImageExtractor(
+    # Instantiate the extractor with Gemini service account
+    extractor = GeminiServiceAccountImageExtractor(
         project_id=os.environ.get("GOOGLE_CLOUD_PROJECT"),
         location="global",
         credentials_file=os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
@@ -128,7 +128,7 @@ def test_vertex_ai_image_extractor(tmp_path):
 
     # Assert the results
     assert isinstance(result.text, str)
-    assert result.metadata["analysis_provider"] == "vertex_ai"
+    assert result.metadata["analysis_provider"] == "gemini-service-account"
     assert result.metadata["width"] == 200
     assert result.metadata["height"] == 100
 
