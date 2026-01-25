@@ -26,25 +26,25 @@ class BoostConfig:
     backlink_weight: float = 0.1  # 10% per backlink
     backlink_cap: int = 10  # Max backlinks to count (caps at 2x boost)
 
-    # Recency boost (tiered)
+    # Recency boost (tiered) - SUBTLE nudge for fresh content
     recency_enabled: bool = True
     recency_fresh_days: int = 14  # < 14 days = fresh
     recency_recent_days: int = 60  # < 60 days = recent
     recency_old_days: int = 180  # > 180 days = old
-    recency_fresh_boost: float = 1.20  # 20% boost for fresh
-    recency_recent_boost: float = 1.10  # 10% boost for recent
-    recency_old_penalty: float = 0.95  # 5% penalty for old
+    recency_fresh_boost: float = 1.10  # 10% boost for fresh
+    recency_recent_boost: float = 1.05  # 5% boost for recent
+    recency_old_penalty: float = 0.98  # 2% penalty for old
 
-    # Title/heading boost
-    heading_boost_enabled: bool = True
-    heading_h1_boost: float = 1.30  # 30% boost for H1 (title)
-    heading_h2_boost: float = 1.15  # 15% boost for H2
-    heading_h3_boost: float = 1.08  # 8% boost for H3
+    # Title/heading boost - DISABLED (content/semantics matter most!)
+    heading_boost_enabled: bool = False
+    heading_h1_boost: float = 1.05  # 5% boost for H1 (title)
+    heading_h2_boost: float = 1.03  # 3% boost for H2
+    heading_h3_boost: float = 1.02  # 2% boost for H3
 
-    # Tag boost
-    tag_boost_enabled: bool = True
-    tag_boost_weight: float = 0.15  # 15% boost per matching tag
-    tag_boost_cap: int = 3  # Max tags counted (caps at 45% boost)
+    # Tag boost - DISABLED (content/semantics matter most!)
+    tag_boost_enabled: bool = False
+    tag_boost_weight: float = 0.03  # 3% boost per matching tag
+    tag_boost_cap: int = 3  # Max tags counted (caps at 9% boost)
 
 
 @dataclass
