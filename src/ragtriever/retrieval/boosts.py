@@ -41,6 +41,11 @@ class BoostConfig:
     heading_h2_boost: float = 1.15  # 15% boost for H2
     heading_h3_boost: float = 1.08  # 8% boost for H3
 
+    # Tag boost
+    tag_boost_enabled: bool = True
+    tag_boost_weight: float = 0.15  # 15% boost per matching tag
+    tag_boost_cap: int = 3  # Max tags counted (caps at 45% boost)
+
 
 @dataclass
 class BoostAdjuster:
@@ -52,12 +57,14 @@ class BoostAdjuster:
         self,
         results: list[SearchResult],
         backlink_counts: dict[str, int] | None = None,
+        query: str | None = None,
     ) -> list[SearchResult]:
         """Apply configured boosts to search results.
 
         Args:
             results: Search results to boost
             backlink_counts: Pre-fetched backlink counts by doc_id (optional)
+            query: Original search query for tag matching (optional)
 
         Returns:
             Results with adjusted scores, re-sorted by boosted score
@@ -96,6 +103,14 @@ class BoostAdjuster:
                     score *= heading_boost
                     boost_info["heading_boost"] = heading_boost
                     boost_info["heading_level"] = heading_level
+
+            # Tag boost
+            if self.config.tag_boost_enabled and query:
+                tag_boost, tag_matches = self._calculate_tag_boost(r, query)
+                if tag_boost > 1.0:
+                    score *= tag_boost
+                    boost_info["tag_boost"] = tag_boost
+                    boost_info["tag_matches"] = tag_matches
 
             # Create boosted result with updated metadata
             new_metadata = {**r.metadata, "original_score": r.score, **boost_info}
@@ -181,3 +196,47 @@ class BoostAdjuster:
         # Fallback: check anchor_type for heading markers
         anchor_type = result.metadata.get("anchor_type", "")
         if "heading" in str(anchor_type).lower():
+            # Heading chunk but no level info, apply moderate boost
+            return self.config.heading_h3_boost, None
+
+        return 1.0, None
+
+    def _calculate_tag_boost(self, result: SearchResult, query: str) -> tuple[float, int]:
+        """Calculate boost based on tag matches.
+
+        Args:
+            result: Search result to check for tags
+            query: Search query to match against tags
+
+        Returns:
+            Tuple of (boost_multiplier, number_of_matching_tags)
+        """
+        if not self.config.tag_boost_enabled:
+            return 1.0, 0
+
+        # Get tags from metadata - can be list or string
+        tags = result.metadata.get("tags", [])
+        if not tags:
+            return 1.0, 0
+
+        # Normalize tags to list if string
+        if isinstance(tags, str):
+            tags = [tags]
+
+        # Tokenize query into words (lowercase)
+        query_terms = set(query.lower().split())
+
+        # Count matching tags
+        matches = 0
+        for tag in tags:
+            # Normalize tag: remove # prefix, replace hyphens/underscores with spaces
+            tag_lower = str(tag).lower().lstrip("#").replace("-", " ").replace("_", " ")
+            tag_terms = set(tag_lower.split())
+            if query_terms & tag_terms:  # Any overlap
+                matches += 1
+
+        if matches == 0:
+            return 1.0, 0
+
+        capped_matches = min(matches, self.config.tag_boost_cap)
+        return 1.0 + (self.config.tag_boost_weight * capped_matches), matches
