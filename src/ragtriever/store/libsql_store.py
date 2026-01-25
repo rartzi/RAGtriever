@@ -582,3 +582,30 @@ class LibSqlStore:
         outlinks = [r["dst_target"] for r in self._conn.execute("SELECT dst_target FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path)).fetchall()]
         backlinks = [r["src_rel_path"] for r in self._conn.execute("SELECT src_rel_path FROM links WHERE vault_id=? AND dst_target=?", (vault_id, rel_path)).fetchall()]
         return {"outlinks": outlinks, "backlinks": backlinks}
+
+    def get_backlink_counts(self, doc_ids: list[str] | None = None) -> dict[str, int]:
+        """Get count of incoming links (backlinks) for documents.
+
+        Args:
+            doc_ids: Optional list of doc_ids to filter. If None, returns all.
+
+        Returns:
+            Dict mapping doc_id -> number of documents linking to it
+        """
+        # Query the links table - group by target, count distinct sources
+        # The 'dst_target' column stores the wikilink target (rel_path typically)
+        # Need to join with documents to get doc_id
+        query = """
+            SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
+            FROM links l
+            JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
+            WHERE d.deleted = 0
+            GROUP BY d.doc_id
+        """
+
+        cursor = self._conn.execute(query)
+        result = {row["doc_id"]: row["backlink_count"] for row in cursor.fetchall()}
+
+        if doc_ids:
+            return {k: v for k, v in result.items() if k in doc_ids}
+        return result

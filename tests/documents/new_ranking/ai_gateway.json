@@ -1,0 +1,62 @@
+[
+  {
+    "chunk_id": "98134d9698e1c887f4f0ffbd86241a39",
+    "score": 0.03934426229508197,
+    "rel_path": "01-Capture/People/Alexander.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "330a0a08b2716b92a68bd128a5364d4d",
+    "score": 0.038104838709677416,
+    "rel_path": "01-Capture/Admin/Draft How to Access AI Gateway guide.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "4f8cca40adebf7066c0db9bbd11f0a0b",
+    "score": 0.038104838709677416,
+    "rel_path": "01-Capture/People/Alexander.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "19444c3ce33668f5ef427277d032f9d6",
+    "score": 0.03695806680881308,
+    "rel_path": "01-Capture/People/Cristina.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "3f610f9ff0c314a1020545b602d7b2b8",
+    "score": 0.03585284280936455,
+    "rel_path": "01-Capture/People/Alexander.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "1fa9d908e2721187429beb8f39a3f914",
+    "score": 0.03481185621189825,
+    "rel_path": "01-Capture/People/Cristina.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "e7ad1018d76a4b776b5f5c3672f56d79",
+    "score": 0.0333716915995397,
+    "rel_path": "01-Capture/Admin/Write TNCS and process guidance.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "179aff47f57a85c91224954c5908d9f0",
+    "score": 0.032901408450704224,
+    "rel_path": "01-Capture/Projects/AI Gateway Access Initiative.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "f73f61850fc14be6afaa1a7f6e8e93e3",
+    "score": 0.03246187363834423,
+    "rel_path": "01-Capture/People/Nadya.md",
+    "recency_boost": 1.2
+  },
+  {
+    "chunk_id": "fa919bbbca016e20939332f7d33eefcc",
+    "score": 0.03246187363834423,
+    "rel_path": "01-Capture/People/Cristina.md",
+    "recency_boost": 1.2
+  }
+]

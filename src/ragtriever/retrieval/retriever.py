@@ -10,6 +10,7 @@ from ..embeddings.sentence_transformers import SentenceTransformersEmbedder
 from ..embeddings.ollama import OllamaEmbedder
 from ..store.libsql_store import LibSqlStore
 from .hybrid import HybridRanker
+from .boosts import BoostAdjuster, BoostConfig
 from .reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
 
 @dataclass
@@ -34,7 +35,21 @@ class Retriever:
         else:
             raise ValueError(f"Unknown embedding provider: {self.cfg.embedding_provider}")
 
-        self.ranker = HybridRanker()
+        # Initialize ranker with config settings
+        use_rrf = self.cfg.fusion_algorithm == "rrf"
+        self.ranker = HybridRanker(use_rrf=use_rrf, rrf_k=self.cfg.rrf_k)
+
+        # Initialize boost adjuster
+        boost_config = BoostConfig(
+            backlink_enabled=self.cfg.backlink_boost_enabled,
+            backlink_weight=self.cfg.backlink_boost_weight,
+            backlink_cap=self.cfg.backlink_boost_cap,
+            recency_enabled=self.cfg.recency_boost_enabled,
+            recency_fresh_days=self.cfg.recency_fresh_days,
+            recency_recent_days=self.cfg.recency_recent_days,
+            recency_old_days=self.cfg.recency_old_days,
+        )
+        self.boost_adjuster = BoostAdjuster(config=boost_config)
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -60,10 +75,18 @@ class Retriever:
         vec_hits = self.store.vector_search(qv, k=self.cfg.k_vec, filters=filters)
         lex_hits = self.store.lexical_search(query, k=self.cfg.k_lex, filters=filters)
 
-        # Merge with RRF
+        # Merge with RRF or weighted scoring
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
-        # Rerank if enabled
+        # Apply boosts (backlinks, recency)
+        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+            # Fetch backlink counts if needed
+            backlink_counts = None
+            if self.cfg.backlink_boost_enabled:
+                backlink_counts = self.store.get_backlink_counts()
+            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+
+        # Rerank if enabled (final pass)
         if self.reranker:
             merged = self.reranker.rerank(query, merged, top_k=k)
 
@@ -106,7 +129,21 @@ class MultiVaultRetriever:
         else:
             raise ValueError(f"Unknown embedding provider: {cfg.embedding_provider}")
 
-        self.ranker = HybridRanker()
+        # Initialize ranker with config settings
+        use_rrf = cfg.fusion_algorithm == "rrf"
+        self.ranker = HybridRanker(use_rrf=use_rrf, rrf_k=cfg.rrf_k)
+
+        # Initialize boost adjuster
+        boost_config = BoostConfig(
+            backlink_enabled=cfg.backlink_boost_enabled,
+            backlink_weight=cfg.backlink_boost_weight,
+            backlink_cap=cfg.backlink_boost_cap,
+            recency_enabled=cfg.recency_boost_enabled,
+            recency_fresh_days=cfg.recency_fresh_days,
+            recency_recent_days=cfg.recency_recent_days,
+            recency_old_days=cfg.recency_old_days,
+        )
+        self.boost_adjuster = BoostAdjuster(config=boost_config)
 
         # Initialize reranker if enabled
         self.reranker: Optional[CrossEncoderReranker] = None
@@ -175,10 +212,18 @@ class MultiVaultRetriever:
         vec_hits = self.store.vector_search(qv, k=self.cfg.k_vec, filters=filters)
         lex_hits = self.store.lexical_search(query, k=self.cfg.k_lex, filters=filters)
 
-        # Merge with RRF
+        # Merge with RRF or weighted scoring
         merged = self.ranker.merge(vec_hits, lex_hits, k=k)
 
-        # Rerank if enabled
+        # Apply boosts (backlinks, recency)
+        if self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled:
+            # Fetch backlink counts if needed
+            backlink_counts = None
+            if self.cfg.backlink_boost_enabled:
+                backlink_counts = self.store.get_backlink_counts()
+            merged = self.boost_adjuster.apply_boosts(merged, backlink_counts=backlink_counts)
+
+        # Rerank if enabled (final pass)
         if self.reranker:
             merged = self.reranker.rerank(query, merged, top_k=k)
 

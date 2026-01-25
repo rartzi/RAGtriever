@@ -1,0 +1,965 @@
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/requests/models.py:976 in json               │
+│                                                                              │
+│    973 │   │   │   │   │   raise RequestsJSONDecodeError(e.msg, e.doc, e.pos │
+│    974 │   │                                                                 │
+│    975 │   │   try:                                                          │
+│ ❱  976 │   │   │   return complexjson.loads(self.text, **kwargs)             │
+│    977 │   │   except JSONDecodeError as e:                                  │
+│    978 │   │   │   # Catch JSON-related errors and raise as requests.JSONDec │
+│    979 │   │   │   # This aliases json.JSONDecodeError and simplejson.JSONDe │
+│                                                                              │
+│ ╭───────── locals ──────────╮                                                │
+│ │ kwargs = {}               │                                                │
+│ │   self = <Response [200]> │                                                │
+│ ╰───────────────────────────╯                                                │
+│                                                                              │
+│ /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/__ini │
+│ t__.py:346 in loads                                                          │
+│                                                                              │
+│   343 │   if (cls is None and object_hook is None and                        │
+│   344 │   │   │   parse_int is None and parse_float is None and              │
+│   345 │   │   │   parse_constant is None and object_pairs_hook is None and n │
+│ ❱ 346 │   │   return _default_decoder.decode(s)                              │
+│   347 │   if cls is None:                                                    │
+│   348 │   │   cls = JSONDecoder                                              │
+│   349 │   if object_hook is not None:                                        │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │               cls = None                                                 │ │
+│ │                kw = {}                                                   │ │
+│ │       object_hook = None                                                 │ │
+│ │ object_pairs_hook = None                                                 │ │
+│ │    parse_constant = None                                                 │ │
+│ │       parse_float = None                                                 │ │
+│ │         parse_int = None                                                 │ │
+│ │                 s = '<!doctype html>\n<html                              │ │
+│ │                     class="">\n\t<head>\n\t\t<meta charset="utf-8"       │ │
+│ │                     />\n\n\t\t<meta name'+148219                         │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/decod │
+│ er.py:338 in decode                                                          │
+│                                                                              │
+│   335 │   │   containing a JSON document).                                   │
+│   336 │   │                                                                  │
+│   337 │   │   """                                                            │
+│ ❱ 338 │   │   obj, end = self.raw_decode(s, idx=_w(s, 0).end())              │
+│   339 │   │   end = _w(s, end).end()                                         │
+│   340 │   │   if end != len(s):                                              │
+│   341 │   │   │   raise JSONDecodeError("Extra data", s, end)                │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │   _w = <built-in method match of re.Pattern object at 0x104d29d80>       │ │
+│ │    s = '<!doctype html>\n<html class="">\n\t<head>\n\t\t<meta            │ │
+│ │        charset="utf-8" />\n\n\t\t<meta name'+148219                      │ │
+│ │ self = <json.decoder.JSONDecoder object at 0x104d48e00>                  │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/decod │
+│ er.py:356 in raw_decode                                                      │
+│                                                                              │
+│   353 │   │   try:                                                           │
+│   354 │   │   │   obj, end = self.scan_once(s, idx)                          │
+│   355 │   │   except StopIteration as err:                                   │
+│ ❱ 356 │   │   │   raise JSONDecodeError("Expecting value", s, err.value) fro │
+│   357 │   │   return obj, end                                                │
+│   358                                                                        │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │  idx = 0                                                                 │ │
+│ │    s = '<!doctype html>\n<html class="">\n\t<head>\n\t\t<meta            │ │
+│ │        charset="utf-8" />\n\n\t\t<meta name'+148219                      │ │
+│ │ self = <json.decoder.JSONDecoder object at 0x104d48e00>                  │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+╰──────────────────────────────────────────────────────────────────────────────╯
+JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/src │
+│ /ragtriever/cli.py:215 in query                                              │
+│                                                                              │
+│   212 │   │   if rerank is not None:                                         │
+│   213 │   │   │   cfg = dataclasses.replace(cfg, use_rerank=rerank)          │
+│   214 │   │                                                                  │
+│ ❱ 215 │   │   r = Retriever(cfg)                                             │
+│   216 │   │   filt = {}                                                      │
+│   217 │   │   if path:                                                       │
+│   218 │   │   │   filt["path_prefix"] = path                                 │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │    cfg = VaultConfig(                                                    │ │
+│ │          │                                                               │ │
+│ │          vault_root=PosixPath('/Users/kjzc236/workrelated/odsp/innovati… │ │
+│ │          │                                                               │ │
+│ │          index_dir=PosixPath('/Users/kjzc236/.ragtriever/indexes/test_v… │ │
+│ │          │   ignore=[                                                    │ │
+│ │          │   │   '.git/**',                                              │ │
+│ │          │   │   '.obsidian/cache/**',                                   │ │
+│ │          │   │   '**/.DS_Store',                                         │ │
+│ │          │   │   '**/~$*',                                               │ │
+│ │          │   │   '**/.~lock.*',                                          │ │
+│ │          │   │   '**/~*.tmp',                                            │ │
+│ │          │   │   '**/*.swp',                                             │ │
+│ │          │   │   '**/*.bak'                                              │ │
+│ │          │   ],                                                          │ │
+│ │          │   vault_name='',                                              │ │
+│ │          │   extractor_version='v1',                                     │ │
+│ │          │   chunker_version='v1',                                       │ │
+│ │          │   overlap_chars=200,                                          │ │
+│ │          │   max_chunk_size=2000,                                        │ │
+│ │          │   preserve_heading_metadata=True,                             │ │
+│ │          │   embedding_provider='sentence_transformers',                 │ │
+│ │          │   embedding_model='sentence-transformers/all-MiniLM-L6-v2',   │ │
+│ │          │   embedding_batch_size=32,                                    │ │
+│ │          │   embedding_device='cpu',                                     │ │
+│ │          │   offline_mode=True,                                          │ │
+│ │          │   use_query_prefix=True,                                      │ │
+│ │          │   query_prefix='Represent this sentence for searching         │ │
+│ │          relevant passages: ',                                           │ │
+│ │          │   use_faiss=False,                                            │ │
+│ │          │   faiss_index_type='IVF',                                     │ │
+│ │          │   faiss_nlist=100,                                            │ │
+│ │          │   faiss_nprobe=10,                                            │ │
+│ │          │   image_analysis_provider='aigateway',                        │ │
+│ │          │   gemini_api_key=None,                                        │ │
+│ │          │   gemini_model='gemini-2.0-flash',                            │ │
+│ │          │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',       │ │
+│ │          │   vertex_ai_location='global',                                │ │
+│ │          │                                                               │ │
+│ │          vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/serv… │ │
+│ │          │   vertex_ai_model='gemini-3-pro-preview',                     │ │
+│ │          │   aigateway_url='https://ai-gateway.astrazeneca.net',         │ │
+│ │          │                                                               │ │
+│ │          aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f… │ │
+│ │          │   aigateway_model='gemini-2.5-flash',                         │ │
+│ │          │   aigateway_timeout=60000,                                    │ │
+│ │          │   aigateway_endpoint_path='vertex-ai-express',                │ │
+│ │          │   image_timeout=60000,                                        │ │
+│ │          │   image_max_retries=3,                                        │ │
+│ │          │   image_retry_backoff=1000,                                   │ │
+│ │          │   image_circuit_threshold=5,                                  │ │
+│ │          │   image_circuit_reset=60,                                     │ │
+│ │          │   gemini_timeout=0,                                           │ │
+│ │          │   vertex_ai_timeout=0,                                        │ │
+│ │          │   k_vec=40,                                                   │ │
+│ │          │   k_lex=40,                                                   │ │
+│ │          │   top_k=10,                                                   │ │
+│ │          │   use_rerank=False,                                           │ │
+│ │          │   rerank_model='cross-encoder/ms-marco-MiniLM-L-6-v2',        │ │
+│ │          │   rerank_device='cpu',                                        │ │
+│ │          │   rerank_top_k=10,                                            │ │
+│ │          │   extraction_workers=10,                                      │ │
+│ │          │   embed_batch_size=256,                                       │ │
+│ │          │   image_workers=10,                                           │ │
+│ │          │   parallel_scan=True,                                         │ │
+│ │          │   watch_workers=4,                                            │ │
+│ │          │   watch_batch_size=10,                                        │ │
+│ │          │   watch_batch_timeout=5.0,                                    │ │
+│ │          │   watch_image_workers=4,                                      │ │
+│ │          │   mcp_transport='stdio',                                      │ │
+│ │          │   log_dir='logs',                                             │ │
+│ │          │   scan_log_file='logs/scan_{date}.log',                       │ │
+│ │          │   watch_log_file='logs/watch_{date}.log',                     │ │
+│ │          │   log_level='INFO',                                           │ │
+│ │          │   enable_scan_logging=True,                                   │ │
+│ │          │   enable_watch_logging=True                                   │ │
+│ │          )                                                               │ │
+│ │ config = 'config.toml'                                                   │ │
+│ │      k = 10                                                              │ │
+│ │   path = ''                                                              │ │
+│ │      q = 'AI Gateway'                                                    │ │
+│ │ rerank = None                                                            │ │
+│ │ vaults = None                                                            │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│ in __init__:4                                                                │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │  cfg = VaultConfig(                                                      │ │
+│ │        │                                                                 │ │
+│ │        vault_root=PosixPath('/Users/kjzc236/workrelated/odsp/innovation… │ │
+│ │        │                                                                 │ │
+│ │        index_dir=PosixPath('/Users/kjzc236/.ragtriever/indexes/test_vau… │ │
+│ │        │   ignore=[                                                      │ │
+│ │        │   │   '.git/**',                                                │ │
+│ │        │   │   '.obsidian/cache/**',                                     │ │
+│ │        │   │   '**/.DS_Store',                                           │ │
+│ │        │   │   '**/~$*',                                                 │ │
+│ │        │   │   '**/.~lock.*',                                            │ │
+│ │        │   │   '**/~*.tmp',                                              │ │
+│ │        │   │   '**/*.swp',                                               │ │
+│ │        │   │   '**/*.bak'                                                │ │
+│ │        │   ],                                                            │ │
+│ │        │   vault_name='',                                                │ │
+│ │        │   extractor_version='v1',                                       │ │
+│ │        │   chunker_version='v1',                                         │ │
+│ │        │   overlap_chars=200,                                            │ │
+│ │        │   max_chunk_size=2000,                                          │ │
+│ │        │   preserve_heading_metadata=True,                               │ │
+│ │        │   embedding_provider='sentence_transformers',                   │ │
+│ │        │   embedding_model='sentence-transformers/all-MiniLM-L6-v2',     │ │
+│ │        │   embedding_batch_size=32,                                      │ │
+│ │        │   embedding_device='cpu',                                       │ │
+│ │        │   offline_mode=True,                                            │ │
+│ │        │   use_query_prefix=True,                                        │ │
+│ │        │   query_prefix='Represent this sentence for searching relevant  │ │
+│ │        passages: ',                                                      │ │
+│ │        │   use_faiss=False,                                              │ │
+│ │        │   faiss_index_type='IVF',                                       │ │
+│ │        │   faiss_nlist=100,                                              │ │
+│ │        │   faiss_nprobe=10,                                              │ │
+│ │        │   image_analysis_provider='aigateway',                          │ │
+│ │        │   gemini_api_key=None,                                          │ │
+│ │        │   gemini_model='gemini-2.0-flash',                              │ │
+│ │        │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',         │ │
+│ │        │   vertex_ai_location='global',                                  │ │
+│ │        │                                                                 │ │
+│ │        vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
+│ │        │   vertex_ai_model='gemini-3-pro-preview',                       │ │
+│ │        │   aigateway_url='https://ai-gateway.astrazeneca.net',           │ │
+│ │        │                                                                 │ │
+│ │        aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f3a… │ │
+│ │        │   aigateway_model='gemini-2.5-flash',                           │ │
+│ │        │   aigateway_timeout=60000,                                      │ │
+│ │        │   aigateway_endpoint_path='vertex-ai-express',                  │ │
+│ │        │   image_timeout=60000,                                          │ │
+│ │        │   image_max_retries=3,                                          │ │
+│ │        │   image_retry_backoff=1000,                                     │ │
+│ │        │   image_circuit_threshold=5,                                    │ │
+│ │        │   image_circuit_reset=60,                                       │ │
+│ │        │   gemini_timeout=0,                                             │ │
+│ │        │   vertex_ai_timeout=0,                                          │ │
+│ │        │   k_vec=40,                                                     │ │
+│ │        │   k_lex=40,                                                     │ │
+│ │        │   top_k=10,                                                     │ │
+│ │        │   use_rerank=False,                                             │ │
+│ │        │   rerank_model='cross-encoder/ms-marco-MiniLM-L-6-v2',          │ │
+│ │        │   rerank_device='cpu',                                          │ │
+│ │        │   rerank_top_k=10,                                              │ │
+│ │        │   extraction_workers=10,                                        │ │
+│ │        │   embed_batch_size=256,                                         │ │
+│ │        │   image_workers=10,                                             │ │
+│ │        │   parallel_scan=True,                                           │ │
+│ │        │   watch_workers=4,                                              │ │
+│ │        │   watch_batch_size=10,                                          │ │
+│ │        │   watch_batch_timeout=5.0,                                      │ │
+│ │        │   watch_image_workers=4,                                        │ │
+│ │        │   mcp_transport='stdio',                                        │ │
+│ │        │   log_dir='logs',                                               │ │
+│ │        │   scan_log_file='logs/scan_{date}.log',                         │ │
+│ │        │   watch_log_file='logs/watch_{date}.log',                       │ │
+│ │        │   log_level='INFO',                                             │ │
+│ │        │   enable_scan_logging=True,                                     │ │
+│ │        │   enable_watch_logging=True                                     │ │
+│ │        )                                                                 │ │
+│ │ self = Retriever(                                                        │ │
+│ │        │   cfg=VaultConfig(                                              │ │
+│ │        │   │                                                             │ │
+│ │        vault_root=PosixPath('/Users/kjzc236/workrelated/odsp/innovation… │ │
+│ │        │   │                                                             │ │
+│ │        index_dir=PosixPath('/Users/kjzc236/.ragtriever/indexes/test_vau… │ │
+│ │        │   │   ignore=[                                                  │ │
+│ │        │   │   │   '.git/**',                                            │ │
+│ │        │   │   │   '.obsidian/cache/**',                                 │ │
+│ │        │   │   │   '**/.DS_Store',                                       │ │
+│ │        │   │   │   '**/~$*',                                             │ │
+│ │        │   │   │   '**/.~lock.*',                                        │ │
+│ │        │   │   │   '**/~*.tmp',                                          │ │
+│ │        │   │   │   '**/*.swp',                                           │ │
+│ │        │   │   │   '**/*.bak'                                            │ │
+│ │        │   │   ],                                                        │ │
+│ │        │   │   vault_name='',                                            │ │
+│ │        │   │   extractor_version='v1',                                   │ │
+│ │        │   │   chunker_version='v1',                                     │ │
+│ │        │   │   overlap_chars=200,                                        │ │
+│ │        │   │   max_chunk_size=2000,                                      │ │
+│ │        │   │   preserve_heading_metadata=True,                           │ │
+│ │        │   │   embedding_provider='sentence_transformers',               │ │
+│ │        │   │   embedding_model='sentence-transformers/all-MiniLM-L6-v2', │ │
+│ │        │   │   embedding_batch_size=32,                                  │ │
+│ │        │   │   embedding_device='cpu',                                   │ │
+│ │        │   │   offline_mode=True,                                        │ │
+│ │        │   │   use_query_prefix=True,                                    │ │
+│ │        │   │   query_prefix='Represent this sentence for searching       │ │
+│ │        relevant passages: ',                                             │ │
+│ │        │   │   use_faiss=False,                                          │ │
+│ │        │   │   faiss_index_type='IVF',                                   │ │
+│ │        │   │   faiss_nlist=100,                                          │ │
+│ │        │   │   faiss_nprobe=10,                                          │ │
+│ │        │   │   image_analysis_provider='aigateway',                      │ │
+│ │        │   │   gemini_api_key=None,                                      │ │
+│ │        │   │   gemini_model='gemini-2.0-flash',                          │ │
+│ │        │   │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',     │ │
+│ │        │   │   vertex_ai_location='global',                              │ │
+│ │        │   │                                                             │ │
+│ │        vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/servic… │ │
+│ │        │   │   vertex_ai_model='gemini-3-pro-preview',                   │ │
+│ │        │   │   aigateway_url='https://ai-gateway.astrazeneca.net',       │ │
+│ │        │   │                                                             │ │
+│ │        aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499f3a… │ │
+│ │        │   │   aigateway_model='gemini-2.5-flash',                       │ │
+│ │        │   │   aigateway_timeout=60000,                                  │ │
+│ │        │   │   aigateway_endpoint_path='vertex-ai-express',              │ │
+│ │        │   │   image_timeout=60000,                                      │ │
+│ │        │   │   image_max_retries=3,                                      │ │
+│ │        │   │   image_retry_backoff=1000,                                 │ │
+│ │        │   │   image_circuit_threshold=5,                                │ │
+│ │        │   │   image_circuit_reset=60,                                   │ │
+│ │        │   │   gemini_timeout=0,                                         │ │
+│ │        │   │   vertex_ai_timeout=0,                                      │ │
+│ │        │   │   k_vec=40,                                                 │ │
+│ │        │   │   k_lex=40,                                                 │ │
+│ │        │   │   top_k=10,                                                 │ │
+│ │        │   │   use_rerank=False,                                         │ │
+│ │        │   │   rerank_model='cross-encoder/ms-marco-MiniLM-L-6-v2',      │ │
+│ │        │   │   rerank_device='cpu',                                      │ │
+│ │        │   │   rerank_top_k=10,                                          │ │
+│ │        │   │   extraction_workers=10,                                    │ │
+│ │        │   │   embed_batch_size=256,                                     │ │
+│ │        │   │   image_workers=10,                                         │ │
+│ │        │   │   parallel_scan=True,                                       │ │
+│ │        │   │   watch_workers=4,                                          │ │
+│ │        │   │   watch_batch_size=10,                                      │ │
+│ │        │   │   watch_batch_timeout=5.0,                                  │ │
+│ │        │   │   watch_image_workers=4,                                    │ │
+│ │        │   │   mcp_transport='stdio',                                    │ │
+│ │        │   │   log_dir='logs',                                           │ │
+│ │        │   │   scan_log_file='logs/scan_{date}.log',                     │ │
+│ │        │   │   watch_log_file='logs/watch_{date}.log',                   │ │
+│ │        │   │   log_level='INFO',                                         │ │
+│ │        │   │   enable_scan_logging=True,                                 │ │
+│ │        │   │   enable_watch_logging=True                                 │ │
+│ │        │   )                                                             │ │
+│ │        )                                                                 │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/src │
+│ /ragtriever/retrieval/retriever.py:27 in __post_init__                       │
+│                                                                              │
+│    24 │   │                                                                  │
+│    25 │   │   # Embedder selection                                           │
+│    26 │   │   if self.cfg.embedding_provider == "sentence_transformers":     │
+│ ❱  27 │   │   │   self.embedder = SentenceTransformersEmbedder(              │
+│    28 │   │   │   │   model_id=self.cfg.embedding_model,                     │
+│    29 │   │   │   │   device=self.cfg.embedding_device,                      │
+│    30 │   │   │   │   batch_size=self.cfg.embedding_batch_size,              │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │ db_path = PosixPath('/Users/kjzc236/.ragtriever/indexes/test_vault/vaul… │ │
+│ │    self = Retriever(                                                     │ │
+│ │           │   cfg=VaultConfig(                                           │ │
+│ │           │   │                                                          │ │
+│ │           vault_root=PosixPath('/Users/kjzc236/workrelated/odsp/innovat… │ │
+│ │           │   │                                                          │ │
+│ │           index_dir=PosixPath('/Users/kjzc236/.ragtriever/indexes/test_… │ │
+│ │           │   │   ignore=[                                               │ │
+│ │           │   │   │   '.git/**',                                         │ │
+│ │           │   │   │   '.obsidian/cache/**',                              │ │
+│ │           │   │   │   '**/.DS_Store',                                    │ │
+│ │           │   │   │   '**/~$*',                                          │ │
+│ │           │   │   │   '**/.~lock.*',                                     │ │
+│ │           │   │   │   '**/~*.tmp',                                       │ │
+│ │           │   │   │   '**/*.swp',                                        │ │
+│ │           │   │   │   '**/*.bak'                                         │ │
+│ │           │   │   ],                                                     │ │
+│ │           │   │   vault_name='',                                         │ │
+│ │           │   │   extractor_version='v1',                                │ │
+│ │           │   │   chunker_version='v1',                                  │ │
+│ │           │   │   overlap_chars=200,                                     │ │
+│ │           │   │   max_chunk_size=2000,                                   │ │
+│ │           │   │   preserve_heading_metadata=True,                        │ │
+│ │           │   │   embedding_provider='sentence_transformers',            │ │
+│ │           │   │                                                          │ │
+│ │           embedding_model='sentence-transformers/all-MiniLM-L6-v2',      │ │
+│ │           │   │   embedding_batch_size=32,                               │ │
+│ │           │   │   embedding_device='cpu',                                │ │
+│ │           │   │   offline_mode=True,                                     │ │
+│ │           │   │   use_query_prefix=True,                                 │ │
+│ │           │   │   query_prefix='Represent this sentence for searching    │ │
+│ │           relevant passages: ',                                          │ │
+│ │           │   │   use_faiss=False,                                       │ │
+│ │           │   │   faiss_index_type='IVF',                                │ │
+│ │           │   │   faiss_nlist=100,                                       │ │
+│ │           │   │   faiss_nprobe=10,                                       │ │
+│ │           │   │   image_analysis_provider='aigateway',                   │ │
+│ │           │   │   gemini_api_key=None,                                   │ │
+│ │           │   │   gemini_model='gemini-2.0-flash',                       │ │
+│ │           │   │   vertex_ai_project_id='gcp-rnd-chatbot-1783-poc-ee44',  │ │
+│ │           │   │   vertex_ai_location='global',                           │ │
+│ │           │   │                                                          │ │
+│ │           vertex_ai_credentials_file='/Users/kjzc236/.config/gcloud/ser… │ │
+│ │           │   │   vertex_ai_model='gemini-3-pro-preview',                │ │
+│ │           │   │   aigateway_url='https://ai-gateway.astrazeneca.net',    │ │
+│ │           │   │                                                          │ │
+│ │           aigateway_key='sk-6747acdb6d646a878a88df11c451e8046210811e499… │ │
+│ │           │   │   aigateway_model='gemini-2.5-flash',                    │ │
+│ │           │   │   aigateway_timeout=60000,                               │ │
+│ │           │   │   aigateway_endpoint_path='vertex-ai-express',           │ │
+│ │           │   │   image_timeout=60000,                                   │ │
+│ │           │   │   image_max_retries=3,                                   │ │
+│ │           │   │   image_retry_backoff=1000,                              │ │
+│ │           │   │   image_circuit_threshold=5,                             │ │
+│ │           │   │   image_circuit_reset=60,                                │ │
+│ │           │   │   gemini_timeout=0,                                      │ │
+│ │           │   │   vertex_ai_timeout=0,                                   │ │
+│ │           │   │   k_vec=40,                                              │ │
+│ │           │   │   k_lex=40,                                              │ │
+│ │           │   │   top_k=10,                                              │ │
+│ │           │   │   use_rerank=False,                                      │ │
+│ │           │   │   rerank_model='cross-encoder/ms-marco-MiniLM-L-6-v2',   │ │
+│ │           │   │   rerank_device='cpu',                                   │ │
+│ │           │   │   rerank_top_k=10,                                       │ │
+│ │           │   │   extraction_workers=10,                                 │ │
+│ │           │   │   embed_batch_size=256,                                  │ │
+│ │           │   │   image_workers=10,                                      │ │
+│ │           │   │   parallel_scan=True,                                    │ │
+│ │           │   │   watch_workers=4,                                       │ │
+│ │           │   │   watch_batch_size=10,                                   │ │
+│ │           │   │   watch_batch_timeout=5.0,                               │ │
+│ │           │   │   watch_image_workers=4,                                 │ │
+│ │           │   │   mcp_transport='stdio',                                 │ │
+│ │           │   │   log_dir='logs',                                        │ │
+│ │           │   │   scan_log_file='logs/scan_{date}.log',                  │ │
+│ │           │   │   watch_log_file='logs/watch_{date}.log',                │ │
+│ │           │   │   log_level='INFO',                                      │ │
+│ │           │   │   enable_scan_logging=True,                              │ │
+│ │           │   │   enable_watch_logging=True                              │ │
+│ │           │   )                                                          │ │
+│ │           )                                                              │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│ in __init__:8                                                                │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │       batch_size = 32                                                    │ │
+│ │           device = 'cpu'                                                 │ │
+│ │         model_id = 'sentence-transformers/all-MiniLM-L6-v2'              │ │
+│ │     query_prefix = 'Represent this sentence for searching relevant       │ │
+│ │                    passages: '                                           │ │
+│ │             self = SentenceTransformersEmbedder(                         │ │
+│ │                    │                                                     │ │
+│ │                    model_id='sentence-transformers/all-MiniLM-L6-v2',    │ │
+│ │                    │   device='cpu',                                     │ │
+│ │                    │   batch_size=32,                                    │ │
+│ │                    │   use_query_prefix=True,                            │ │
+│ │                    │   query_prefix='Represent this sentence for         │ │
+│ │                    searching relevant passages: '                        │ │
+│ │                    )                                                     │ │
+│ │ use_query_prefix = True                                                  │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/src │
+│ /ragtriever/embeddings/sentence_transformers.py:23 in __post_init__          │
+│                                                                              │
+│   20 │   │   warnings.filterwarnings("ignore", message="resource_tracker: Th │
+│   21 │   │                                                                   │
+│   22 │   │   from sentence_transformers import SentenceTransformer  # type:  │
+│ ❱ 23 │   │   self._model = SentenceTransformer(self.model_id, device=self.de │
+│   24 │   │   # Determine dims from a small encode                            │
+│   25 │   │   v = self._model.encode(["dimension_probe"], batch_size=1, conve │
+│   26 │   │   self.dims = int(v.shape[1])                                     │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │     self = SentenceTransformersEmbedder(                                 │ │
+│ │            │   model_id='sentence-transformers/all-MiniLM-L6-v2',        │ │
+│ │            │   device='cpu',                                             │ │
+│ │            │   batch_size=32,                                            │ │
+│ │            │   use_query_prefix=True,                                    │ │
+│ │            │   query_prefix='Represent this sentence for searching       │ │
+│ │            relevant passages: '                                          │ │
+│ │            )                                                             │ │
+│ │ warnings = <module 'warnings' from                                       │ │
+│ │            '/Library/Frameworks/Python.framework/Versions/3.12/lib/pyth… │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/sentence_transformers/SentenceTransformer.py │
+│ :327 in __init__                                                             │
+│                                                                              │
+│    324 │   │   │   │   )                                                     │
+│    325 │   │   │   │   == self._model_config["model_type"]                   │
+│    326 │   │   │   ):                                                        │
+│ ❱  327 │   │   │   │   modules, self.module_kwargs = self._load_sbert_model( │
+│    328 │   │   │   │   │   model_name_or_path,                               │
+│    329 │   │   │   │   │   token=token,                                      │
+│    330 │   │   │   │   │   cache_folder=cache_folder,                        │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │                  backend = 'torch'                                       │ │
+│ │ basic_transformer_models = [                                             │ │
+│ │                            │   'albert-base-v1',                         │ │
+│ │                            │   'albert-base-v2',                         │ │
+│ │                            │   'albert-large-v1',                        │ │
+│ │                            │   'albert-large-v2',                        │ │
+│ │                            │   'albert-xlarge-v1',                       │ │
+│ │                            │   'albert-xlarge-v2',                       │ │
+│ │                            │   'albert-xxlarge-v1',                      │ │
+│ │                            │   'albert-xxlarge-v2',                      │ │
+│ │                            │   'bert-base-cased-finetuned-mrpc',         │ │
+│ │                            │   'bert-base-cased',                        │ │
+│ │                            │   ... +58                                   │ │
+│ │                            ]                                             │ │
+│ │             cache_folder = None                                          │ │
+│ │            config_kwargs = None                                          │ │
+│ │      default_prompt_name = None                                          │ │
+│ │                   device = 'cpu'                                         │ │
+│ │              has_modules = True                                          │ │
+│ │         local_files_only = False                                         │ │
+│ │          model_card_data = None                                          │ │
+│ │             model_kwargs = None                                          │ │
+│ │       model_name_or_path = 'sentence-transformers/all-MiniLM-L6-v2'      │ │
+│ │                  modules = None                                          │ │
+│ │                  prompts = None                                          │ │
+│ │                 revision = None                                          │ │
+│ │                     self = <repr-error "'SentenceTransformer' object has │ │
+│ │                            no attribute '_modules'">                     │ │
+│ │       similarity_fn_name = None                                          │ │
+│ │                    token = None                                          │ │
+│ │         tokenizer_kwargs = None                                          │ │
+│ │             truncate_dim = None                                          │ │
+│ │        trust_remote_code = False                                         │ │
+│ │           use_auth_token = None                                          │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/sentence_transformers/SentenceTransformer.py │
+│ :2305 in _load_sbert_model                                                   │
+│                                                                              │
+│   2302 │   │   │   else:                                                     │
+│   2303 │   │   │   │   # Newer modules that support the new loading method a │
+│   2304 │   │   │   │   # i.e. with many keyword arguments that can optionall │
+│ ❱ 2305 │   │   │   │   module = module_class.load(                           │
+│   2306 │   │   │   │   │   model_name_or_path,                               │
+│   2307 │   │   │   │   │   # Loading-specific keyword arguments              │
+│   2308 │   │   │   │   │   subfolder=module_config["path"],                  │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │                      cache_folder = None                                 │ │
+│ │                         class_ref = 'sentence_transformers.models.Trans… │ │
+│ │                     config_kwargs = None                                 │ │
+│ │ config_sentence_transformers_json_… '/Users/kjzc236/.cache/huggingface/… │ │
+│ │                                   =                                      │ │
+│ │                               fIn = <_io.TextIOWrapper                   │ │
+│ │                                     name='/Users/kjzc236/.cache/hugging… │ │
+│ │                                     mode='r' encoding='utf8'>            │ │
+│ │                    load_signature = <Signature (model_name_or_path:      │ │
+│ │                                     'str', subfolder: 'str' = '', token: │ │
+│ │                                     'bool | str | None' = None,          │ │
+│ │                                     cache_folder: 'str | None' = None,   │ │
+│ │                                     revision: 'str | None' = None,       │ │
+│ │                                     local_files_only: 'bool' = False,    │ │
+│ │                                     trust_remote_code: 'bool' = False,   │ │
+│ │                                     model_kwargs: 'dict[str, Any] |      │ │
+│ │                                     None' = None, tokenizer_kwargs:      │ │
+│ │                                     'dict[str, Any] | None' = None,      │ │
+│ │                                     config_kwargs: 'dict[str, Any] |     │ │
+│ │                                     None' = None, backend: 'str' =       │ │
+│ │                                     'torch', **kwargs) -> 'Self'>        │ │
+│ │                  local_files_only = False                                │ │
+│ │                   model_card_path = '/Users/kjzc236/.cache/huggingface/… │ │
+│ │                      model_kwargs = None                                 │ │
+│ │                model_name_or_path = 'sentence-transformers/all-MiniLM-L… │ │
+│ │                     module_config = {                                    │ │
+│ │                                     │   'idx': 0,                        │ │
+│ │                                     │   'name': '0',                     │ │
+│ │                                     │   'path': '',                      │ │
+│ │                                     │   'type':                          │ │
+│ │                                     'sentence_transformers.models.Trans… │ │
+│ │                                     }                                    │ │
+│ │                     module_kwargs = OrderedDict()                        │ │
+│ │                           modules = OrderedDict()                        │ │
+│ │                    modules_config = [                                    │ │
+│ │                                     │   {                                │ │
+│ │                                     │   │   'idx': 0,                    │ │
+│ │                                     │   │   'name': '0',                 │ │
+│ │                                     │   │   'path': '',                  │ │
+│ │                                     │   │   'type':                      │ │
+│ │                                     'sentence_transformers.models.Trans… │ │
+│ │                                     │   },                               │ │
+│ │                                     │   {                                │ │
+│ │                                     │   │   'idx': 1,                    │ │
+│ │                                     │   │   'name': '1',                 │ │
+│ │                                     │   │   'path': '1_Pooling',         │ │
+│ │                                     │   │   'type':                      │ │
+│ │                                     'sentence_transformers.models.Pooli… │ │
+│ │                                     │   },                               │ │
+│ │                                     │   {                                │ │
+│ │                                     │   │   'idx': 2,                    │ │
+│ │                                     │   │   'name': '2',                 │ │
+│ │                                     │   │   'path': '2_Normalize',       │ │
+│ │                                     │   │   'type':                      │ │
+│ │                                     'sentence_transformers.models.Norma… │ │
+│ │                                     │   }                                │ │
+│ │                                     ]                                    │ │
+│ │                 modules_json_path = '/Users/kjzc236/.cache/huggingface/… │ │
+│ │                          revision = None                                 │ │
+│ │                              self = <repr-error "'SentenceTransformer'   │ │
+│ │                                     object has no attribute '_modules'"> │ │
+│ │                             token = None                                 │ │
+│ │                  tokenizer_kwargs = None                                 │ │
+│ │                 trust_remote_code = False                                │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/sentence_transformers/models/Transformer.py: │
+│ 366 in load                                                                  │
+│                                                                              │
+│   363 │   │   │   config_kwargs=config_kwargs,                               │
+│   364 │   │   │   backend=backend,                                           │
+│   365 │   │   )                                                              │
+│ ❱ 366 │   │   return cls(model_name_or_path=model_name_or_path, **init_kwarg │
+│   367 │                                                                      │
+│   368 │   @classmethod                                                       │
+│   369 │   def _load_init_kwargs(                                             │
+│                                                                              │
+│ ╭─────────────────────────── locals ────────────────────────────╮            │
+│ │            backend = 'torch'                                  │            │
+│ │       cache_folder = None                                     │            │
+│ │      config_kwargs = None                                     │            │
+│ │        init_kwargs = {                                        │            │
+│ │                      │   'max_seq_length': 256,               │            │
+│ │                      │   'do_lower_case': False,              │            │
+│ │                      │   'model_args': {                      │            │
+│ │                      │   │   'subfolder': '',                 │            │
+│ │                      │   │   'token': None,                   │            │
+│ │                      │   │   'revision': None,                │            │
+│ │                      │   │   'local_files_only': False,       │            │
+│ │                      │   │   'trust_remote_code': False       │            │
+│ │                      │   },                                   │            │
+│ │                      │   'tokenizer_args': {                  │            │
+│ │                      │   │   'subfolder': '',                 │            │
+│ │                      │   │   'token': None,                   │            │
+│ │                      │   │   'revision': None,                │            │
+│ │                      │   │   'local_files_only': False,       │            │
+│ │                      │   │   'trust_remote_code': False,      │            │
+│ │                      │   │   'model_max_length': 256          │            │
+│ │                      │   },                                   │            │
+│ │                      │   'config_args': {                     │            │
+│ │                      │   │   'subfolder': '',                 │            │
+│ │                      │   │   'token': None,                   │            │
+│ │                      │   │   'revision': None,                │            │
+│ │                      │   │   'local_files_only': False,       │            │
+│ │                      │   │   'trust_remote_code': False       │            │
+│ │                      │   },                                   │            │
+│ │                      │   'cache_dir': None,                   │            │
+│ │                      │   'backend': 'torch'                   │            │
+│ │                      }                                        │            │
+│ │             kwargs = {}                                       │            │
+│ │   local_files_only = False                                    │            │
+│ │       model_kwargs = None                                     │            │
+│ │ model_name_or_path = 'sentence-transformers/all-MiniLM-L6-v2' │            │
+│ │           revision = None                                     │            │
+│ │          subfolder = ''                                       │            │
+│ │              token = None                                     │            │
+│ │   tokenizer_kwargs = None                                     │            │
+│ │  trust_remote_code = False                                    │            │
+│ ╰───────────────────────────────────────────────────────────────╯            │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/sentence_transformers/models/Transformer.py: │
+│ 103 in __init__                                                              │
+│                                                                              │
+│   100 │   │                                                                  │
+│   101 │   │   if max_seq_length is not None and "model_max_length" not in to │
+│   102 │   │   │   tokenizer_args["model_max_length"] = max_seq_length        │
+│ ❱ 103 │   │   self.tokenizer = AutoTokenizer.from_pretrained(                │
+│   104 │   │   │   tokenizer_name_or_path if tokenizer_name_or_path is not No │
+│   105 │   │   │   cache_dir=cache_dir,                                       │
+│   106 │   │   │   **tokenizer_args,                                          │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │                backend = 'torch'                                         │ │
+│ │              cache_dir = None                                            │ │
+│ │                 config = BertConfig {                                    │ │
+│ │                            "architectures": [                            │ │
+│ │                          │   "BertModel"                                 │ │
+│ │                            ],                                            │ │
+│ │                            "attention_probs_dropout_prob": 0.1,          │ │
+│ │                            "classifier_dropout": null,                   │ │
+│ │                            "gradient_checkpointing": false,              │ │
+│ │                            "hidden_act": "gelu",                         │ │
+│ │                            "hidden_dropout_prob": 0.1,                   │ │
+│ │                            "hidden_size": 384,                           │ │
+│ │                            "initializer_range": 0.02,                    │ │
+│ │                            "intermediate_size": 1536,                    │ │
+│ │                            "layer_norm_eps": 1e-12,                      │ │
+│ │                            "max_position_embeddings": 512,               │ │
+│ │                            "model_type": "bert",                         │ │
+│ │                            "num_attention_heads": 12,                    │ │
+│ │                            "num_hidden_layers": 6,                       │ │
+│ │                            "pad_token_id": 0,                            │ │
+│ │                            "position_embedding_type": "absolute",        │ │
+│ │                            "transformers_version": "4.57.5",             │ │
+│ │                            "type_vocab_size": 2,                         │ │
+│ │                            "use_cache": true,                            │ │
+│ │                            "vocab_size": 30522                           │ │
+│ │                          }                                               │ │
+│ │            config_args = {                                               │ │
+│ │                          │   'subfolder': '',                            │ │
+│ │                          │   'token': None,                              │ │
+│ │                          │   'revision': None,                           │ │
+│ │                          │   'local_files_only': False,                  │ │
+│ │                          │   'trust_remote_code': False                  │ │
+│ │                          }                                               │ │
+│ │          do_lower_case = False                                           │ │
+│ │          is_peft_model = False                                           │ │
+│ │         max_seq_length = 256                                             │ │
+│ │             model_args = {                                               │ │
+│ │                          │   'subfolder': '',                            │ │
+│ │                          │   'token': None,                              │ │
+│ │                          │   'revision': None,                           │ │
+│ │                          │   'local_files_only': False,                  │ │
+│ │                          │   'trust_remote_code': False                  │ │
+│ │                          }                                               │ │
+│ │   model_forward_params = [                                               │ │
+│ │                          │   'input_ids',                                │ │
+│ │                          │   'attention_mask',                           │ │
+│ │                          │   'token_type_ids',                           │ │
+│ │                          │   'position_ids',                             │ │
+│ │                          │   'head_mask',                                │ │
+│ │                          │   'inputs_embeds',                            │ │
+│ │                          │   'encoder_hidden_states',                    │ │
+│ │                          │   'encoder_attention_mask',                   │ │
+│ │                          │   'past_key_values',                          │ │
+│ │                          │   'use_cache',                                │ │
+│ │                          │   ... +4                                      │ │
+│ │                          ]                                               │ │
+│ │     model_name_or_path = 'sentence-transformers/all-MiniLM-L6-v2'        │ │
+│ │                   self = <repr-error "'Transformer' object has no        │ │
+│ │                          attribute 'max_seq_length'">                    │ │
+│ │         tokenizer_args = {                                               │ │
+│ │                          │   'subfolder': '',                            │ │
+│ │                          │   'token': None,                              │ │
+│ │                          │   'revision': None,                           │ │
+│ │                          │   'local_files_only': False,                  │ │
+│ │                          │   'trust_remote_code': False,                 │ │
+│ │                          │   'model_max_length': 256                     │ │
+│ │                          }                                               │ │
+│ │ tokenizer_name_or_path = None                                            │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/transformers/models/auto/tokenization_auto.p │
+│ y:1156 in from_pretrained                                                    │
+│                                                                              │
+│   1153 │   │   │   │   raise ValueError(                                     │
+│   1154 │   │   │   │   │   f"Tokenizer class {tokenizer_class_candidate} doe │
+│   1155 │   │   │   │   )                                                     │
+│ ❱ 1156 │   │   │   return tokenizer_class.from_pretrained(pretrained_model_n │
+│   1157 │   │                                                                 │
+│   1158 │   │   # Otherwise we have to be creative.                           │
+│   1159 │   │   # if model is an encoder decoder, the encoder tokenizer class │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │                        config = None                                     │ │
+│ │        config_tokenizer_class = 'BertTokenizer'                          │ │
+│ │                     gguf_file = None                                     │ │
+│ │                has_local_code = True                                     │ │
+│ │               has_remote_code = False                                    │ │
+│ │                        inputs = ()                                       │ │
+│ │                        kwargs = {                                        │ │
+│ │                                 │   'cache_dir': None,                   │ │
+│ │                                 │   'subfolder': '',                     │ │
+│ │                                 │   'token': None,                       │ │
+│ │                                 │   'revision': None,                    │ │
+│ │                                 │   'local_files_only': False,           │ │
+│ │                                 │   'model_max_length': 256,             │ │
+│ │                                 │   '_from_auto': True,                  │ │
+│ │                                 │   '_commit_hash':                      │ │
+│ │                                 '8e2a56f90460eff3a6ec43651cd7b15ff4d28c… │ │
+│ │                                 }                                        │ │
+│ │ pretrained_model_name_or_path = 'sentence-transformers/all-MiniLM-L6-v2' │ │
+│ │            tokenizer_auto_map = None                                     │ │
+│ │     tokenizer_class_candidate = 'BertTokenizerFast'                      │ │
+│ │              tokenizer_config = {                                        │ │
+│ │                                 │   'do_lower_case': True,               │ │
+│ │                                 │   'unk_token': '[UNK]',                │ │
+│ │                                 │   'sep_token': '[SEP]',                │ │
+│ │                                 │   'pad_token': '[PAD]',                │ │
+│ │                                 │   'cls_token': '[CLS]',                │ │
+│ │                                 │   'mask_token': '[MASK]',              │ │
+│ │                                 │   'tokenize_chinese_chars': True,      │ │
+│ │                                 │   'strip_accents': None,               │ │
+│ │                                 │   'name_or_path':                      │ │
+│ │                                 'nreimers/MiniLM-L6-H384-uncased',       │ │
+│ │                                 │   'do_basic_tokenize': True,           │ │
+│ │                                 │   ... +4                               │ │
+│ │                                 }                                        │ │
+│ │                tokenizer_type = None                                     │ │
+│ │             trust_remote_code = False                                    │ │
+│ │                use_auth_token = None                                     │ │
+│ │                      use_fast = True                                     │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/transformers/tokenization_utils_base.py:2039 │
+│  in from_pretrained                                                          │
+│                                                                              │
+│   2036 │   │   │   │   │   │   │   │   │   f"{CHAT_TEMPLATE_DIR}/{template_f │
+│   2037 │   │   │   │   │   │   │   │   )                                     │
+│   2038 │   │   │   │   │   else:                                             │
+│ ❱ 2039 │   │   │   │   │   │   for template in list_repo_templates(          │
+│   2040 │   │   │   │   │   │   │   pretrained_model_name_or_path,            │
+│   2041 │   │   │   │   │   │   │   local_files_only=local_files_only,        │
+│   2042 │   │   │   │   │   │   │   revision=revision,                        │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │        additional_files_names = {                                        │ │
+│ │                                 │   'added_tokens_file':                 │ │
+│ │                                 'added_tokens.json',                     │ │
+│ │                                 │   'special_tokens_map_file':           │ │
+│ │                                 'special_tokens_map.json',               │ │
+│ │                                 │   'tokenizer_config_file':             │ │
+│ │                                 'tokenizer_config.json',                 │ │
+│ │                                 │   'tokenizer_file': 'tokenizer.json',  │ │
+│ │                                 │   'chat_template_file':                │ │
+│ │                                 'chat_template.jinja'                    │ │
+│ │                                 }                                        │ │
+│ │                     cache_dir = None                                     │ │
+│ │                   commit_hash = '8e2a56f90460eff3a6ec43651cd7b15ff4d28c… │ │
+│ │           fast_tokenizer_file = 'tokenizer.json'                         │ │
+│ │                force_download = False                                    │ │
+│ │               from_auto_class = True                                     │ │
+│ │                 from_pipeline = None                                     │ │
+│ │                     gguf_file = None                                     │ │
+│ │            init_configuration = {}                                       │ │
+│ │                   init_inputs = ()                                       │ │
+│ │                      is_local = False                                    │ │
+│ │                        kwargs = {'model_max_length': 256}                │ │
+│ │              local_files_only = False                                    │ │
+│ │ pretrained_model_name_or_path = 'sentence-transformers/all-MiniLM-L6-v2' │ │
+│ │                       proxies = None                                     │ │
+│ │                        reader = <_io.TextIOWrapper                       │ │
+│ │                                 name='/Users/kjzc236/.cache/huggingface… │ │
+│ │                                 mode='r' encoding='utf-8'>               │ │
+│ │          resolved_config_file = '/Users/kjzc236/.cache/huggingface/hub/… │ │
+│ │               resume_download = None                                     │ │
+│ │                      revision = None                                     │ │
+│ │                single_file_id = None                                     │ │
+│ │                     subfolder = ''                                       │ │
+│ │                         token = None                                     │ │
+│ │              tokenizer_config = {                                        │ │
+│ │                                 │   'do_lower_case': True,               │ │
+│ │                                 │   'unk_token': '[UNK]',                │ │
+│ │                                 │   'sep_token': '[SEP]',                │ │
+│ │                                 │   'pad_token': '[PAD]',                │ │
+│ │                                 │   'cls_token': '[CLS]',                │ │
+│ │                                 │   'mask_token': '[MASK]',              │ │
+│ │                                 │   'tokenize_chinese_chars': True,      │ │
+│ │                                 │   'strip_accents': None,               │ │
+│ │                                 │   'name_or_path':                      │ │
+│ │                                 'nreimers/MiniLM-L6-H384-uncased',       │ │
+│ │                                 │   'do_basic_tokenize': True,           │ │
+│ │                                 │   ... +3                               │ │
+│ │                                 }                                        │ │
+│ │             trust_remote_code = False                                    │ │
+│ │                use_auth_token = None                                     │ │
+│ │                    user_agent = {                                        │ │
+│ │                                 │   'file_type': 'tokenizer',            │ │
+│ │                                 │   'from_auto_class': True,             │ │
+│ │                                 │   'is_fast': True                      │ │
+│ │                                 }                                        │ │
+│ │                   vocab_files = {                                        │ │
+│ │                                 │   'vocab_file': 'vocab.txt',           │ │
+│ │                                 │   'tokenizer_file': 'tokenizer.json',  │ │
+│ │                                 │   'added_tokens_file':                 │ │
+│ │                                 'added_tokens.json',                     │ │
+│ │                                 │   'special_tokens_map_file':           │ │
+│ │                                 'special_tokens_map.json',               │ │
+│ │                                 │   'tokenizer_config_file':             │ │
+│ │                                 'tokenizer_config.json',                 │ │
+│ │                                 │   'chat_template_file':                │ │
+│ │                                 'chat_template.jinja'                    │ │
+│ │                                 }                                        │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/transformers/utils/hub.py:169 in             │
+│ list_repo_templates                                                          │
+│                                                                              │
+│    166 │   │   try:                                                          │
+│    167 │   │   │   return [                                                  │
+│    168 │   │   │   │   entry.path.removeprefix(f"{CHAT_TEMPLATE_DIR}/")      │
+│ ❱  169 │   │   │   │   for entry in list_repo_tree(                          │
+│    170 │   │   │   │   │   repo_id=repo_id,                                  │
+│    171 │   │   │   │   │   revision=revision,                                │
+│    172 │   │   │   │   │   path_in_repo=CHAT_TEMPLATE_DIR,                   │
+│                                                                              │
+│ ╭────────────────────────── locals ───────────────────────────╮              │
+│ │        cache_dir = None                                     │              │
+│ │ local_files_only = False                                    │              │
+│ │          repo_id = 'sentence-transformers/all-MiniLM-L6-v2' │              │
+│ │         revision = None                                     │              │
+│ │            token = None                                     │              │
+│ ╰─────────────────────────────────────────────────────────────╯              │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/huggingface_hub/hf_api.py:3191 in            │
+│ list_repo_tree                                                               │
+│                                                                              │
+│    3188 │   │                                                                │
+│    3189 │   │   encoded_path_in_repo = "/" + quote(path_in_repo, safe="") if │
+│    3190 │   │   tree_url = f"{self.endpoint}/api/{repo_type}s/{repo_id}/tree │
+│ ❱  3191 │   │   for path_info in paginate(path=tree_url, headers=headers, pa │
+│    3192 │   │   │   yield (RepoFile(**path_info) if path_info["type"] == "fi │
+│    3193 │                                                                    │
+│    3194 │   @validate_hf_hub_args                                            │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │ encoded_path_in_repo = '/additional_chat_templates'                      │ │
+│ │               expand = False                                             │ │
+│ │              headers = {                                                 │ │
+│ │                        │   'user-agent': 'unknown/None; hf_hub/0.36.0;   │ │
+│ │                        python/3.12.8; torch/2.9.1'                       │ │
+│ │                        }                                                 │ │
+│ │         path_in_repo = 'additional_chat_templates'                       │ │
+│ │            recursive = False                                             │ │
+│ │              repo_id = 'sentence-transformers/all-MiniLM-L6-v2'          │ │
+│ │            repo_type = 'model'                                           │ │
+│ │             revision = 'main'                                            │ │
+│ │                 self = <huggingface_hub.hf_api.HfApi object at           │ │
+│ │                        0x110dff050>                                      │ │
+│ │                token = None                                              │ │
+│ │             tree_url = 'https://huggingface.co/api/models/sentence-tran… │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/huggingface_hub/utils/_pagination.py:38 in   │
+│ paginate                                                                     │
+│                                                                              │
+│   35 │   session = get_session()                                             │
+│   36 │   r = session.get(path, params=params, headers=headers)               │
+│   37 │   hf_raise_for_status(r)                                              │
+│ ❱ 38 │   yield from r.json()                                                 │
+│   39 │                                                                       │
+│   40 │   # Follow pages                                                      │
+│   41 │   # Next link already contains query params                           │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │ headers = {                                                              │ │
+│ │           │   'user-agent': 'unknown/None; hf_hub/0.36.0; python/3.12.8; │ │
+│ │           torch/2.9.1'                                                   │ │
+│ │           }                                                              │ │
+│ │  params = {'recursive': False, 'expand': False}                          │ │
+│ │    path = 'https://huggingface.co/api/models/sentence-transformers/all-… │ │
+│ │       r = <Response [200]>                                               │ │
+│ │ session = <requests.sessions.Session object at 0x133f44fb0>              │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /Users/kjzc236/workrelated/odsp/innovation_group/experiments/cortexindex/.ve │
+│ nv/lib/python3.12/site-packages/requests/models.py:980 in json               │
+│                                                                              │
+│    977 │   │   except JSONDecodeError as e:                                  │
+│    978 │   │   │   # Catch JSON-related errors and raise as requests.JSONDec │
+│    979 │   │   │   # This aliases json.JSONDecodeError and simplejson.JSONDe │
+│ ❱  980 │   │   │   raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)        │
+│    981 │                                                                     │
+│    982 │   @property                                                         │
+│    983 │   def links(self):                                                  │
+│                                                                              │
+│ ╭───────── locals ──────────╮                                                │
+│ │ kwargs = {}               │                                                │
+│ │   self = <Response [200]> │                                                │
+│ ╰───────────────────────────╯                                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+JSONDecodeError: Expecting value: line 1 column 1 (char 0)
