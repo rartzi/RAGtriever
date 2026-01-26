@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RAGtriever Local is a local-first vault indexer + hybrid retrieval system with MCP interface. It indexes Obsidian-compatible vaults (Markdown + attachments) into a hybrid search system (semantic + lexical + link-graph) and serves results via CLI, Python API, and MCP tools.
+Mneme Local is a local-first vault indexer + hybrid retrieval system with MCP interface. It indexes Obsidian-compatible vaults (Markdown + attachments) into a hybrid search system (semantic + lexical + link-graph) and serves results via CLI, Python API, and MCP tools.
 
 **Key design principles:**
 - Local-only: no data leaves the machine
@@ -52,12 +52,12 @@ pytest tests/test_markdown_parsing.py              # single file
 pytest tests/test_markdown_parsing.py::test_parse_wikilinks  # single test
 
 # CLI (after creating config.toml)
-ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
-ragtriever scan --full
-ragtriever query "search term" --k 10
-ragtriever query "search term" --k 10 --rerank  # with cross-encoder reranking
-ragtriever watch              # watch mode for continuous indexing
-ragtriever mcp                # MCP server over stdio
+mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
+mneme scan --full
+mneme query "search term" --k 10
+mneme query "search term" --k 10 --rerank  # with cross-encoder reranking
+mneme watch              # watch mode for continuous indexing
+mneme mcp                # MCP server over stdio
 ```
 
 ## Architecture
@@ -69,7 +69,7 @@ Vault (filesystem) → Change Detection → Ingestion Pipeline → Stores → Re
 
 ### Parallel Processing Architecture
 
-RAGtriever uses parallel processing to significantly speed up full vault scans (3.6x speedup tested). **All file types** (markdown, PDFs, PowerPoint, Excel, images) are extracted in parallel, not just images. The architecture uses three types of parallelization:
+Mneme uses parallel processing to significantly speed up full vault scans (3.6x speedup tested). **All file types** (markdown, PDFs, PowerPoint, Excel, images) are extracted in parallel, not just images. The architecture uses three types of parallelization:
 
 **Worker Pools:**
 1. **Extraction Workers** (`extraction_workers`): Parallel file extraction **for ALL file types**
@@ -168,14 +168,14 @@ watch_image_workers = 4   # Parallel image workers for watch
 **CLI Overrides:**
 ```bash
 # Scan mode
-ragtriever scan --full --workers 10     # Override extraction workers
-ragtriever scan --full --no-parallel    # Disable all parallelization
+mneme scan --full --workers 10     # Override extraction workers
+mneme scan --full --no-parallel    # Disable all parallelization
 
 # Watch mode (batched by default)
-ragtriever watch                        # Batched mode (default)
-ragtriever watch --batch-size 20        # Override batch size
-ragtriever watch --batch-timeout 10     # Override timeout
-ragtriever watch --no-batch             # Legacy serial mode
+mneme watch                        # Batched mode (default)
+mneme watch --batch-size 20        # Override batch size
+mneme watch --batch-timeout 10     # Override timeout
+mneme watch --no-batch             # Legacy serial mode
 ```
 
 **Performance Characteristics:**
@@ -275,8 +275,8 @@ batch = collector.flush_if_timeout()  # Check for timeout trigger
 - **Deterministic IDs** (same file = same doc_id/chunk_ids)
 
 **Code Reference:**
-- `src/ragtriever/indexer/parallel_types.py`: `ProcessResult`, `ChunkData`, `ImageTask`
-- `src/ragtriever/indexer/indexer.py:_process_file()`: Unified processing method
+- `src/mneme/indexer/parallel_types.py`: `ProcessResult`, `ChunkData`, `ImageTask`
+- `src/mneme/indexer/indexer.py:_process_file()`: Unified processing method
 
 ### Logging for Auditability
 
@@ -324,7 +324,7 @@ The codebase uses Python Protocol classes for pluggable adapters:
 
 ### Module Organization
 ```
-src/ragtriever/
+src/mneme/
 ├── extractors/    # File parsers (markdown, pdf, pptx, xlsx, image)
 ├── chunking/      # Text segmentation (heading-aware, boundary markers)
 ├── embeddings/    # Vector generation (SentenceTransformers, Ollama)
@@ -335,18 +335,18 @@ src/ragtriever/
 ```
 
 ### Key Entry Points
-- `src/ragtriever/cli.py`: Typer CLI (`ragtriever` command) with commands: init, scan, query, watch, open, mcp
-- `src/ragtriever/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
-- `src/ragtriever/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
-- `src/ragtriever/retrieval/reranker.py`: Optional `CrossEncoderReranker` for improving result quality (enabled via `use_rerank = true`)
-- `src/ragtriever/mcp/tools.py`: MCP tool implementations (`vault_search`, `vault_open`, `vault_neighbors`, `vault_status`, `vault_list`)
-- `src/ragtriever/store/libsql_store.py`: SQLite-based storage with FTS5 + vector BLOBs (`vaultrag.sqlite`)
-- `src/ragtriever/store/faiss_index.py`: Optional FAISS index for approximate NN search (enabled via `use_faiss = true`)
-- `src/ragtriever/chunking/markdown_chunker.py`: v2 chunker with overlap support for context preservation
+- `src/mneme/cli.py`: Typer CLI (`mneme` command) with commands: init, scan, query, watch, open, mcp
+- `src/mneme/indexer/indexer.py`: Main `Indexer` class orchestrating extract → chunk → embed → store
+- `src/mneme/retrieval/retriever.py`: `Retriever` class for hybrid search (uses `HybridRanker` to merge vector + lexical results)
+- `src/mneme/retrieval/reranker.py`: Optional `CrossEncoderReranker` for improving result quality (enabled via `use_rerank = true`)
+- `src/mneme/mcp/tools.py`: MCP tool implementations (`vault_search`, `vault_open`, `vault_neighbors`, `vault_status`, `vault_list`)
+- `src/mneme/store/libsql_store.py`: SQLite-based storage with FTS5 + vector BLOBs (`vaultrag.sqlite`)
+- `src/mneme/store/faiss_index.py`: Optional FAISS index for approximate NN search (enabled via `use_faiss = true`)
+- `src/mneme/chunking/markdown_chunker.py`: v2 chunker with overlap support for context preservation
 
 ### Hybrid Retrieval & Ranking
 
-RAGtriever uses a multi-stage ranking pipeline to produce high-quality search results:
+Mneme uses a multi-stage ranking pipeline to produce high-quality search results:
 
 **Stage 1: Candidate Retrieval**
 - Lexical candidates via SQLite FTS5 (k_lex results)
@@ -464,14 +464,14 @@ use_rerank = false
 ```
 
 **Code Reference:**
-- `src/ragtriever/retrieval/hybrid.py`: RRF and weighted fusion
-- `src/ragtriever/retrieval/boosts.py`: Backlink, recency, heading, and tag boosting
-- `src/ragtriever/retrieval/reranker.py`: Cross-encoder reranking
-- `src/ragtriever/retrieval/retriever.py`: Pipeline orchestration
+- `src/mneme/retrieval/hybrid.py`: RRF and weighted fusion
+- `src/mneme/retrieval/boosts.py`: Backlink, recency, heading, and tag boosting
+- `src/mneme/retrieval/reranker.py`: Cross-encoder reranking
+- `src/mneme/retrieval/retriever.py`: Pipeline orchestration
 
 ### Result Diversity (MMR)
 
-RAGtriever uses Maximal Marginal Relevance (MMR) to ensure diverse search results by limiting the number of chunks returned from the same document. This prevents a single highly-relevant document from dominating all results.
+Mneme uses Maximal Marginal Relevance (MMR) to ensure diverse search results by limiting the number of chunks returned from the same document. This prevents a single highly-relevant document from dominating all results.
 
 **How It Works:**
 
@@ -510,11 +510,11 @@ max_per_document = 2           # Max chunks from same document
 Set `diversity_enabled = false` to return all top-k results regardless of source document.
 
 **Code Reference:**
-- `src/ragtriever/retrieval/diversity.py`: MMR diversification implementation
+- `src/mneme/retrieval/diversity.py`: MMR diversification implementation
 
 ### File Lifecycle Management
 
-RAGtriever properly handles the complete file lifecycle: **add**, **change**, and **delete** operations are detected and processed by both scan and watch modes. This includes both individual files and entire directories.
+Mneme properly handles the complete file lifecycle: **add**, **change**, and **delete** operations are detected and processed by both scan and watch modes. This includes both individual files and entire directories.
 
 **Lifecycle Events:**
 
@@ -553,17 +553,17 @@ RAGtriever properly handles the complete file lifecycle: **add**, **change**, an
 - `manifest` table: Indexing metadata removed
 
 **Code References:**
-- `src/ragtriever/indexer/indexer.py:scan()` - Reconciliation logic (lines 119-135)
-- `src/ragtriever/indexer/indexer.py:scan_parallel()` - Parallel reconciliation (lines 166-177)
-- `src/ragtriever/indexer/change_detector.py:on_deleted()` - Directory deletion handler (lines 135-163)
-- `src/ragtriever/indexer/change_detector.py:on_moved()` - Directory move handler (lines 165-227)
-- `src/ragtriever/store/libsql_store.py:delete_document()` - Full cleanup (lines 268-286)
-- `src/ragtriever/store/libsql_store.py:get_indexed_files()` - Get indexed files for reconciliation
-- `src/ragtriever/store/libsql_store.py:get_files_under_path()` - Query files under directory prefix
+- `src/mneme/indexer/indexer.py:scan()` - Reconciliation logic (lines 119-135)
+- `src/mneme/indexer/indexer.py:scan_parallel()` - Parallel reconciliation (lines 166-177)
+- `src/mneme/indexer/change_detector.py:on_deleted()` - Directory deletion handler (lines 135-163)
+- `src/mneme/indexer/change_detector.py:on_moved()` - Directory move handler (lines 165-227)
+- `src/mneme/store/libsql_store.py:delete_document()` - Full cleanup (lines 268-286)
+- `src/mneme/store/libsql_store.py:get_indexed_files()` - Get indexed files for reconciliation
+- `src/mneme/store/libsql_store.py:get_files_under_path()` - Query files under directory prefix
 
 **CLI Output Example:**
 ```bash
-$ ragtriever scan
+$ mneme scan
 Scan complete: 119 files, 792 chunks in 45.2s
   (3 deleted files removed from index)
 ```
@@ -598,7 +598,7 @@ The file watcher provides comprehensive logging for auditability and debugging. 
 - Empty directory events (no indexed files found)
 
 **Code Reference:**
-- `src/ragtriever/indexer/change_detector.py`: ChangeDetector class with Handler inner class
+- `src/mneme/indexer/change_detector.py`: ChangeDetector class with Handler inner class
 
 ### Enriched Chunk Metadata
 Every indexed chunk includes enriched metadata for fast operations without additional database lookups:
@@ -618,14 +618,14 @@ Every indexed chunk includes enriched metadata for fast operations without addit
 **Usage example:**
 ```bash
 # Get full_path directly from query results
-ragtriever query "search term" --k 1 | jq -r '.[0].metadata.full_path'
+mneme query "search term" --k 1 | jq -r '.[0].metadata.full_path'
 
 # Open file directly without database lookup
-open "$(ragtriever query 'search term' --k 1 | jq -r '.[0].metadata.full_path')"
+open "$(mneme query 'search term' --k 1 | jq -r '.[0].metadata.full_path')"
 ```
 
 **Code reference:**
-- `src/ragtriever/indexer/indexer.py:_extract_and_chunk_one()`: Metadata assembly (lines 272-312)
+- `src/mneme/indexer/indexer.py:_extract_and_chunk_one()`: Metadata assembly (lines 272-312)
 
 ### Query Handling
 Search queries are automatically escaped for FTS5 to handle special characters (hyphens, slashes, etc.) in technical and medical terms. Queries are treated as phrase searches wrapped in double quotes, ensuring terms like "T-DXd", "CDK4/6i", or "HR+/HER2-low" work correctly without FTS5 syntax errors.
@@ -706,12 +706,12 @@ Set `use_rerank = true` in `[retrieval]` to enable cross-encoder reranking. This
 **Example:**
 ```bash
 # Test reranking on a specific query
-ragtriever query "kubernetes deployment" --k 10 --rerank
+mneme query "kubernetes deployment" --k 10 --rerank
 ```
 
 **Code reference:**
-- `src/ragtriever/retrieval/reranker.py`: CrossEncoderReranker implementation
-- `src/ragtriever/retrieval/retriever.py:search()`: Integration point (line 66-67)
+- `src/mneme/retrieval/reranker.py`: CrossEncoderReranker implementation
+- `src/mneme/retrieval/retriever.py:search()`: Integration point (line 66-67)
 
 ### Parallel Scanning (3.6x Speedup)
 Parallel scanning is enabled by default for faster full vault scans. Configure in `[indexing]`:
@@ -722,15 +722,15 @@ Parallel scanning is enabled by default for faster full vault scans. Configure i
 
 **CLI overrides:**
 ```bash
-ragtriever scan --full --workers 8     # Use 8 extraction workers
-ragtriever scan --full --no-parallel   # Disable parallelization
+mneme scan --full --workers 8     # Use 8 extraction workers
+mneme scan --full --no-parallel   # Disable parallelization
 ```
 
 **Tested performance:** 337s → 93s (3.6x speedup) on 143-file vault with images.
 
 ### Image Analysis Providers
 
-RAGtriever supports multiple image analysis providers, each with different capabilities and use cases. All AI-powered providers (gemini, gemini-service-account, aigateway) extract structured metadata including:
+Mneme supports multiple image analysis providers, each with different capabilities and use cases. All AI-powered providers (gemini, gemini-service-account, aigateway) extract structured metadata including:
 - **Description**: Detailed 2-3 sentence description of image content
 - **Visible Text**: OCR transcription of any text in the image
 - **Image Type**: Classification (screenshot, diagram, flowchart, photo, presentation_slide, document, chart, infographic, logo, ui_mockup, other)
@@ -870,7 +870,7 @@ endpoint_path = "vertex-ai-express"  # Path suffix appended to URL (default: ver
 
 **Architecture:**
 ```
-RAGtriever → AI Gateway (Microsoft) → /{endpoint_path} → Gemini API
+Mneme → AI Gateway (Microsoft) → /{endpoint_path} → Gemini API
 ```
 
 **Performance:**
@@ -965,8 +965,8 @@ circuit_reset = 60           # Auto-reset breaker after 60s
 - All errors include source file path and provider name for debugging
 
 **Code Reference:**
-- `src/ragtriever/extractors/resilience.py`: Core resilience module (ErrorCategory, CircuitBreaker, ResilientClient)
-- `src/ragtriever/extractors/image.py`: Integration with image extractors
+- `src/mneme/extractors/resilience.py`: Core resilience module (ErrorCategory, CircuitBreaker, ResilientClient)
+- `src/mneme/extractors/image.py`: Integration with image extractors
 
 ## Security Notes
 
@@ -1004,7 +1004,7 @@ PackageNotFoundError: Package not found at '.../~$document.pptx'
    ```
 2. Run scan to download model
 3. Switch back to `offline_mode = true`
-4. Alternative: Use environment variable: `HF_OFFLINE_MODE=0 ragtriever scan`
+4. Alternative: Use environment variable: `HF_OFFLINE_MODE=0 mneme scan`
 
 **Check cached models:**
 ```bash
@@ -1034,7 +1034,7 @@ find /path/to/vault -name "~$*"  # Check what matches
 To test changes against a real vault, create a `test_config.toml` (already in `.gitignore`):
 
 ```bash
-ragtriever init --vault "/path/to/test/vault" --index "~/.ragtriever/indexes/test" --out test_config.toml
-ragtriever scan --config test_config.toml --full
-ragtriever query --config test_config.toml "test query"
+mneme init --vault "/path/to/test/vault" --index "~/.mneme/indexes/test" --out test_config.toml
+mneme scan --config test_config.toml --full
+mneme query --config test_config.toml "test query"
 ```

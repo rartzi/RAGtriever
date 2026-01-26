@@ -2,8 +2,8 @@
 
 import dataclasses
 from pathlib import Path
-from ragtriever.config import load_config
-from ragtriever.retrieval.retriever import Retriever
+from mneme.config import load_config
+from mneme.retrieval.retriever import Retriever
 
 
 def print_results(title: str, results: list, max_results: int = 10):

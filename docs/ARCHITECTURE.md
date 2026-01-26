@@ -1,4 +1,4 @@
-# RAGtriever Architecture
+# Mneme Architecture
 
 Complete system architecture explaining all components and how they interact.
 
@@ -6,7 +6,7 @@ Complete system architecture explaining all components and how they interact.
 - [System Overview](#system-overview) - High-level design
 - [Core Components](#core-components) - Vault, Indexer, Store, Retriever
 - [Execution Modes](#execution-modes) - CLI, Watch, MCP, Python API
-- [Skills vs Non-Skills](#skills-vs-non-skills) - **Important:** RAGtriever is NOT a Claude Code skill
+- [Skills vs Non-Skills](#skills-vs-non-skills) - **Important:** Mneme is NOT a Claude Code skill
 - [Data Flow](#data-flow) - How data moves through the system
 - [Extension Points](#extension-points) - How to customize
 
@@ -14,13 +14,13 @@ Complete system architecture explaining all components and how they interact.
 
 ## System Overview
 
-RAGtriever is a **local-first hybrid retrieval system** for Obsidian-compatible vaults.
+Mneme is a **local-first hybrid retrieval system** for Obsidian-compatible vaults.
 
 ### High-Level Architecture (Bidirectional)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           RAGtriever                                │
+│                           Mneme                                │
 │                                                                     │
 │  ┌──────────────┐      ┌──────────────┐      ┌─────────────────┐  │
 │  │   Vault      │──────▶│   Indexer    │─────▶│   Store         │  │
@@ -40,7 +40,7 @@ RAGtriever is a **local-first hybrid retrieval system** for Obsidian-compatible 
 │   User Interfaces                            │   (Hybrid)      │  │
 │   ┌─────────┐   ┌──────────┐   ┌────────┐  │  • Lexical FTS5 │  │
 │   │   CLI   │   │  Python  │   │  MCP   │  │  • Vector cosine│  │
-│   │ ragtriever  │   API    │   │ Server │  │  • RRF merge    │  │
+│   │ mneme  │   API    │   │ Server │  │  • RRF merge    │  │
 │   └────┬────┘   └────┬─────┘   └───┬────┘  └────────┬────────┘  │
 │        │             │             │                  │           │
 │        │   Query     │    Query    │     Query        │           │
@@ -84,14 +84,14 @@ vault/
 ```
 
 **Key Points:**
-- RAGtriever reads from vault but never modifies it
+- Mneme reads from vault but never modifies it
 - Automatically extracts images embedded in PDFs and PowerPoints
 - Analyzes images referenced in Markdown (`![](path)` and `![[image]]`)
 
 ### 2. Indexer (Processing Pipeline)
 
 **What:** Converts files into searchable chunks
-**Code:** `src/ragtriever/indexer/indexer.py`
+**Code:** `src/mneme/indexer/indexer.py`
 **Entry Point:** `Indexer.scan()` or `Indexer.watch()`
 
 **Unified Processing (`_process_file()`):**
@@ -144,8 +144,8 @@ Phase 3: Parallel image analysis
 ### 3. Store (Persistence Layer)
 
 **What:** SQLite database with hybrid index
-**Location:** `~/.ragtriever/indexes/{vault_name}/vaultrag.sqlite`
-**Code:** `src/ragtriever/store/libsql_store.py`
+**Location:** `~/.mneme/indexes/{vault_name}/vaultrag.sqlite`
+**Code:** `src/mneme/store/libsql_store.py`
 
 **Tables:**
 ```sql
@@ -171,7 +171,7 @@ embeddings(chunk_id, model_id, dims, vector BLOB, ...)
 ### 4. Retriever (Query Engine)
 
 **What:** Hybrid search combining lexical + semantic
-**Code:** `src/ragtriever/retrieval/retriever.py`
+**Code:** `src/mneme/retrieval/retriever.py`
 **Entry Point:** `Retriever.hybrid_search()`
 
 **Algorithm:**
@@ -224,7 +224,7 @@ preserve_heading_metadata = true  # Keep heading hierarchy
 
 **Code:**
 ```python
-# src/ragtriever/chunking/markdown_chunker.py
+# src/mneme/chunking/markdown_chunker.py
 def chunk(self, extracted_text, extracted_metadata):
     sections = self._extract_sections(extracted_text)
     chunks = []
@@ -265,7 +265,7 @@ query_prefix = "Represent this sentence for searching relevant passages: "
 
 **Code:**
 ```python
-# src/ragtriever/embeddings/sentence_transformers.py
+# src/mneme/embeddings/sentence_transformers.py
 class SentenceTransformersEmbedder:
     def embed_texts(self, texts: Sequence[str]) -> np.ndarray:
         """Embed documents (no prefix)."""
@@ -285,7 +285,7 @@ class SentenceTransformersEmbedder:
 
 **Retriever Update:**
 ```python
-# src/ragtriever/retrieval/retriever.py
+# src/mneme/retrieval/retriever.py
 def hybrid_search(self, query: str, top_k: int = 10):
     # Use embed_query instead of embed_texts
     query_embedding = self.embedder.embed_query(query)  # ← New
@@ -359,8 +359,8 @@ Query: "kubernetes deployment strategies"
 ```
 
 **Code Reference:**
-- `src/ragtriever/retrieval/reranker.py` - Cross-encoder implementation
-- `src/ragtriever/retrieval/retriever.py:search()` - Integration point
+- `src/mneme/retrieval/reranker.py` - Cross-encoder implementation
+- `src/mneme/retrieval/retriever.py:search()` - Integration point
 
 **CLI Usage:**
 ```bash
@@ -369,7 +369,7 @@ Query: "kubernetes deployment strategies"
 use_rerank = true
 
 # Or override per query
-ragtriever query "kubernetes deployment" --k 10 --rerank
+mneme query "kubernetes deployment" --k 10 --rerank
 ```
 
 ### 4. FAISS Index Support (Planned for Large Vaults)
@@ -399,7 +399,7 @@ faiss_nprobe = 10              # Clusters to search (IVF)
 - Vector search latency becomes noticeable
 - Accept 95-99% recall vs 100% (approximate search tradeoff)
 
-**Code:** `src/ragtriever/store/faiss_index.py` (FAISSIndex wrapper class)
+**Code:** `src/mneme/store/faiss_index.py` (FAISSIndex wrapper class)
 
 ### Design Decisions
 
@@ -425,24 +425,24 @@ faiss_nprobe = 10              # Clusters to search (IVF)
 ### Mode 1: CLI (Command Line)
 
 **Usage:** Direct terminal commands
-**Code:** `src/ragtriever/cli.py` (Typer application)
+**Code:** `src/mneme/cli.py` (Typer application)
 
 **Commands:**
 ```bash
 # Initialize config
-ragtriever init --vault /path/to/vault --index ~/.ragtriever/indexes/myvault
+mneme init --vault /path/to/vault --index ~/.mneme/indexes/myvault
 
 # Index vault
-ragtriever scan --config config.toml --full
+mneme scan --config config.toml --full
 
 # Query
-ragtriever query --config config.toml "search term" --k 10
+mneme query --config config.toml "search term" --k 10
 
 # Continuous indexing
-ragtriever watch --config config.toml
+mneme watch --config config.toml
 
 # MCP server
-ragtriever mcp --config config.toml
+mneme mcp --config config.toml
 ```
 
 **Use Cases:**
@@ -452,7 +452,7 @@ ragtriever mcp --config config.toml
 
 ### Mode 2: Watch Mode (Continuous Indexing)
 
-**Usage:** `ragtriever watch --config config.toml`
+**Usage:** `mneme watch --config config.toml`
 **Implementation:** Filesystem watcher (watchdog library)
 
 **How It Works:**
@@ -534,14 +534,14 @@ def on_moved(event):
 
 **Run as daemon:**
 ```bash
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 ```
 
 ### Mode 3: MCP Server (Claude Integration)
 
-**Usage:** `ragtriever mcp --config config.toml`
+**Usage:** `mneme mcp --config config.toml`
 **Protocol:** Model Context Protocol (stdio transport)
-**Code:** `src/ragtriever/mcp/server.py`
+**Code:** `src/mneme/mcp/server.py`
 
 **Tools Exposed to Claude:**
 ```json
@@ -558,8 +558,8 @@ nohup ragtriever watch --config config.toml &
 ```json
 {
   "mcpServers": {
-    "ragtriever": {
-      "command": "ragtriever",
+    "mneme": {
+      "command": "mneme",
       "args": ["mcp", "--config", "/Users/you/vault/config.toml"]
     }
   }
@@ -580,13 +580,13 @@ Claude: "Based on your notes, you wrote about..."
 
 ### Mode 4: Python API (Programmatic)
 
-**Usage:** Import RAGtriever as a Python library
+**Usage:** Import Mneme as a Python library
 
 **Example:**
 ```python
-from ragtriever.config import VaultConfig
-from ragtriever.indexer import Indexer
-from ragtriever.retrieval import Retriever
+from mneme.config import VaultConfig
+from mneme.indexer import Indexer
+from mneme.retrieval import Retriever
 
 # Load config
 cfg = VaultConfig.from_toml("config.toml")
@@ -614,36 +614,36 @@ for result in results:
 
 ## Skills vs Non-Skills
 
-### ❌ RAGtriever is NOT a Claude Code Skill
+### ❌ Mneme is NOT a Claude Code Skill
 
 **Important clarification:**
 
-**RAGtriever is:**
-- ✅ A standalone CLI tool (`ragtriever` command)
+**Mneme is:**
+- ✅ A standalone CLI tool (`mneme` command)
 - ✅ A Python library (import and use)
 - ✅ An MCP server (for Claude integration)
 - ✅ Independent application with own lifecycle
 
-**RAGtriever is NOT:**
-- ❌ A Claude Code skill (no `/ragtriever` slash command)
+**Mneme is NOT:**
+- ❌ A Claude Code skill (no `/mneme` slash command)
 - ❌ Dependent on Claude to run
 - ❌ Part of Claude Code's skill system
 
 ### Relationship with Claude
 
 **Optional Integration via MCP:**
-- Claude can use RAGtriever as a tool (like `grep`, `git`, `npm`)
-- You run `ragtriever mcp` as a separate process
+- Claude can use Mneme as a tool (like `grep`, `git`, `npm`)
+- You run `mneme mcp` as a separate process
 - Claude Desktop connects to it via stdio
-- RAGtriever runs independently - works without Claude
+- Mneme runs independently - works without Claude
 
 **Comparison:**
 
-| Aspect | Claude Code Skill | RAGtriever |
+| Aspect | Claude Code Skill | Mneme |
 |--------|-------------------|------------|
-| Invocation | `/skill-name` | `ragtriever command` |
+| Invocation | `/skill-name` | `mneme command` |
 | Lifecycle | Managed by Claude | Independent process |
-| Distribution | `~/.claude/skills/` | `pip install ragtriever` |
+| Distribution | `~/.claude/skills/` | `pip install mneme` |
 | Runtime | Claude agent subprocess | Standalone Python app |
 | MCP | Not applicable | Optional MCP server mode |
 
@@ -981,7 +981,7 @@ Add support for new file types:
 
 ```python
 # my_extractor.py
-from ragtriever.extractors.base import Extracted
+from mneme.extractors.base import Extracted
 from pathlib import Path
 
 class CustomExtractor:
@@ -993,14 +993,14 @@ class CustomExtractor:
         return Extracted(text=text, metadata=metadata)
 ```
 
-Register in `src/ragtriever/indexer/extractors.py`.
+Register in `src/mneme/indexer/extractors.py`.
 
 ### 2. Custom Chunkers
 
 Implement custom chunking strategy:
 
 ```python
-from ragtriever.chunking.base import Chunked
+from mneme.chunking.base import Chunked
 
 class SemanticChunker:
     def chunk(self, text: str, metadata: dict) -> list[Chunked]:

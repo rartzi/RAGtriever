@@ -4,8 +4,8 @@ Tests segmentation, metadata, and anchor generation.
 """
 
 import pytest
-from ragtriever.chunking.markdown_chunker import MarkdownChunker
-from ragtriever.chunking.boundary_chunker import BoundaryMarkerChunker
+from mneme.chunking.markdown_chunker import MarkdownChunker
+from mneme.chunking.boundary_chunker import BoundaryMarkerChunker
 
 
 class TestMarkdownChunker:
@@ -340,7 +340,7 @@ class TestChunkerRegistry:
 
     def test_registry_markdown_chunker(self):
         """Test getting markdown chunker."""
-        from ragtriever.chunking.base import ChunkerRegistry
+        from mneme.chunking.base import ChunkerRegistry
 
         registry = ChunkerRegistry()
         registry.register("markdown", MarkdownChunker())
@@ -351,7 +351,7 @@ class TestChunkerRegistry:
 
     def test_registry_boundary_chunker(self):
         """Test getting boundary chunker."""
-        from ragtriever.chunking.base import ChunkerRegistry
+        from mneme.chunking.base import ChunkerRegistry
 
         registry = ChunkerRegistry()
         registry.register("pdf", BoundaryMarkerChunker("PAGE"))
@@ -362,7 +362,7 @@ class TestChunkerRegistry:
 
     def test_registry_unknown_type(self):
         """Test registry with unknown type."""
-        from ragtriever.chunking.base import ChunkerRegistry
+        from mneme.chunking.base import ChunkerRegistry
 
         registry = ChunkerRegistry()
         chunker = registry.get("unknown")

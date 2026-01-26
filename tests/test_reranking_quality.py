@@ -9,10 +9,10 @@ Run with: pytest tests/test_reranking_quality.py -v -m manual
 import pytest
 from pathlib import Path
 import dataclasses
-from ragtriever.config import VaultConfig
-from ragtriever.indexer.indexer import Indexer
-from ragtriever.retrieval.retriever import Retriever
-from ragtriever.retrieval.reranker import CROSS_ENCODER_AVAILABLE
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.retrieval.retriever import Retriever
+from mneme.retrieval.reranker import CROSS_ENCODER_AVAILABLE
 
 
 # Test queries with known relevant documents

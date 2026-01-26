@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np
-from ragtriever.retrieval.reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
-from ragtriever.models import SearchResult, SourceRef
+from mneme.retrieval.reranker import CrossEncoderReranker, CROSS_ENCODER_AVAILABLE
+from mneme.models import SearchResult, SourceRef
 
 
 @pytest.mark.skipif(not CROSS_ENCODER_AVAILABLE, reason="sentence-transformers not installed")
@@ -13,7 +13,7 @@ class TestCrossEncoderReranker:
     @pytest.fixture
     def reranker(self):
         """Create reranker with mocked model for fast testing without downloads."""
-        with patch('ragtriever.retrieval.reranker.CrossEncoder') as mock_cross_encoder:
+        with patch('mneme.retrieval.reranker.CrossEncoder') as mock_cross_encoder:
             # Create mock model
             mock_model = Mock()
             mock_cross_encoder.return_value = mock_model

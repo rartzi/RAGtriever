@@ -9,10 +9,10 @@ import numpy as np
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from ragtriever.config import VaultConfig
-from ragtriever.indexer.indexer import Indexer
-from ragtriever.indexer.queue import Job
-from ragtriever.indexer.parallel_types import BatchStats
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.indexer.queue import Job
+from mneme.indexer.parallel_types import BatchStats
 
 
 @pytest.fixture

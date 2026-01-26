@@ -51,8 +51,8 @@ def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
                             "tools": {}
                         },
                         "serverInfo": {
-                            "name": "ragtriever",
-                            "version": "1.0.0"
+                            "name": "mneme",
+                            "version": "3.0.0"
                         }
                     }
                 }

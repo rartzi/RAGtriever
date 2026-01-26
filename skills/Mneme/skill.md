@@ -1,18 +1,20 @@
 ---
-name: RAGtrieval
-description: Answer questions from indexed vault content using RAGtriever search, plus setup, configuration, and troubleshooting
+name: Mneme
+description: Answer questions from indexed vault content using Mneme search, plus setup, configuration, and troubleshooting
 ---
 
-# RAGtrieval Skill
+# Mneme Skill
 
-Claude Code skill for working with RAGtriever (local-first vault indexer with hybrid retrieval).
+Claude Code skill for working with Mneme (pronounced NEE-mee) — Memory for your Second Brain.
 
-**Primary Purpose:** Search and answer questions from the indexed vault content, not the RAGtriever codebase.
+Mneme is a local-first vault indexer with hybrid retrieval, named after the Greek Muse of Memory.
+
+**Primary Purpose:** Search and answer questions from the indexed vault content, not the Mneme codebase.
 
 ## When to Use This Skill
 
-- **Answering questions about vault content** - Always use RAGtriever to search indexed content
-- Setting up RAGtriever for a new vault
+- **Answering questions about vault content** - Always use Mneme to search indexed content
+- Setting up Mneme for a new vault
 - Configuring image analysis (Tesseract, Gemini API, or Gemini service account)
 - Troubleshooting scanning or indexing issues
 - Testing search and retrieval functionality
@@ -22,9 +24,9 @@ Claude Code skill for working with RAGtriever (local-first vault indexer with hy
 
 **When the user asks ANY question that could be answered from vault content:**
 
-1. **ALWAYS use `ragtriever query` to search the indexed vault**
+1. **ALWAYS use `mneme query` to search the indexed vault**
 2. **NEVER answer from memory or assumptions about the codebase**
-3. **The vault content is the source of truth** - not the RAGtriever repository code itself
+3. **The vault content is the source of truth** - not the Mneme repository code itself
 4. **ALWAYS cite sources in your response** - Include the file paths and locations where the information was found
 
 ### MANDATORY: Citing Sources in Responses
@@ -56,7 +58,7 @@ Claude Code skill for working with RAGtriever (local-first vault indexer with hy
 ### Example Query Pattern:
 ```bash
 source .venv/bin/activate
-ragtriever query --config config.toml "user's question keywords" --k 15
+mneme query --config config.toml "user's question keywords" --k 15
 ```
 
 ### Example Response Format:
@@ -88,7 +90,7 @@ Check `test_config.toml` or the active config to see:
 
 ## Pre-flight Checks
 
-Before running any RAGtriever commands:
+Before running any Mneme commands:
 
 1. **Check virtual environment:**
    ```bash
@@ -112,15 +114,15 @@ Before running any RAGtriever commands:
 
 ```bash
 # Main help - shows all commands
-ragtriever --help
+mneme --help
 
 # Command-specific help
-ragtriever scan --help
-ragtriever watch --help
-ragtriever query --help
-ragtriever init --help
-ragtriever mcp --help
-ragtriever status --help
+mneme scan --help
+mneme watch --help
+mneme query --help
+mneme init --help
+mneme mcp --help
+mneme status --help
 ```
 
 **Why use --help:**
@@ -133,7 +135,7 @@ ragtriever status --help
 ```bash
 # User asks: "How do I enable logging for scan?"
 # Instead of guessing, check:
-ragtriever scan --help | grep -A 2 log
+mneme scan --help | grep -A 2 log
 
 # Output shows:
 #   --log-file TEXT    Log file path for audit trail
@@ -155,7 +157,7 @@ ragtriever scan --help | grep -A 2 log
 ps aux | grep -E "[r]agtriever watch"
 
 # Or more precise:
-pgrep -f "ragtriever watch"
+pgrep -f "mneme watch"
 
 # If output: process is running
 # If no output: watcher is not running
@@ -167,21 +169,21 @@ pgrep -f "ragtriever watch"
 source .venv/bin/activate
 
 # Start watcher (foreground)
-ragtriever watch --config config.toml
+mneme watch --config config.toml
 
 # Start watcher (background with logging)
-nohup ragtriever watch --config config.toml > /dev/null 2>&1 &
+nohup mneme watch --config config.toml > /dev/null 2>&1 &
 
 # Start watcher (background with config-driven logging)
 # (Logs automatically to watch_{date}.log if enable_watch_logging=true)
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 echo $! > logs/watcher.pid  # Save PID for later
 ```
 
 ### Stop the Watcher
 ```bash
-# Method 1: Kill all ragtriever watch processes
-pkill -f "ragtriever watch"
+# Method 1: Kill all mneme watch processes
+pkill -f "mneme watch"
 
 # Method 2: Kill specific PID (if you saved it)
 kill $(cat logs/watcher.pid)
@@ -197,14 +199,14 @@ ps aux | grep -E "[r]agtriever watch" || echo "Watcher stopped"
 ### Restart the Watcher
 ```bash
 # Stop existing watcher
-pkill -f "ragtriever watch"
+pkill -f "mneme watch"
 
 # Wait for graceful shutdown
 sleep 2
 
 # Start new watcher
 source .venv/bin/activate
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 echo $! > logs/watcher.pid
 
 # Verify it started
@@ -214,7 +216,7 @@ ps aux | grep "[r]agtriever watch" && echo "Watcher running"
 ### Check Watcher Status
 ```bash
 # Is it running?
-if pgrep -f "ragtriever watch" > /dev/null; then
+if pgrep -f "mneme watch" > /dev/null; then
     echo "✓ Watcher is running"
     ps aux | grep "[r]agtriever watch" | grep -v grep
 else
@@ -228,7 +230,7 @@ tail -20 logs/watch_$(date +%Y%m%d).log
 ### Watcher Health Check
 ```bash
 # 1. Check if process is running
-pgrep -f "ragtriever watch" > /dev/null || echo "ERROR: Watcher not running"
+pgrep -f "mneme watch" > /dev/null || echo "ERROR: Watcher not running"
 
 # 2. Check if it's actually indexing (log activity in last 5 minutes)
 find logs/ -name "watch_*.log" -mmin -5 | grep -q . && echo "✓ Recent activity" || echo "⚠ No recent log activity"
@@ -272,7 +274,7 @@ When setting up or modifying `config.toml`:
 ### Basic Setup
 - [ ] `[vault]` - Set vault root path (absolute path)
 - [ ] `[vault]` - Configure ignore patterns (Office temp files, .git, .obsidian/cache)
-- [ ] `[index]` - Set index directory (usually `~/.ragtriever/indexes/<vault-name>`)
+- [ ] `[index]` - Set index directory (usually `~/.mneme/indexes/<vault-name>`)
 - [ ] `[embeddings]` - Choose provider and model
 - [ ] `[embeddings]` - Set offline_mode (true if behind proxy)
 
@@ -321,11 +323,11 @@ provider = "off"
 
 ### Initial Setup
 ```bash
-# Install RAGtriever in development mode
+# Install Mneme in development mode
 pip install -e ".[dev]"
 
 # Generate starter config
-ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
+mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
 
 # Edit config.toml to configure image analysis and embeddings
 ```
@@ -333,40 +335,40 @@ ragtriever init --vault "/path/to/vault" --index "~/.ragtriever/indexes/myvault"
 ### Scanning and Indexing
 ```bash
 # Full scan (re-index everything) - uses parallel processing by default
-ragtriever scan --config config.toml --full
+mneme scan --config config.toml --full
 
 # Full scan with explicit parallel settings
-ragtriever scan --config config.toml --full --workers 8
+mneme scan --config config.toml --full --workers 8
 
 # Sequential scan (disable parallelization)
-ragtriever scan --config config.toml --full --no-parallel
+mneme scan --config config.toml --full --no-parallel
 
 # Incremental scan (only changed files)
-ragtriever scan --config config.toml
+mneme scan --config config.toml
 
 # Watch mode (continuous indexing)
-ragtriever watch --config config.toml
+mneme watch --config config.toml
 ```
 
 ### Scanning with Logging and Profiling
 ```bash
 # Scan with logging to file
-ragtriever scan --config config.toml --full --log-file logs/scan.log
+mneme scan --config config.toml --full --log-file logs/scan.log
 
 # Scan with verbose (DEBUG) logging
-ragtriever scan --config config.toml --full --log-file logs/scan.log --verbose
+mneme scan --config config.toml --full --log-file logs/scan.log --verbose
 
 # Scan with profiling (performance analysis)
-ragtriever scan --config config.toml --full --profile logs/profile.txt
+mneme scan --config config.toml --full --profile logs/profile.txt
 
 # Scan with both logging and profiling
-ragtriever scan --config config.toml --full \
+mneme scan --config config.toml --full \
     --log-file logs/scan.log \
     --profile logs/profile.txt \
     --verbose
 
 # Watch mode with logging
-ragtriever watch --config config.toml --log-file logs/watch.log --verbose
+mneme watch --config config.toml --log-file logs/watch.log --verbose
 ```
 
 ### Parallel Scanning (3.6x faster)
@@ -400,10 +402,10 @@ enable_watch_logging = true                 # Auto-enable for watch (true = alwa
 **Example usage:**
 ```bash
 # With config enable_watch_logging=true, watch automatically logs
-ragtriever watch  # → logs/watch_20260123.log
+mneme watch  # → logs/watch_20260123.log
 
 # CLI flags override config
-ragtriever scan --full --log-file logs/custom.log
+mneme scan --full --log-file logs/custom.log
 
 # Check indexing results
 grep '\[scan\] Complete:' logs/scan_20260123.log
@@ -413,22 +415,22 @@ grep '\[watch\] Indexed:' logs/watch_20260123.log
 ### Querying
 ```bash
 # Basic search (hybrid: semantic + lexical)
-ragtriever query --config config.toml "search term" --k 10
+mneme query --config config.toml "search term" --k 10
 
 # More results
-ragtriever query --config config.toml "kubernetes deployment" --k 20
+mneme query --config config.toml "kubernetes deployment" --k 20
 ```
 
 ### MCP Server (Claude Desktop Integration)
 ```bash
 # Start MCP server
-ragtriever mcp --config config.toml
+mneme mcp --config config.toml
 
 # Add to Claude Desktop config.json:
 {
   "mcpServers": {
-    "ragtriever": {
-      "command": "ragtriever",
+    "mneme": {
+      "command": "mneme",
       "args": ["mcp", "--config", "/full/path/to/config.toml"]
     }
   }
@@ -467,7 +469,7 @@ ragtriever mcp --config config.toml
 ```bash
 # Option 1: Temporarily disable offline mode
 export HF_OFFLINE_MODE=0
-ragtriever scan --config config.toml
+mneme scan --config config.toml
 
 # Then re-enable offline mode
 export HF_OFFLINE_MODE=1
@@ -517,9 +519,9 @@ ls ~/.cache/huggingface/hub/
 
 **Solution:** This is handled automatically as of recent versions. Queries with hyphens, slashes, etc. work correctly:
 ```bash
-ragtriever query "T-DXd treatment"     # Works
-ragtriever query "CDK4/6 inhibitor"    # Works
-ragtriever query "HR+/HER2- cancer"    # Works
+mneme query "T-DXd treatment"     # Works
+mneme query "CDK4/6 inhibitor"    # Works
+mneme query "HR+/HER2- cancer"    # Works
 ```
 
 ## Development Workflow
@@ -544,13 +546,13 @@ pytest
 ### Testing Image Analysis
 ```bash
 # Test with small vault first (1-3 images)
-ragtriever scan --config config.toml --full
+mneme scan --config config.toml --full
 
 # Check logs for errors
 # tail -100 scan.log
 
 # Query for image content
-ragtriever query --config config.toml "image description" --k 5
+mneme query --config config.toml "image description" --k 5
 
 # Verify results include image metadata
 ```
@@ -601,7 +603,7 @@ grep '\[batch\] Stored' logs/watch_20260123.log
 **Real-time monitoring:**
 ```bash
 # Terminal 1: Run watcher
-ragtriever watch
+mneme watch
 
 # Terminal 2: Monitor indexing
 tail -f logs/watch_20260123.log | grep '\[watch\] Indexed:'
@@ -618,18 +620,18 @@ grep -c '\[watch\] Indexed:' logs/watch_20260123.log
 
 ### Verify in Database
 ```bash
-ragtriever status
+mneme status
 # Output: Indexed files: 135, Indexed chunks: 963
 ```
 
 ## Key Files Reference
 
 ### Code
-- `src/ragtriever/extractors/image.py` - Image extractor implementations
-- `src/ragtriever/config.py` - Configuration management (includes [logging] support)
-- `src/ragtriever/cli.py` - CLI commands (scan, watch, query with logging/profiling)
-- `src/ragtriever/indexer/indexer.py` - Main indexer orchestration
-- `src/ragtriever/retrieval/retriever.py` - Hybrid search implementation
+- `src/mneme/extractors/image.py` - Image extractor implementations
+- `src/mneme/config.py` - Configuration management (includes [logging] support)
+- `src/mneme/cli.py` - CLI commands (scan, watch, query with logging/profiling)
+- `src/mneme/indexer/indexer.py` - Main indexer orchestration
+- `src/mneme/retrieval/retriever.py` - Hybrid search implementation
 
 ### Configuration
 - `examples/config.toml.example` - Configuration template with [logging] section
@@ -671,7 +673,7 @@ Image file
 ```
 
 ### Execution Modes
-- **CLI**: `ragtriever scan/query/watch/mcp`
+- **CLI**: `mneme scan/query/watch/mcp`
 - **Watch Mode**: Continuous filesystem monitoring
 - **MCP Server**: Integration with Claude Desktop
 - **Python API**: Programmatic import and use
@@ -681,7 +683,7 @@ Image file
 After running a scan, verify:
 - [ ] Scan completes without fatal errors
 - [ ] Rate limit errors (429) are logged but don't stop scan
-- [ ] Database created: `~/.ragtriever/indexes/<vault>/vaultrag.sqlite`
+- [ ] Database created: `~/.mneme/indexes/<vault>/vaultrag.sqlite`
 - [ ] Query returns results
 - [ ] Image content is searchable (if images in vault)
 - [ ] Metadata includes analysis_provider and model name
@@ -689,15 +691,15 @@ After running a scan, verify:
 **Check indexing stats:**
 ```bash
 # Count documents
-sqlite3 ~/.ragtriever/indexes/myvault/vaultrag.sqlite \
+sqlite3 ~/.mneme/indexes/myvault/vaultrag.sqlite \
     "SELECT COUNT(*) FROM documents WHERE deleted=0;"
 
 # Count chunks
-sqlite3 ~/.ragtriever/indexes/myvault/vaultrag.sqlite \
+sqlite3 ~/.mneme/indexes/myvault/vaultrag.sqlite \
     "SELECT COUNT(*) FROM chunks;"
 
 # Show file types
-sqlite3 ~/.ragtriever/indexes/myvault/vaultrag.sqlite \
+sqlite3 ~/.mneme/indexes/myvault/vaultrag.sqlite \
     "SELECT file_type, COUNT(*) FROM documents WHERE deleted=0 GROUP BY file_type;"
 ```
 
@@ -723,10 +725,10 @@ sqlite3 ~/.ragtriever/indexes/myvault/vaultrag.sqlite \
 ### Setup New Vault (Tesseract)
 ```bash
 source .venv/bin/activate
-ragtriever init --vault ~/vault --index ~/.ragtriever/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: set provider = "tesseract"
-ragtriever scan --config config.toml --full
-ragtriever query --config config.toml "test query" --k 5
+mneme scan --config config.toml --full
+mneme query --config config.toml "test query" --k 5
 ```
 
 ### Setup with Gemini service account
@@ -736,16 +738,16 @@ export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/creds.json"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 unset GEMINI_API_KEY
-ragtriever init --vault ~/vault --index ~/.ragtriever/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: configure [gemini_service_account] section
-ragtriever scan --config config.toml --full
-ragtriever query --config config.toml "image content" --k 5
+mneme scan --config config.toml --full
+mneme query --config config.toml "image content" --k 5
 ```
 
 ### Incremental Updates
 ```bash
 source .venv/bin/activate
-ragtriever scan --config config.toml  # Only changed files
+mneme scan --config config.toml  # Only changed files
 ```
 
 ### Watch Mode (Background)
@@ -753,14 +755,14 @@ ragtriever scan --config config.toml  # Only changed files
 source .venv/bin/activate
 
 # Start watcher in background
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 echo $! > logs/watcher.pid
 
 # Check if running
-pgrep -f "ragtriever watch" && echo "✓ Watcher running"
+pgrep -f "mneme watch" && echo "✓ Watcher running"
 
 # Stop watcher later
-pkill -f "ragtriever watch"
+pkill -f "mneme watch"
 ```
 
 ## Additional Resources
@@ -774,13 +776,13 @@ pkill -f "ragtriever watch"
 
 ## Tips for Claude Code Users
 
-When helping users with RAGtriever:
+When helping users with Mneme:
 
-1. **ALWAYS search vault content first** - When user asks questions, use `ragtriever query` to search indexed vault
+1. **ALWAYS search vault content first** - When user asks questions, use `mneme query` to search indexed vault
 2. **ALWAYS cite sources** - Every response MUST end with a "Sources" section listing file paths and locations
-3. **Vault content ≠ RAGtriever code** - Don't confuse searching the vault (user's content) with RAGtriever repository code
-4. **Use --help to discover options** - Run `ragtriever <command> --help` instead of guessing flags or parameters
-5. **Check if watcher is running** - Use `pgrep -f "ragtriever watch"` before starting/restarting
+3. **Vault content ≠ Mneme code** - Don't confuse searching the vault (user's content) with Mneme repository code
+4. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing flags or parameters
+5. **Check if watcher is running** - Use `pgrep -f "mneme watch"` before starting/restarting
 6. **Always check config first** - Most issues stem from configuration (now includes [logging] section)
 7. **Verify virtual environment** - Commands fail if venv not activated
 8. **Check file paths** - Use absolute paths, expand ~
@@ -799,17 +801,17 @@ When helping users with RAGtriever:
 When user mentions watcher issues:
 ```bash
 # 1. Check if running
-pgrep -f "ragtriever watch" || echo "Not running"
+pgrep -f "mneme watch" || echo "Not running"
 
 # 2. If not running, start it
 source .venv/bin/activate
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 
 # 3. If running but needs restart
-pkill -f "ragtriever watch"
+pkill -f "mneme watch"
 sleep 2
 source .venv/bin/activate
-nohup ragtriever watch --config config.toml &
+nohup mneme watch --config config.toml &
 
 # 4. Verify it's working
 tail -20 logs/watch_$(date +%Y%m%d).log
@@ -817,7 +819,7 @@ tail -20 logs/watch_$(date +%Y%m%d).log
 
 ## Notes
 
-- RAGtriever is a standalone tool, not a Claude Code skill itself
-- This skill provides workflow assistance for using RAGtriever
-- RAGtriever runs independently and can work without Claude
+- Mneme is a standalone tool, not a Claude Code skill itself
+- This skill provides workflow assistance for using Mneme
+- Mneme runs independently and can work without Claude
 - Optional MCP integration enables Claude Desktop to search your vault

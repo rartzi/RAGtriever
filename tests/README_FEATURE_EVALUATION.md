@@ -1,6 +1,6 @@
 # Feature Evaluation Tests
 
-Comprehensive evaluation tests for RAGtriever's new retrieval features:
+Comprehensive evaluation tests for Mneme's new retrieval features:
 - Heading boost (H1, H2, H3)
 - Tag boost (matching query terms to document tags)
 - MMR diversity (limiting chunks per document)

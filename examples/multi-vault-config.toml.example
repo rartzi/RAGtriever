@@ -1,4 +1,4 @@
-# Multi-Vault RAGtriever Configuration Example
+# Multi-Vault Mneme Configuration Example
 # This configuration indexes multiple vaults into a shared database,
 # enabling cross-vault search while maintaining separate content.
 
@@ -29,7 +29,7 @@ enabled = true  # Can set to false to temporarily exclude a vault
 # All vaults share this index directory (single SQLite database)
 
 [index]
-dir = "~/.ragtriever/indexes/all-vaults"
+dir = "~/.mneme/indexes/all-vaults"
 extractor_version = "v1"
 chunker_version = "v1"
 
@@ -136,26 +136,26 @@ transport = "stdio"
 # ============================================
 #
 # Scan all vaults:
-#   ragtriever scan --config multi-vault.toml --full
+#   mneme scan --config multi-vault.toml --full
 #
 # Scan specific vault(s):
-#   ragtriever scan --config multi-vault.toml --full --vaults obsidian
-#   ragtriever scan --config multi-vault.toml --full --vaults obsidian --vaults work
+#   mneme scan --config multi-vault.toml --full --vaults obsidian
+#   mneme scan --config multi-vault.toml --full --vaults obsidian --vaults work
 #
 # Query all vaults (default):
-#   ragtriever query --config multi-vault.toml "search term"
+#   mneme query --config multi-vault.toml "search term"
 #
 # Query specific vault(s):
-#   ragtriever query --config multi-vault.toml "search term" --vaults research
+#   mneme query --config multi-vault.toml "search term" --vaults research
 #
 # List configured vaults:
-#   ragtriever list-vaults --config multi-vault.toml
+#   mneme list-vaults --config multi-vault.toml
 #
 # Show status:
-#   ragtriever status --config multi-vault.toml
+#   mneme status --config multi-vault.toml
 #
 # Watch all vaults for changes:
-#   ragtriever watch --config multi-vault.toml
+#   mneme watch --config multi-vault.toml
 #
 # Watch specific vault(s):
-#   ragtriever watch --config multi-vault.toml --vaults obsidian
+#   mneme watch --config multi-vault.toml --vaults obsidian

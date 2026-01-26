@@ -1,6 +1,6 @@
 """Tests for chunk overlap functionality."""
-from ragtriever.chunking.markdown_chunker import MarkdownChunker
-from ragtriever.chunking.boundary_chunker import BoundaryMarkerChunker
+from mneme.chunking.markdown_chunker import MarkdownChunker
+from mneme.chunking.boundary_chunker import BoundaryMarkerChunker
 
 
 def test_markdown_overlap_basic():

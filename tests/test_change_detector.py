@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ragtriever.indexer.change_detector import ChangeDetector
-from ragtriever.indexer.queue import Job, JobQueue
+from mneme.indexer.change_detector import ChangeDetector
+from mneme.indexer.queue import Job, JobQueue
 
 
 class TestChangeDetectorDirectoryScan:
@@ -72,7 +72,7 @@ class TestChangeDetectorDirectoryScan:
             # Test ignore patterns
             ignore_patterns = ["**/.DS_Store", "**/ignored_folder/**"]
 
-            from ragtriever.indexer.reconciler import matches_ignore_pattern
+            from mneme.indexer.reconciler import matches_ignore_pattern
 
             files_in_dir = list(subdir.rglob("*"))
             file_paths = [f for f in files_in_dir if f.is_file()]

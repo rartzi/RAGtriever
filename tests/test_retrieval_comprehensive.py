@@ -7,9 +7,9 @@ import tempfile
 import os
 from pathlib import Path
 
-from ragtriever.config import VaultConfig
-from ragtriever.indexer.indexer import Indexer
-from ragtriever.retrieval.retriever import Retriever
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.retrieval.retriever import Retriever
 
 # Set offline mode for all tests to avoid network calls
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -283,7 +283,7 @@ class TestDocumentOpening:
 
     def test_open_invalid_source_ref(self, retriever: Retriever):
         """Test opening with invalid source reference."""
-        from ragtriever.models import SourceRef
+        from mneme.models import SourceRef
 
         # Create an invalid source reference
         invalid_ref = SourceRef(
