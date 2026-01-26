@@ -470,6 +470,21 @@ class MultiVaultConfig:
     recency_recent_days: int = 60  # Files modified within this many days get medium boost
     recency_old_days: int = 180  # Files older than this get penalty
 
+    # Title/heading boost (DISABLED by default - content/semantics matter most!)
+    heading_boost_enabled: bool = False
+    heading_h1_boost: float = 1.05  # 5% boost for H1 (title) chunks
+    heading_h2_boost: float = 1.03  # 3% boost for H2 chunks
+    heading_h3_boost: float = 1.02  # 2% boost for H3 chunks
+
+    # Tag boost (DISABLED by default - content/semantics matter most!)
+    tag_boost_enabled: bool = False
+    tag_boost_weight: float = 0.03  # Score boost per matching tag (3%)
+    tag_boost_cap: int = 3  # Maximum tags counted for boost (caps at 9%)
+
+    # Result diversity (MMR)
+    diversity_enabled: bool = True
+    max_per_document: int = 2  # Maximum chunks from same document
+
     # Parallelization (scan mode)
     extraction_workers: int = 8
     embed_batch_size: int = 256
@@ -625,6 +640,21 @@ class MultiVaultConfig:
         if recency_recent_days >= recency_old_days:
             raise ValueError(f"recency_recent_days ({recency_recent_days}) must be less than recency_old_days ({recency_old_days}).")
 
+        # Parse heading boost parameters
+        heading_boost_enabled = bool(ret.get("heading_boost_enabled", False))
+        heading_h1_boost = float(ret.get("heading_h1_boost", 1.05))
+        heading_h2_boost = float(ret.get("heading_h2_boost", 1.03))
+        heading_h3_boost = float(ret.get("heading_h3_boost", 1.02))
+
+        # Parse tag boost parameters
+        tag_boost_enabled = bool(ret.get("tag_boost_enabled", False))
+        tag_boost_weight = float(ret.get("tag_boost_weight", 0.03))
+        tag_boost_cap = int(ret.get("tag_boost_cap", 3))
+
+        # Parse diversity parameters
+        diversity_enabled = bool(ret.get("diversity_enabled", True))
+        max_per_document = int(ret.get("max_per_document", 2))
+
         # Parse logging settings
         log_dir = logging_config.get("dir", "logs")
         scan_log_file = logging_config.get("scan_log_file", "logs/scan_{date}.log")
@@ -696,6 +726,15 @@ class MultiVaultConfig:
             recency_fresh_days=recency_fresh_days,
             recency_recent_days=recency_recent_days,
             recency_old_days=recency_old_days,
+            heading_boost_enabled=heading_boost_enabled,
+            heading_h1_boost=heading_h1_boost,
+            heading_h2_boost=heading_h2_boost,
+            heading_h3_boost=heading_h3_boost,
+            tag_boost_enabled=tag_boost_enabled,
+            tag_boost_weight=tag_boost_weight,
+            tag_boost_cap=tag_boost_cap,
+            diversity_enabled=diversity_enabled,
+            max_per_document=max_per_document,
             extraction_workers=int(indexing.get("extraction_workers", 8)),
             embed_batch_size=int(indexing.get("embed_batch_size", 256)),
             image_workers=int(indexing.get("image_workers", 8)),
