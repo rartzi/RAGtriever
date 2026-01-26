@@ -170,21 +170,55 @@ Keep it brief - one clarifying question, then search:
 
 Before running any Mneme commands:
 
-1. **Check virtual environment:**
+1. **Activate virtual environment:**
    ```bash
    source .venv/bin/activate
    ```
 
-2. **For offline mode (corporate proxies):**
+2. **Smart Offline Mode (Auto-detect cached models):**
+
+   **ALWAYS run this check first** - it prevents HuggingFace network errors:
+
    ```bash
-   export HF_HUB_OFFLINE=1
-   export TRANSFORMERS_OFFLINE=1
+   # Check if default model is cached
+   if ls ~/.cache/huggingface/hub/models--BAAI--bge-small-en-v1.5 2>/dev/null || \
+      ls ~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2 2>/dev/null; then
+       echo "✓ Model cached - enabling offline mode"
+       export HF_HUB_OFFLINE=1
+       export TRANSFORMERS_OFFLINE=1
+   else
+       echo "⚠ No cached model found - will download on first run"
+   fi
    ```
 
-3. **Verify cached models:**
+   **Or use this one-liner:**
    ```bash
-   ls ~/.cache/huggingface/hub/
+   ls ~/.cache/huggingface/hub/models--* &>/dev/null && export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 && echo "Offline mode enabled"
    ```
+
+3. **Force model update (when needed):**
+   ```bash
+   # Temporarily disable offline mode to download/update model
+   unset HF_HUB_OFFLINE TRANSFORMERS_OFFLINE
+   mneme scan --config config.toml  # Downloads model
+   # Then re-enable offline mode
+   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+   ```
+
+4. **List cached models:**
+   ```bash
+   ls ~/.cache/huggingface/hub/ | grep "models--"
+   ```
+
+### Why Auto-Offline Matters
+
+HuggingFace network calls fail frequently due to:
+- Corporate proxies
+- Rate limits
+- Network issues
+- Redirect responses (HTML instead of JSON)
+
+**If the model is cached, there's no reason to hit the network.**
 
 ## Discovering CLI Options
 
