@@ -485,6 +485,14 @@ class MultiVaultConfig:
     # MCP
     mcp_transport: str = "stdio"
 
+    # Logging
+    log_dir: str = "logs"                              # Directory for log files
+    scan_log_file: str = "logs/scan_{date}.log"        # Scan log file pattern
+    watch_log_file: str = "logs/watch_{datetime}.log"  # Watch log file pattern
+    log_level: str = "INFO"                            # Log level
+    enable_scan_logging: bool = False                  # Auto-enable logging for scan
+    enable_watch_logging: bool = True                  # Auto-enable logging for watch
+
     def __post_init__(self):
         """Convert string paths to Path objects."""
         if isinstance(self.index_dir, str):
@@ -545,6 +553,7 @@ class MultiVaultConfig:
         ret = data.get("retrieval", {})
         mcp = data.get("mcp", {})
         indexing = data.get("indexing", {})
+        logging_config = data.get("logging", {})
 
         # Validate settings (reuse VaultConfig validation logic)
         batch_size = int(emb.get("batch_size", 32))
@@ -616,6 +625,19 @@ class MultiVaultConfig:
         if recency_recent_days >= recency_old_days:
             raise ValueError(f"recency_recent_days ({recency_recent_days}) must be less than recency_old_days ({recency_old_days}).")
 
+        # Parse logging settings
+        log_dir = logging_config.get("dir", "logs")
+        scan_log_file = logging_config.get("scan_log_file", "logs/scan_{date}.log")
+        watch_log_file = logging_config.get("watch_log_file", "logs/watch_{datetime}.log")
+        log_level = logging_config.get("level", "INFO").upper()
+        enable_scan_logging = bool(logging_config.get("enable_scan_logging", False))
+        enable_watch_logging = bool(logging_config.get("enable_watch_logging", True))
+
+        # Validate log level
+        valid_log_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        if log_level not in valid_log_levels:
+            raise ValueError(f"Invalid log_level: {log_level}. Must be one of: {valid_log_levels}")
+
         return MultiVaultConfig(
             vaults=vaults,
             index_dir=index_dir,
@@ -683,6 +705,12 @@ class MultiVaultConfig:
             watch_batch_timeout=float(indexing.get("watch_batch_timeout", 5.0)),
             watch_image_workers=int(indexing.get("watch_image_workers", 4)),
             mcp_transport=mcp.get("transport", "stdio"),
+            log_dir=log_dir,
+            scan_log_file=scan_log_file,
+            watch_log_file=watch_log_file,
+            log_level=log_level,
+            enable_scan_logging=enable_scan_logging,
+            enable_watch_logging=enable_watch_logging,
         )
 
 
