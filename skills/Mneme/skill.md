@@ -88,6 +88,84 @@ Check `test_config.toml` or the active config to see:
 - Index directory (where the database lives)
 - Which files are included/ignored
 
+## Search Best Practices
+
+### Vocabulary Mismatch is the #1 Issue
+
+Your query words often differ from document words:
+- "team" in query → "ownership" in document
+- "responsibilities" → "scope" or "role"
+- "people" → "sponsor", "lead", "manager"
+
+**The embedding model doesn't always connect synonyms.**
+
+### Effective Search Strategy
+
+1. **Iterate, don't rely on one query**
+   - First results inform your next query
+   - Note the vocabulary used in results, then search using those terms
+
+2. **Increase k for broad questions**
+   ```bash
+   mneme query "topic" --k 20           # More results than default 10
+   mneme query "topic" --k 30 --rerank  # Best coverage
+   ```
+
+3. **Try synonyms and domain terms**
+   - Generic terms often miss specific content
+   - Use role-specific terms: "sponsor", "owner", "lead"
+   - Use domain vocabulary from initial results
+
+4. **Narrow after broad**
+   - Start: broad concept query
+   - Then: specific names/terms discovered in initial results
+
+5. **When something seems missing, search directly**
+   - Search for specific names, acronyms, or exact phrases
+   - Example: If "team" misses someone, search their name directly
+
+### Example: Finding Project Team Members
+
+```bash
+# First attempt (broad)
+mneme query "Navari project team" --k 15
+
+# Results use "sponsor", "ownership" - not "team"
+# Second attempt (using document vocabulary)
+mneme query "Navari sponsor ownership comms" --k 15
+
+# Still missing someone? Search directly
+mneme query "Anne-Claire Navari" --k 5
+```
+
+## When to Ask for Clarification
+
+**Don't guess with endless query variations. Ask the user.**
+
+### Ask When:
+
+- **Query is broad/ambiguous**
+  - User: "Navari team"
+  - Ask: "Are you looking for specific roles (sponsors, leads) or the full org structure?"
+
+- **Initial results seem incomplete**
+  - "I found Justin and Jorge, but results may not have everyone. Are there specific people or roles you expected to see?"
+
+- **Domain terms are unclear**
+  - "What do you mean by 'responsibilities' - reporting structure, project scope, or job duties?"
+
+- **Results don't match apparent intent**
+  - "These results focus on project timeline. Were you looking for something else?"
+
+### How to Ask
+
+Keep it brief - one clarifying question, then search:
+- "Are you looking for [specific thing] or [other thing]?"
+- "I found X and Y. Anyone else you expected?"
+- "Should I search for specific names or roles?"
+
+**Don't over-ask** - gather context, then execute.
+
 ## Pre-flight Checks
 
 Before running any Mneme commands:
