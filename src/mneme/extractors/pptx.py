@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import logging
 
 from .base import Extracted
@@ -15,6 +15,29 @@ class PptxExtractor:
     supported_suffixes = (".pptx",)
     min_image_width: int = 100
     min_image_height: int = 100
+
+    def _iter_shapes(self, shapes: Any) -> Iterator[Any]:
+        """Recursively iterate through all shapes, including those inside groups.
+
+        This ensures we capture text from grouped text boxes, which are common
+        in acknowledgement slides and multi-column layouts.
+        """
+        try:
+            from pptx.enum.shapes import MSO_SHAPE_TYPE  # type: ignore
+        except Exception:
+            # If we can't import, just iterate top-level
+            yield from shapes
+            return
+
+        for shape in shapes:
+            yield shape
+            # Recursively iterate into group shapes
+            try:
+                if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                    yield from self._iter_shapes(shape.shapes)
+            except (NotImplementedError, AttributeError):
+                # Shape type not recognized or no shapes attribute
+                pass
 
     def extract(self, path: Path) -> Extracted:
         """Extract PowerPoint slide text and embedded images.
@@ -36,7 +59,8 @@ class PptxExtractor:
         for idx, slide in enumerate(prs.slides, start=1):
             parts: list[str] = [f"[[[SLIDE {idx}]]]"]
 
-            for shape in slide.shapes:
+            # Use recursive shape iteration to capture grouped text boxes
+            for shape in self._iter_shapes(slide.shapes):
                 # Extract text
                 if getattr(shape, "has_text_frame", False) and shape.text_frame:
                     txt = shape.text_frame.text.strip()
