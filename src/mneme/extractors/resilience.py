@@ -268,7 +268,13 @@ class ResilientClient:
 
         for attempt in range(self.max_retries + 1):
             try:
+                start_time = time.time()
                 result = fn(*args, **kwargs)
+                elapsed_ms = (time.time() - start_time) * 1000
+
+                # Log success with timing for report analysis
+                logger.debug(f"[{self.provider}] {source}: SUCCESS - {elapsed_ms:.0f}ms")
+
                 if attempt > 0:
                     logger.debug(f"[{self.provider}] {source} succeeded on retry {attempt}")
                 self._breaker.record_success()
