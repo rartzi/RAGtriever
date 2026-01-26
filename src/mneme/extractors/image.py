@@ -293,6 +293,7 @@ class GeminiServiceAccountImageExtractor:
     retry_backoff: int = 1000  # Base backoff in ms
 
     _client: ResilientClient = field(init=False, repr=False)
+    _vertexai_initialized: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self) -> None:
         # Try to get values from environment if not provided
@@ -309,6 +310,49 @@ class GeminiServiceAccountImageExtractor:
             circuit_breaker=get_circuit_breaker(),
             provider="gemini-service-account",
         )
+
+        # Initialize Vertex AI once per extractor instance (session reuse)
+        self._init_vertexai()
+
+    def _init_vertexai(self) -> None:
+        """Initialize Vertex AI once per extractor instance to enable session reuse."""
+        if self._vertexai_initialized:
+            return
+
+        if not self.project_id or not self.credentials_file:
+            # Skip initialization if credentials not configured
+            return
+
+        import importlib.util
+        if importlib.util.find_spec("vertexai") is None or importlib.util.find_spec("google.oauth2") is None:
+            logger.warning(
+                "vertexai or google-auth not installed. Install with: pip install google-cloud-aiplatform google-auth"
+            )
+            return
+
+        try:
+            import vertexai  # type: ignore
+            from google.oauth2 import service_account  # type: ignore
+
+            # Load credentials from JSON file once
+            logger.debug(f"[Session Init] Loading credentials from: {self.credentials_file}")
+            credentials = service_account.Credentials.from_service_account_file(
+                self.credentials_file,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+
+            # Initialize Vertex AI once
+            logger.debug(f"[Session Init] Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
+            vertexai.init(
+                project=self.project_id,
+                location=self.location,
+                credentials=credentials
+            )
+
+            self._vertexai_initialized = True
+            logger.debug("[Session Init] Vertex AI initialized - session will be reused for all images")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Vertex AI: {e}")
 
     def extract(self, path: Path) -> Extracted:
         """Extract image content using Gemini with service account authentication."""
@@ -393,27 +437,13 @@ class GeminiServiceAccountImageExtractor:
         return result or {}
 
     def _raw_gemini_sa_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
-        """Raw Gemini API call with service account (wrapped by ResilientClient)."""
-        import vertexai  # type: ignore
+        """Raw Gemini API call with service account (wrapped by ResilientClient).
+
+        Note: Vertex AI is initialized once in __post_init__ for session reuse.
+        """
         from vertexai.generative_models import GenerativeModel, Part  # type: ignore
-        from google.oauth2 import service_account  # type: ignore
 
-        # Security: Log at debug level to avoid exposing credentials path
-        logger.debug(f"Loading credentials from: {self.credentials_file}")
-        # Load credentials from JSON file
-        credentials = service_account.Credentials.from_service_account_file(
-            self.credentials_file,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-
-        # Security: Log at debug level to avoid exposing project ID
-        logger.debug(f"Initializing Vertex AI (project: {self.project_id}, location: {self.location})")
-        # Initialize Vertex AI
-        vertexai.init(
-            project=self.project_id,
-            location=self.location,
-            credentials=credentials
-        )
+        # Vertex AI already initialized in __post_init__ - reuse the session
 
         # Determine mime type
         mime_map = {
@@ -506,6 +536,7 @@ class AIGatewayImageExtractor:
     retry_backoff: int = 1000  # Base backoff in ms
 
     _client: ResilientClient = field(init=False, repr=False)
+    _genai_client: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
         # Try to get values from environment if not provided
@@ -522,6 +553,46 @@ class AIGatewayImageExtractor:
             circuit_breaker=get_circuit_breaker(),
             provider="aigateway",
         )
+
+        # Initialize AI Gateway client once for session reuse
+        self._init_aigateway_client()
+
+    def _init_aigateway_client(self) -> None:
+        """Initialize AI Gateway client once per extractor instance for session reuse."""
+        if self._genai_client is not None:
+            return
+
+        if not self.gateway_url or not self.gateway_key:
+            # Skip initialization if not configured
+            return
+
+        import importlib.util
+        if importlib.util.find_spec("google.genai") is None:
+            logger.warning(
+                "google-genai not installed. Install with: pip install google-genai"
+            )
+            return
+
+        try:
+            from google import genai  # type: ignore
+            from google.genai import types  # type: ignore
+
+            # Configure client to use Microsoft AI Gateway endpoint once
+            endpoint = f"{self.gateway_url}/{self.endpoint_path}"
+            logger.debug(f"[Session Init] Initializing AI Gateway client (endpoint: {endpoint})")
+
+            self._genai_client = genai.Client(
+                http_options=types.HttpOptions(
+                    base_url=endpoint,
+                    api_version="v1",
+                    timeout=self.timeout,
+                ),
+                api_key=self.gateway_key,
+                vertexai=True
+            )
+            logger.debug("[Session Init] AI Gateway client initialized - session will be reused for all images")
+        except Exception as e:
+            logger.warning(f"Failed to initialize AI Gateway client: {e}")
 
     def extract(self, path: Path) -> Extracted:
         """Extract image content using Microsoft AI Gateway proxy to Gemini."""
@@ -606,22 +677,15 @@ class AIGatewayImageExtractor:
         return result or {}
 
     def _raw_aigateway_call(self, image_bytes: bytes, suffix: str) -> dict[str, Any]:
-        """Raw AI Gateway API call (wrapped by ResilientClient)."""
-        from google import genai  # type: ignore
+        """Raw AI Gateway API call (wrapped by ResilientClient).
+
+        Note: AI Gateway client is initialized once in __post_init__ for session reuse.
+        """
         from google.genai import types  # type: ignore
 
-        # Configure client to use Microsoft AI Gateway endpoint
-        # Append endpoint_path to base URL (configurable, default: vertex-ai-express)
-        endpoint = f"{self.gateway_url}/{self.endpoint_path}"
-        client = genai.Client(
-            http_options=types.HttpOptions(
-                base_url=endpoint,
-                api_version="v1",
-                timeout=self.timeout,  # Configurable timeout to prevent hanging
-            ),
-            api_key=self.gateway_key,
-            vertexai=True
-        )
+        # Use cached client (initialized in __post_init__)
+        if self._genai_client is None:
+            raise RuntimeError("AI Gateway client not initialized")
 
         # Determine mime type
         mime_map = {
@@ -644,7 +708,8 @@ class AIGatewayImageExtractor:
 
 Respond ONLY with valid JSON, no markdown formatting or extra text."""
 
-        response = client.models.generate_content(
+        # Use the cached client for session reuse
+        response = self._genai_client.models.generate_content(
             model=self.model,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
