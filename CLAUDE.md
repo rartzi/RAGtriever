@@ -99,7 +99,7 @@ TOML sections (see `examples/config.toml.example`): `[vault]`, `[index]`, `[chun
 
 **Key options:**
 - **Chunking:** v2 chunker (overlap_chars=200), max_chunk_size
-- **Embeddings:** sentence_transformers/ollama, offline_mode, use_query_prefix (asymmetric), use_faiss (ANN)
+- **Embeddings:** sentence_transformers/ollama, offline_mode, use_query_prefix (asymmetric), use_faiss (ANN), model_path (explicit local path)
 - **Image:** tesseract/gemini/gemini-service-account/aigateway/off
 - **Retrieval:** RRF/weighted fusion, boosts, diversity, reranking
 - **Indexing:** workers, batch sizes, parallel_scan
@@ -108,6 +108,7 @@ TOML sections (see `examples/config.toml.example`): `[vault]`, `[index]`, `[chun
 
 **Ignore patterns:** `folder/**`, `**/.DS_Store`, `**/~$*` (Office temp files)
 **Offline mode:** `offline_mode = true` (no HF downloads, env: `HF_OFFLINE_MODE`)
+**Model path:** `model_path = "~/.cache/huggingface/hub/BAAI/bge-large-en-v1.5/main"` (explicit local path, overrides model ID for loading)
 **Chunk overlap:** `chunker_version = "v2"`, `overlap_chars = 200`
 **Query prefix:** `use_query_prefix = true` (asymmetric BGE retrieval)
 **FAISS:** `use_faiss = true` for >10K chunks (5-10x speedup, IVF index)
