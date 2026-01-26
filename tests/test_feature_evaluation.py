@@ -23,10 +23,10 @@ import pytest
 from pathlib import Path
 import dataclasses
 from datetime import datetime, timedelta
-from ragtriever.config import VaultConfig
-from ragtriever.indexer.indexer import Indexer
-from ragtriever.retrieval.retriever import Retriever
-from ragtriever.retrieval.diversity import MMRDiversifier, DiversityConfig
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.retrieval.retriever import Retriever
+from mneme.retrieval.diversity import MMRDiversifier, DiversityConfig
 
 
 # Test queries with expected behavior

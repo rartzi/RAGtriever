@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="assets/hero.jpg" alt="RAGtriever - Retrieval-Augmented Generation for Your Vault" width="800"/>
+  <img src="assets/hero.jpg" alt="Mneme - Memory for Your Second Brain" width="800"/>
 </p>
 
-<h1 align="center">RAGtriever</h1>
+<h1 align="center">Mneme</h1>
 
 <p align="center">
-  <strong>Retrieval-Augmented Generation system for your Obsidian vault</strong>
+  <strong>Memory for your Second Brain</strong><br/>
+  <em>(pronounced NEE-mee, after the Greek Muse of Memory)</em>
 </p>
 
 <p align="center">
@@ -25,9 +26,9 @@
 
 ---
 
-RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retrieval system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness** for retrieval-augmented generation. All data stays local on your machine.
+Mneme indexes your Obsidian-compatible vault into a powerful hybrid retrieval system combining **semantic search**, **lexical search (FTS5)**, and **link-graph awareness** for retrieval-augmented generation. All data stays local on your machine.
 
-> **⚠️ Breaking Change in v2.0.0**: The `vertex_ai` image provider has been renamed to `gemini-service-account`. Update your `config.toml`: change `provider = "vertex_ai"` to `provider = "gemini-service-account"` and rename `[vertex_ai]` section to `[gemini_service_account]`. See [CHANGELOG.md](CHANGELOG.md) for details.
+> **⚠️ Breaking Change in v3.0.0**: The project has been renamed from Mneme to Mneme. Update your CLI commands from `mneme` to `mneme`, and update imports from `mneme` to `mneme`. See [CHANGELOG.md](CHANGELOG.md) for migration details.
 
 ## Features
 
@@ -57,8 +58,8 @@ RAGtriever indexes your Obsidian-compatible vault into a powerful hybrid retriev
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ragtriever.git
-cd ragtriever
+git clone https://github.com/yourusername/mneme.git
+cd mneme
 
 # Create virtual environment
 python3 -m venv .venv
@@ -97,7 +98,7 @@ root = "/path/to/your/obsidian/vault"    # Your vault location
 ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
 
 [index]
-dir = "~/.ragtriever/indexes/myvault"       # Where to store the index
+dir = "~/.mneme/indexes/myvault"       # Where to store the index
 
 [embeddings]
 provider = "sentence_transformers"
@@ -124,20 +125,20 @@ top_k = 10
 
 ```bash
 # Index your vault (uses parallel scanning by default - 3.6x faster)
-ragtriever scan --full
+mneme scan --full
 
 # Search your knowledge
-ragtriever query "machine learning concepts"
+mneme query "machine learning concepts"
 
 # Search with reranking for best quality
-ragtriever query "machine learning concepts" --rerank
+mneme query "machine learning concepts" --rerank
 
 # Control parallel scanning
-ragtriever scan --full --workers 8      # Use 8 parallel workers
-ragtriever scan --full --no-parallel    # Disable parallelization
+mneme scan --full --workers 8      # Use 8 parallel workers
+mneme scan --full --no-parallel    # Disable parallelization
 
 # Watch for changes (continuous indexing)
-ragtriever watch
+mneme watch
 ```
 
 ### Enable Reranking (Optional)
@@ -152,52 +153,52 @@ use_rerank = true
 This adds ~100-200ms latency but significantly improves relevance. You can also enable it per-query:
 
 ```bash
-ragtriever query "kubernetes deployment" --rerank
+mneme query "kubernetes deployment" --rerank
 ```
 
 ---
 
 ## Usage
 
-RAGtriever can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
+Mneme can be used in three ways: **CLI**, **Python API**, or **MCP Server**.
 
 ### CLI Usage
 
 ```bash
 # Initialize a new config file
-cortex init --vault "/path/to/vault" --index "~/.cortexindex/indexes/myvault"
+mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
 
 # Full index scan
-cortex scan --full
+mneme scan --full
 
 # Incremental scan (only changed files)
-cortex scan
+mneme scan
 
 # Search your vault
-cortex query "project planning" --k 10
+mneme query "project planning" --k 10
 
 # Search with reranking (improves quality by 20-30%)
-cortex query "project planning" --k 10 --rerank
+mneme query "project planning" --k 10 --rerank
 
 # Search with path filter
-cortex query "meeting notes" --path "Work/Meetings/"
+mneme query "meeting notes" --path "Work/Meetings/"
 
 # Watch mode - continuously index changes
-cortex watch
+mneme watch
 
 # Open a specific chunk by ID
-cortex open <chunk_id>
+mneme open <chunk_id>
 
 # Start MCP server
-cortex mcp
+mneme mcp
 ```
 
 ### Python API Usage
 
 ```python
-from cortexindex.config import VaultConfig
-from cortexindex.indexer.indexer import Indexer
-from cortexindex.retrieval.retriever import Retriever
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.retrieval.retriever import Retriever
 
 # Load configuration
 cfg = VaultConfig.from_toml("config.toml")
@@ -243,10 +244,10 @@ results = retriever.search(
 #### Advanced: Direct Store Access
 
 ```python
-from cortexindex.store.libsql_store import LibSqlStore
+from mneme.store.libsql_store import LibSqlStore
 
 # Direct access to the store
-store = LibSqlStore(cfg.index_dir / "cortexindex.sqlite")
+store = LibSqlStore(cfg.index_dir / "vaultrag.sqlite")
 
 # Get index status
 status = store.status(vault_id="your_vault_id")
@@ -266,7 +267,7 @@ vector_results = store.vector_search(query_vector, k=20, filters={})
 
 ## MCP Integration
 
-CortexIndex exposes your vault to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
+Mneme exposes your vault to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
 ### Available MCP Tools
 
@@ -282,7 +283,7 @@ CortexIndex exposes your vault to AI agents via the [Model Context Protocol](htt
 
 ```bash
 # Start the MCP server (stdio transport)
-cortex mcp
+mneme mcp
 ```
 
 ### Claude Desktop Integration
@@ -292,10 +293,10 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "cortexindex": {
-      "command": "/absolute/path/to/cortexindex/.venv/bin/cortex",
+    "mneme": {
+      "command": "/absolute/path/to/mneme/.venv/bin/mneme",
       "args": ["mcp"],
-      "cwd": "/absolute/path/to/cortexindex"
+      "cwd": "/absolute/path/to/mneme"
     }
   }
 }
@@ -382,30 +383,30 @@ The MCP server accepts JSON-RPC requests. Here are example tool calls:
 
 ## Claude Code Skill (Optional)
 
-For users of [Claude Code](https://claude.ai/code), RAGtriever includes a workflow skill to assist with setup, configuration, and troubleshooting.
+For users of [Claude Code](https://claude.ai/code), Mneme includes a workflow skill to assist with setup, configuration, and troubleshooting.
 
 ### Installation
 
 ```bash
 # Option 1: Symlink from repository (recommended)
-ln -s $(pwd)/skills/RAGtrieval ~/.claude/skills/RAGtrieval
+ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 
 # Option 2: Copy skill
-cp -r skills/RAGtrieval ~/.claude/skills/RAGtrieval
+cp -r skills/Mneme ~/.claude/skills/Mneme
 ```
 
 ### Usage
 
-The `RAGtrieval` skill provides:
+The `Mneme` skill provides:
 - Setup and configuration guidance
 - Common command workflows
 - Troubleshooting assistance
 - Pre-flight checks and checklists
 - Architecture and key file references
 
-Once installed, Claude Code will automatically use this skill when helping you with RAGtriever tasks.
+Once installed, Claude Code will automatically use this skill when helping you with Mneme tasks.
 
-**Note:** The skill is optional - RAGtriever works independently without it. The skill simply helps Claude Code assist you better.
+**Note:** The skill is optional - Mneme works independently without it. The skill simply helps Claude Code assist you better.
 
 ---
 
@@ -459,7 +460,7 @@ Vault (filesystem)
 | `[indexing]` | `image_workers` | Parallel image API workers | `8` |
 | `[indexing]` | `parallel_scan` | Enable parallel scanning | `true` |
 
-**Note**: RAGtriever automatically extracts and analyzes images embedded in PDFs and PowerPoint presentations, as well as images referenced in Markdown files (`![](image.png)` and `![[image.png]]`). These are indexed as separate chunks linked to their parent documents.
+**Note**: Mneme automatically extracts and analyzes images embedded in PDFs and PowerPoint presentations, as well as images referenced in Markdown files (`![](image.png)` and `![[image.png]]`). These are indexed as separate chunks linked to their parent documents.
 
 ---
 
@@ -489,7 +490,7 @@ mypy src/
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 - [Gemini Service Account Setup](docs/gemini_service_account_setup.md) - Gemini with GCP service account configuration
 - [Improvements](IMPROVEMENTS.md) - Planned enhancements and roadmap
-- [RAGtrieval Skill](skills/RAGtrieval/skill.md) - Claude Code workflow skill
+- [Mneme Skill](skills/Mneme/skill.md) - Claude Code workflow skill
 - [MCP Tool Spec](docs/MCP_TOOL_SPEC.json) - MCP protocol specification
 
 ---

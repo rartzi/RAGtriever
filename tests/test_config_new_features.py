@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 import pytest
 
-from ragtriever.config import VaultConfig
+from mneme.config import VaultConfig
 
 
 def test_config_chunking_defaults():

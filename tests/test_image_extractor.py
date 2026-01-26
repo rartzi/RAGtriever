@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 import os
 
-from ragtriever.extractors.image import TesseractImageExtractor, GeminiImageExtractor, GeminiServiceAccountImageExtractor
+from mneme.extractors.image import TesseractImageExtractor, GeminiImageExtractor, GeminiServiceAccountImageExtractor
 
 def create_test_image() -> BytesIO:
     """Create a simple test image in memory."""

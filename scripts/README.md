@@ -6,11 +6,11 @@ Operational scripts for testing, development, and watcher management.
 
 ### manage_watcher.sh
 
-Watcher management script for starting, stopping, and monitoring the RAGtriever watcher.
+Watcher management script for starting, stopping, and monitoring the Mneme watcher.
 
 **Usage:**
 ```bash
-./scripts/manage_watcher.sh {status|start|stop|restart|health}
+./scripts/manage_watcher.sh {status|start|stop|restart|health|check|help}
 ```
 
 **Commands:**
@@ -19,13 +19,16 @@ Watcher management script for starting, stopping, and monitoring the RAGtriever 
 - `stop` - Stop the watcher gracefully
 - `restart` - Restart the watcher
 - `health` - Run comprehensive health check
+- `check` - Verify dependencies only
+- `help` - Show usage information
 
 **Features:**
 - Automatic virtual environment activation
+- Automatic dependency checking
 - PID file management (`logs/watcher.pid`)
 - Graceful shutdown with fallback to force kill
 - Health checks: process, log activity, errors
-- Color-coded status messages
+- Offline mode environment variables
 
 **Examples:**
 ```bash
@@ -40,6 +43,9 @@ Watcher management script for starting, stopping, and monitoring the RAGtriever 
 
 # Restart after config change
 ./scripts/manage_watcher.sh restart
+
+# Verify dependencies
+./scripts/manage_watcher.sh check
 ```
 
 **Environment:**
@@ -76,8 +82,5 @@ All logs are timestamped and saved to the `logs/` directory.
 
 ## See Also
 
-**Documentation:**
-- `docs/SCAN_AND_WATCH_QUICKSTART.md` - Quick reference for manual commands
-- `docs/SCAN_AND_WATCH_TESTING.md` - Comprehensive testing guide
-- `docs/LOGGING_CONFIGURATION.md` - Logging setup and configuration
-- `docs/WHERE_TO_SEE_INDEXING.md` - How to verify indexing success
+- `docs/USERGUIDE.md` - Comprehensive user guide including watcher management
+- `docs/ARCHITECTURE.md` - System architecture

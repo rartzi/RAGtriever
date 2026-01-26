@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ragtriever.extractors.resilience import (
+from mneme.extractors.resilience import (
     CircuitBreaker,
     ErrorCategory,
     ResilientClient,

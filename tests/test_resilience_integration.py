@@ -18,12 +18,12 @@ from pathlib import Path
 
 import pytest
 
-from ragtriever.extractors.image import (
+from mneme.extractors.image import (
     AIGatewayImageExtractor,
     GeminiServiceAccountImageExtractor,
     GeminiImageExtractor,
 )
-from ragtriever.extractors.resilience import (
+from mneme.extractors.resilience import (
     reset_circuit_breaker,
     get_circuit_breaker,
 )

@@ -87,7 +87,7 @@ echo ""
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
-ragtriever scan \
+mneme scan \
     --config "$CONFIG_FILE" \
     --full \
     --workers 10 \
@@ -133,7 +133,7 @@ echo "Starting watcher... (Press Ctrl+C to stop)"
 echo ""
 
 # Run watcher with logging
-ragtriever watch \
+mneme watch \
     --config "$CONFIG_FILE" \
     --log-file "$WATCH_LOG" \
     --verbose

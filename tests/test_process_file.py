@@ -11,9 +11,9 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import Mock, patch, MagicMock
 
-from ragtriever.config import VaultConfig
-from ragtriever.indexer.indexer import Indexer
-from ragtriever.indexer.parallel_types import ProcessResult
+from mneme.config import VaultConfig
+from mneme.indexer.indexer import Indexer
+from mneme.indexer.parallel_types import ProcessResult
 
 
 @pytest.fixture

@@ -12,7 +12,7 @@ ignore = [
 ]
 
 [index]
-dir = "~/.ragtriever/indexes/myvault"
+dir = "~/.mneme/indexes/myvault"
 extractor_version = "v1"
 chunker_version = "v2"  # v2: adds chunk overlap support
 
@@ -252,14 +252,14 @@ max_per_document = 2  # Maximum chunks from same document
 # Parallelization (3.6x speedup for full scans)
 # Parallel scanning is enabled by default
 [indexing]
-# Scan mode settings (ragtriever scan --full)
+# Scan mode settings (mneme scan --full)
 extraction_workers = 8    # Parallel file extraction workers (default: 8)
 embed_batch_size = 256    # Cross-file embedding batch size (GPU efficiency)
 image_workers = 8         # Parallel image API workers (default: 8)
 parallel_scan = true      # Enable/disable parallel scanning
 # CLI overrides: --workers N, --no-parallel
 
-# Watch mode settings (ragtriever watch)
+# Watch mode settings (mneme watch)
 # Batched mode is default - accumulates filesystem events for efficient batch processing
 watch_workers = 4         # Parallel extraction workers for watch (default: 4)
 watch_batch_size = 10     # Max files per batch before processing (default: 10)
@@ -290,4 +290,4 @@ enable_scan_logging = false   # Set to true to always log scan operations
 enable_watch_logging = true   # Set to true to always log watch operations (recommended)
 
 # CLI overrides: --log-file PATH, --log-level LEVEL, --verbose (DEBUG)
-# Example:  ragtriever scan --log-file logs/my_scan.log --verbose
+# Example:  mneme scan --log-file logs/my_scan.log --verbose

@@ -7,8 +7,8 @@ import pytest
 from pathlib import Path
 import numpy as np
 
-from ragtriever.models import Document, Chunk
-from ragtriever.store.libsql_store import LibSqlStore
+from mneme.models import Document, Chunk
+from mneme.store.libsql_store import LibSqlStore
 
 
 @pytest.fixture

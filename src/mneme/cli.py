@@ -270,8 +270,8 @@ def _setup_logging(log_file: str | None, log_level: str, verbose: bool) -> None:
         file_handler.setFormatter(logging.Formatter(fmt, datefmt))
         handlers.append(file_handler)
 
-    # Configure root logger for ragtriever
-    logger = logging.getLogger("ragtriever")
+    # Configure root logger for mneme
+    logger = logging.getLogger("mneme")
     logger.setLevel(level)
     for h in handlers:
         logger.addHandler(h)

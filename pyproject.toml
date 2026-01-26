@@ -3,12 +3,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ragtriever"
-version = "2.0.0"
-description = "Local-only vault indexer + hybrid RAG retrieval with MCP interface."
+name = "mneme"
+version = "3.0.0"
+description = "Memory for your Second Brain — local-first vault indexer + hybrid retrieval with MCP interface."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{name="RAGtriever Local"}]
+authors = [{name="Mneme"}]
 dependencies = [
   "typer>=0.12",
   "python-frontmatter>=1.1.0",
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-ragtriever = "ragtriever.cli:app"
+mneme = "mneme.cli:app"
 
 [tool.pytest.ini_options]
 markers = [

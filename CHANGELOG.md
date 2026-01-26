@@ -1,9 +1,92 @@
 # Changelog
 
-All notable changes to RAGtriever will be documented in this file.
+All notable changes to Mneme (formerly RAGtriever) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.0.0] - 2026-01-25
+
+### BREAKING CHANGES
+
+**Project Renamed: RAGtriever → Mneme**
+
+The project has been renamed from RAGtriever to Mneme (pronounced NEE-mee), after the Greek Muse of Memory. This name better reflects the project's purpose as a memory layer for your Second Brain.
+
+**What changed:**
+- Package name: `ragtriever` → `mneme`
+- CLI command: `ragtriever` → `mneme`
+- Import paths: `from ragtriever` → `from mneme`
+- Default index directory: `~/.ragtriever/` → `~/.mneme/`
+- MCP server name: `ragtriever` → `mneme`
+- Skill name: `RAGtrieval` → `Mneme`
+
+**Migration Guide:**
+
+1. **Update package:**
+   ```bash
+   pip uninstall ragtriever
+   pip install mneme
+   ```
+
+2. **Update CLI commands:**
+   ```bash
+   # Old
+   ragtriever scan --full
+   ragtriever query "search term"
+
+   # New
+   mneme scan --full
+   mneme query "search term"
+   ```
+
+3. **Update imports in your code:**
+   ```python
+   # Old
+   from ragtriever.config import VaultConfig
+   from ragtriever.retrieval import Retriever
+
+   # New
+   from mneme.config import VaultConfig
+   from mneme.retrieval import Retriever
+   ```
+
+4. **Update config paths (optional):**
+   ```toml
+   # Old
+   [index]
+   dir = "~/.ragtriever/indexes/myvault"
+
+   # New
+   [index]
+   dir = "~/.mneme/indexes/myvault"
+   ```
+   Note: Existing indexes at `~/.ragtriever/` will continue to work.
+
+5. **Update MCP configuration:**
+   ```json
+   {
+     "mcpServers": {
+       "mneme": {
+         "command": "mneme",
+         "args": ["mcp", "--config", "/path/to/config.toml"]
+       }
+     }
+   }
+   ```
+
+6. **Update skill symlink (if using Claude Code):**
+   ```bash
+   rm ~/.claude/skills/RAGtrieval
+   ln -s /path/to/mneme/skills/Mneme ~/.claude/skills/Mneme
+   ```
+
+**Why this change?**
+
+- "Mneme" (Greek Muse of Memory) better represents the project's purpose
+- Emphasizes the "memory" aspect of a Second Brain system
+- Shorter, more memorable name
+- Cleaner branding aligned with knowledge management philosophy
 
 ## [2.0.0] - 2026-01-25
 

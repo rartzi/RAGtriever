@@ -5,10 +5,10 @@ from pathlib import Path
 from unittest.mock import patch, Mock
 import numpy as np
 import dataclasses
-from ragtriever.config import VaultConfig
-from ragtriever.retrieval.retriever import Retriever
-from ragtriever.retrieval.reranker import CROSS_ENCODER_AVAILABLE
-from ragtriever.models import SearchResult, SourceRef
+from mneme.config import VaultConfig
+from mneme.retrieval.retriever import Retriever
+from mneme.retrieval.reranker import CROSS_ENCODER_AVAILABLE
+from mneme.models import SearchResult, SourceRef
 
 
 @pytest.mark.skipif(not CROSS_ENCODER_AVAILABLE, reason="sentence-transformers not installed")
@@ -42,7 +42,7 @@ class TestRerankerIntegration:
         config_with_rerank = dataclasses.replace(minimal_config, use_rerank=True)
 
         with patch('sentence_transformers.SentenceTransformer'), \
-             patch('ragtriever.retrieval.reranker.CrossEncoder'):
+             patch('mneme.retrieval.reranker.CrossEncoder'):
             retriever = Retriever(config_with_rerank)
             assert retriever.reranker is not None
 
@@ -55,7 +55,7 @@ class TestRerankerIntegration:
         )
 
         with patch('sentence_transformers.SentenceTransformer'), \
-             patch('ragtriever.retrieval.reranker.CrossEncoder'):
+             patch('mneme.retrieval.reranker.CrossEncoder'):
             Retriever(config_with_rerank)
             captured = capsys.readouterr()
             assert "✓ Reranker initialized" in captured.out
@@ -86,7 +86,7 @@ class TestRerankerIntegration:
         ]
 
         with patch('sentence_transformers.SentenceTransformer'), \
-             patch('ragtriever.retrieval.reranker.CrossEncoder') as mock_cross_encoder:
+             patch('mneme.retrieval.reranker.CrossEncoder') as mock_cross_encoder:
 
             # Setup mocks
             mock_model = Mock()
@@ -145,6 +145,6 @@ class TestRerankerIntegration:
         config_override = dataclasses.replace(minimal_config, use_rerank=True)
 
         with patch('sentence_transformers.SentenceTransformer'), \
-             patch('ragtriever.retrieval.reranker.CrossEncoder'):
+             patch('mneme.retrieval.reranker.CrossEncoder'):
             retriever_with_rerank = Retriever(config_override)
             assert retriever_with_rerank.reranker is not None

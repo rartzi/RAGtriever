@@ -2,8 +2,8 @@
 
 import pytest
 from datetime import datetime, timezone, timedelta
-from ragtriever.retrieval.boosts import BoostConfig, BoostAdjuster
-from ragtriever.models import SearchResult, SourceRef
+from mneme.retrieval.boosts import BoostConfig, BoostAdjuster
+from mneme.models import SearchResult, SourceRef
 
 
 def make_result(

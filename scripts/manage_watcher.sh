@@ -49,15 +49,15 @@ check_dependencies() {
         errors=$((errors + 1))
     fi
 
-    # Check if ragtriever is installed (after activating venv)
+    # Check if mneme is installed (after activating venv)
     if [ -f ".venv/bin/activate" ]; then
         source .venv/bin/activate
     elif [ -f "venv/bin/activate" ]; then
         source venv/bin/activate
     fi
 
-    if ! command -v ragtriever &> /dev/null; then
-        echo -e "${RED}✗${NC} ragtriever command not found"
+    if ! command -v mneme &> /dev/null; then
+        echo -e "${RED}✗${NC} mneme command not found"
         echo "  Run: pip install -e ."
         errors=$((errors + 1))
     fi
@@ -67,12 +67,12 @@ check_dependencies() {
 
 # Check if watcher is running
 is_running() {
-    pgrep -f "ragtriever watch" > /dev/null
+    pgrep -f "mneme watch" > /dev/null
 }
 
 # Get PID if running
 get_pid() {
-    pgrep -f "ragtriever watch"
+    pgrep -f "mneme watch"
 }
 
 # Status command
@@ -120,7 +120,7 @@ cmd_start() {
     export TRANSFORMERS_OFFLINE=1
 
     # Start watcher in background using /bin/bash explicitly
-    /bin/bash -c "source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null; export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1; nohup ragtriever watch --config '$CONFIG_FILE' > /dev/null 2>&1 &
+    /bin/bash -c "source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null; export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1; nohup mneme watch --config '$CONFIG_FILE' > /dev/null 2>&1 &
     echo \$!" > "$PID_FILE"
 
     # Get PID from file
@@ -155,7 +155,7 @@ cmd_start() {
         fi
     else
         echo -e "${RED}✗${NC} Failed to start watcher"
-        echo "Check if ragtriever is installed: pip install -e ."
+        echo "Check if mneme is installed: pip install -e ."
         return 1
     fi
 }
@@ -168,7 +168,7 @@ cmd_stop() {
     fi
 
     echo "Stopping watcher..."
-    pkill -f "ragtriever watch"
+    pkill -f "mneme watch"
 
     # Wait for graceful shutdown
     for i in {1..5}; do
@@ -181,7 +181,7 @@ cmd_stop() {
     # Force kill if still running
     if is_running; then
         echo "Force killing watcher..."
-        pkill -9 -f "ragtriever watch"
+        pkill -9 -f "mneme watch"
         sleep 1
     fi
 

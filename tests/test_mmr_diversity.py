@@ -1,8 +1,8 @@
 """Unit tests for MMR diversity functionality."""
 
 import pytest
-from ragtriever.retrieval.diversity import DiversityConfig, MMRDiversifier
-from ragtriever.models import SearchResult, SourceRef
+from mneme.retrieval.diversity import DiversityConfig, MMRDiversifier
+from mneme.models import SearchResult, SourceRef
 
 
 def make_result(

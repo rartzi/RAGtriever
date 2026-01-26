@@ -9,8 +9,8 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ragtriever.indexer.indexer import BatchCollector
-from ragtriever.indexer.queue import Job
+from mneme.indexer.indexer import BatchCollector
+from mneme.indexer.queue import Job
 
 
 class TestBatchCollectorBasic:

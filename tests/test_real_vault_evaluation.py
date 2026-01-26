@@ -8,9 +8,9 @@ Run with: pytest tests/test_real_vault_evaluation.py -v -m manual -s
 
 import pytest
 from pathlib import Path
-from ragtriever.config import load_config
-from ragtriever.retrieval.retriever import Retriever
-from ragtriever.retrieval.diversity import MMRDiversifier, DiversityConfig
+from mneme.config import load_config
+from mneme.retrieval.retriever import Retriever
+from mneme.retrieval.diversity import MMRDiversifier, DiversityConfig
 import dataclasses
 
 
