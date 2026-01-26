@@ -28,6 +28,7 @@ class Retriever:
         if self.cfg.embedding_provider == "sentence_transformers":
             self.embedder = SentenceTransformersEmbedder(
                 model_id=self.cfg.embedding_model,
+                model_path=self.cfg.embedding_model_path,
                 device=self.cfg.embedding_device,
                 batch_size=self.cfg.embedding_batch_size,
             )
@@ -148,6 +149,7 @@ class MultiVaultRetriever:
         if cfg.embedding_provider == "sentence_transformers":
             self.embedder = SentenceTransformersEmbedder(
                 model_id=cfg.embedding_model,
+                model_path=cfg.embedding_model_path,
                 device=cfg.embedding_device,
                 batch_size=cfg.embedding_batch_size,
             )

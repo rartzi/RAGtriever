@@ -30,6 +30,10 @@ preserve_heading_metadata = true
 [embeddings]
 provider = "sentence_transformers"
 model = "BAAI/bge-small-en-v1.5"
+# Explicit local path for model (overrides model for loading)
+# Use when HuggingFace hub is blocked and you download models via another method
+# Example: model_path = "~/.cache/huggingface/hub/BAAI/bge-large-en-v1.5/main"
+# model_path = ""
 batch_size = 32
 device = "cpu"  # cpu|cuda|mps
 # Set to true to use cached models only (no HuggingFace downloads)

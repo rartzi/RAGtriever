@@ -186,6 +186,7 @@ class Indexer:
         if self.cfg.embedding_provider == "sentence_transformers":
             self.embedder = SentenceTransformersEmbedder(
                 model_id=self.cfg.embedding_model,
+                model_path=self.cfg.embedding_model_path,
                 device=self.cfg.embedding_device,
                 batch_size=self.cfg.embedding_batch_size,
                 use_query_prefix=self.cfg.use_query_prefix,
@@ -1700,6 +1701,7 @@ class MultiVaultIndexer:
             chunker_version=self.cfg.chunker_version,
             embedding_provider=self.cfg.embedding_provider,
             embedding_model=self.cfg.embedding_model,
+            embedding_model_path=self.cfg.embedding_model_path,
             embedding_device=self.cfg.embedding_device,
             embedding_batch_size=self.cfg.embedding_batch_size,
             offline_mode=self.cfg.offline_mode,

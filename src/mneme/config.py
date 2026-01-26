@@ -56,6 +56,7 @@ class VaultConfig:
     # Embeddings
     embedding_provider: str = "sentence_transformers"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_model_path: str | None = None  # Explicit local path for model (overrides model for loading)
     embedding_batch_size: int = 32
     embedding_device: str = "cpu"  # cpu|cuda|mps
     offline_mode: bool = True  # Set HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE
@@ -315,6 +316,7 @@ class VaultConfig:
             preserve_heading_metadata=preserve_heading_metadata,
             embedding_provider=emb.get("provider", "sentence_transformers"),
             embedding_model=emb.get("model", "BAAI/bge-small-en-v1.5"),
+            embedding_model_path=emb.get("model_path"),
             embedding_batch_size=batch_size,
             embedding_device=device,
             offline_mode=offline_mode,
@@ -405,6 +407,7 @@ class MultiVaultConfig:
     # Embeddings
     embedding_provider: str = "sentence_transformers"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_model_path: str | None = None  # Explicit local path for model (overrides model for loading)
     embedding_batch_size: int = 32
     embedding_device: str = "cpu"
     offline_mode: bool = True
@@ -682,6 +685,7 @@ class MultiVaultConfig:
             preserve_heading_metadata=bool(chunking.get("preserve_heading_metadata", True)),
             embedding_provider=emb.get("provider", "sentence_transformers"),
             embedding_model=emb.get("model", "BAAI/bge-small-en-v1.5"),
+            embedding_model_path=emb.get("model_path"),
             embedding_batch_size=batch_size,
             embedding_device=device,
             offline_mode=offline_mode,
