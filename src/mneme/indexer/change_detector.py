@@ -29,6 +29,69 @@ class ChangeDetector:
     ignore: list[str] = field(default_factory=list)
     debounce_ms: int = 500
 
+    def queue_stale_files(self) -> int:
+        """Queue files modified since last index for reprocessing.
+
+        Compares filesystem mtimes against manifest to detect files that
+        changed while the watcher was stopped. Queues them for reindex.
+
+        Returns:
+            Number of stale files queued.
+        """
+        root = self.root.resolve()
+        queued = 0
+        new_files = 0
+
+        # Get last-indexed mtimes from manifest
+        manifest_mtimes = self.store.get_manifest_mtimes(self.vault_id)
+
+        logger.info("[watch] Checking for files modified since last index...")
+
+        # Walk filesystem and compare
+        for file_path in root.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            try:
+                rel = str(file_path.relative_to(root)).replace("\\", "/")
+            except ValueError:
+                continue
+
+            # Skip ignored files
+            if matches_ignore_pattern(rel, self.ignore):
+                continue
+
+            # Get filesystem mtime
+            try:
+                fs_mtime = int(file_path.stat().st_mtime)
+            except OSError:
+                continue
+
+            # Check if file is new or modified since last index
+            manifest_mtime = manifest_mtimes.get(rel)
+
+            if manifest_mtime is None:
+                # New file not in manifest
+                logger.debug(f"[watch] New file (not in index): {rel}")
+                self.q.put(Job(kind="upsert", rel_path=rel))
+                new_files += 1
+                queued += 1
+            elif fs_mtime > manifest_mtime:
+                # File modified since last index
+                logger.debug(f"[watch] Stale file (modified): {rel}")
+                self.q.put(Job(kind="upsert", rel_path=rel))
+                queued += 1
+
+        if queued > 0:
+            logger.info(
+                f"[watch] Queued {queued} stale files for reindex "
+                f"({new_files} new, {queued - new_files} modified)"
+            )
+        else:
+            logger.info("[watch] No stale files found - index is up to date")
+
+        return queued
+
     def watch(self) -> None:
         try:
             from watchdog.observers import Observer  # type: ignore

@@ -1217,6 +1217,9 @@ class Indexer:
         detector_thread = threading.Thread(target=detector.watch, daemon=True)
         detector_thread.start()
 
+        # Queue files modified since last index (catch-up on startup)
+        detector.queue_stale_files()
+
         logger.info(f"[watch] Starting batched watch on: {self.cfg.vault_root}")
         logger.info(
             f"[watch] Batch config: size={self.cfg.watch_batch_size}, "

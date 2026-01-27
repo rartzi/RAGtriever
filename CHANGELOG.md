@@ -5,6 +5,15 @@ All notable changes to Mneme (formerly RAGtriever) will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-01-26
+
+### Added
+
+- **Watcher catch-up on startup**: The watcher now detects and reindexes files modified while it was stopped. On startup, it compares filesystem mtimes against manifest timestamps and queues stale files for reprocessing. This ensures no changes are missed when restarting the watcher.
+  - New `queue_stale_files()` method in `ChangeDetector`
+  - New `get_manifest_mtimes()` method in `Store` protocol
+  - Logs show catch-up progress: `[watch] Queued N stale files for reindex (X new, Y modified)`
+
 ## [3.0.0] - 2026-01-25
 
 ### BREAKING CHANGES

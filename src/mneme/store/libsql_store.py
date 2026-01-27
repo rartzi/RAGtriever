@@ -293,6 +293,19 @@ class LibSqlStore:
         ).fetchall()
         return {row["rel_path"] for row in rows}
 
+    def get_manifest_mtimes(self, vault_id: str) -> dict[str, int]:
+        """Get mtime from manifest for all indexed files in vault.
+
+        Returns:
+            Dict mapping rel_path to mtime (unix timestamp) from last index.
+            Used by watcher to detect files modified while stopped.
+        """
+        rows = self._conn.execute(
+            "SELECT rel_path, mtime FROM manifest WHERE vault_id=?",
+            (vault_id,)
+        ).fetchall()
+        return {row["rel_path"]: row["mtime"] for row in rows}
+
     def get_files_under_path(self, vault_id: str, path_prefix: str) -> list[str]:
         """Get all indexed files under a directory path prefix.
 

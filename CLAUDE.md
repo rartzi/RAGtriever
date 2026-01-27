@@ -56,7 +56,15 @@ Both scan/watch use `_process_file()` → `ProcessResult` (thread-safe, no DB wr
 
 ### Logging
 
-**Scan:** `[scan] Phase N:`, `Found/Deleted/Failed/Complete`. **Watch:** `[watch] File created/modified/deleted/moved`, `Batch processed`. **Code:** `src/mneme/indexer/change_detector.py`
+**Scan:** `[scan] Phase N:`, `Found/Deleted/Failed/Complete`. **Watch:** `[watch] File created/modified/deleted/moved`, `Batch processed`, `Queued N stale files`. **Code:** `src/mneme/indexer/change_detector.py`
+
+### Watcher Catch-up
+
+On startup, the watcher detects files modified while stopped by comparing filesystem mtimes against manifest timestamps. Stale files are queued for reprocessing alongside new events (no startup delay).
+
+**Logs:** `[watch] Checking for files modified since last index...`, `[watch] Stale file (modified): path`, `[watch] New file (not in index): path`, `[watch] Queued N stale files for reindex (X new, Y modified)`
+
+**Code:** `change_detector.py:queue_stale_files()`, `libsql_store.py:get_manifest_mtimes()`
 
 ### Core Design
 

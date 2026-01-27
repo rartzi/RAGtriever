@@ -28,6 +28,15 @@ class Store(Protocol):
         """Get set of rel_paths for all non-deleted documents in vault."""
         ...
 
+    def get_manifest_mtimes(self, vault_id: str) -> dict[str, int]:
+        """Get mtime from manifest for all indexed files in vault.
+
+        Returns:
+            Dict mapping rel_path to mtime (unix timestamp) from last index.
+            Used by watcher to detect files modified while stopped.
+        """
+        ...
+
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
         ...
 
