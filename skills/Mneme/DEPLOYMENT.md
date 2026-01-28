@@ -177,6 +177,24 @@ git pull origin main
 ~/.mneme/venv/bin/pip install -e .[dev]
 ```
 
+## Installation Modes
+
+### User-Wide (Default)
+```bash
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
+```
+- Installs to `~/.mneme/`
+- Shared by all projects
+- Each project has its own `config.toml`
+
+### Project-Local
+```bash
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install-local
+```
+- Installs to `./.mneme/` in current project
+- Isolated from other projects
+- Useful for specific version requirements
+
 ## Multi-Project Setup
 
 The same `~/.mneme/` installation works for multiple projects:
@@ -195,6 +213,21 @@ The same `~/.mneme/` installation works for multiple projects:
 ```
 
 Each project just needs its own `config.toml` with vault paths.
+
+## Config File Location
+
+**Config is always relative to your current working directory**, regardless of where mneme is installed:
+
+```bash
+cd ~/project-a
+mneme query "search"              # Uses ~/project-a/config.toml
+
+cd ~/project-b
+mneme query "search"              # Uses ~/project-b/config.toml
+
+# Or specify explicitly:
+mneme query --config /path/to/config.toml "search"
+```
 
 ## Troubleshooting
 

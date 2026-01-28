@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mneme"
+version = "3.0.0"
+description = "Memory for your Second Brain — local-first vault indexer + hybrid retrieval with MCP interface."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name="Mneme"}]
+dependencies = [
+  "typer>=0.12",
+  "python-frontmatter>=1.1.0",
+  "pyyaml>=6.0",
+  "watchdog>=4.0.0",
+  "numpy>=1.26",
+  "sentence-transformers>=3.0.0",
+  "pillow>=10.0.0",
+  "pdfplumber>=0.11.0",
+  "pymupdf>=1.24.0",
+  "python-pptx>=1.0.2",
+  "openpyxl>=3.1.5",
+  "pytesseract>=0.3.10",
+  "google-genai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5.0",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+mneme = "mneme.cli:app"
+
+[tool.pytest.ini_options]
+markers = [
+    "manual: marks tests as manual (require network access, long-running, etc.)",
+]
