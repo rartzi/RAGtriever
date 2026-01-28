@@ -1,180 +1,130 @@
 # CLAUDE.md
 
-Mneme: Local-first vault indexer with hybrid retrieval (semantic + lexical + link-graph). Indexes Obsidian-compatible vaults, serves via CLI/Python/MCP.
+Mneme: Claude Code skill for local-first vault indexing with hybrid retrieval (semantic + lexical + link-graph).
 
-**Design:** Local-only, filesystem as source of truth, pluggable Protocol-based adapters
+## Project Structure
 
-## Migration (v2.0.0)
-⚠️ Rename `provider = "vertex_ai"` → `"gemini-service-account"` in config. See [CHANGELOG.md](CHANGELOG.md).
+This repo contains the **Mneme skill** - a self-contained, portable skill for Claude Code.
 
-## Commands
+```
+RAGtriever/
+├── skills/Mneme/              # The skill (everything is here)
+│   ├── SKILL.md               # Routing + quick reference
+│   ├── DEPLOYMENT.md          # Installation guide
+│   ├── Tools/                 # CLI wrappers
+│   │   ├── mneme-wrapper.sh   # Auto-installing CLI
+│   │   └── manage-watcher.sh  # Watcher management
+│   ├── Workflows/             # Execution procedures
+│   ├── source/                # Bundled source code
+│   │   ├── pyproject.toml
+│   │   ├── src/mneme/         # The mneme package
+│   │   └── tests/             # Test suite
+│   ├── docs/                  # Documentation
+│   └── examples/              # Example configs
+├── README.md
+├── CHANGELOG.md
+└── LICENSE
+```
+
+## Development Commands
 
 ```bash
+# Navigate to source
+cd skills/Mneme/source
+
 # Setup (requires Python 3.11+)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Linting and type checking
 ruff check src/ tests/
-ruff check --fix src/ tests/    # autofix
-ruff format src/ tests/         # formatting
+ruff check --fix src/ tests/
+ruff format src/ tests/
 mypy src/
 
 # Testing
-pytest                                              # all tests
-pytest tests/test_markdown_parsing.py              # single file
-pytest tests/test_markdown_parsing.py::test_parse_wikilinks  # single test
+pytest
+pytest tests/test_markdown_parsing.py
+pytest tests/test_markdown_parsing.py::test_parse_wikilinks
 
-# CLI (after creating config.toml)
-mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
-mneme scan --full
-mneme query "search term" --k 10
-mneme query "search term" --k 10 --rerank  # with cross-encoder reranking
-mneme watch              # watch mode for continuous indexing
-mneme mcp                # MCP server over stdio
+# CLI (from repo root with config.toml)
+cd ../../..
+./skills/Mneme/Tools/mneme-wrapper.sh scan --config config.toml --full
+./skills/Mneme/Tools/mneme-wrapper.sh query "search term" --k 10
+./skills/Mneme/Tools/manage-watcher.sh start
 ```
 
 ## Architecture
 
 **Flow:** Vault → Change Detection → Ingestion → Stores → Retrieval → API/MCP
 
-### Parallel Processing (3.6x speedup)
+### Core Components (in `source/src/mneme/`)
 
-| Pool | Purpose | Default | Bottleneck |
-|------|---------|---------|-----------|
-| `extraction_workers` | All file extraction (md/pdf/pptx/xlsx/images) | 8 | CPU |
-| `image_workers` | API calls (Gemini/Vertex/Gateway) | 8 | Network I/O |
-| `embed_batch_size` | Cross-file embedding batches | 256 | GPU |
-
-**Pipeline:** Parallel Extract → Serial Chunk → Batch Embed → Store. Images processed separately via parallel API workers.
-
-**Config:** `[indexing]` section. **CLI:** `--workers N`, `--no-parallel`, `--batch-size N`. **Perf:** <50 files minimal gain, 50-500 files 2-3x, >500 files 3-4x.
-
-### Unified Processing
-
-Both scan/watch use `_process_file()` → `ProcessResult` (thread-safe, no DB writes). Watch uses `BatchCollector` (size/timeout triggers). **Code:** `src/mneme/indexer/indexer.py:_process_file()`, `parallel_types.py`
-
-### Logging
-
-**Scan:** `[scan] Phase N:`, `Found/Deleted/Failed/Complete`. **Watch:** `[watch] File created/modified/deleted/moved`, `Batch processed`, `Queued N stale files`. **Code:** `src/mneme/indexer/change_detector.py`
-
-### Watcher Catch-up
-
-On startup, the watcher detects files modified while stopped by comparing filesystem mtimes against manifest timestamps. Stale files are queued for reprocessing alongside new events (no startup delay).
-
-**Logs:** `[watch] Checking for files modified since last index...`, `[watch] Stale file (modified): path`, `[watch] New file (not in index): path`, `[watch] Queued N stale files for reindex (X new, Y modified)`
-
-**Code:** `change_detector.py:queue_stale_files()`, `libsql_store.py:get_manifest_mtimes()`
-
-### Core Design
-
-**Protocols (`**/base.py`):** Extractor, Chunker, Embedder, Store
-**IDs (deterministic):** vault_id (12), doc_id (24), chunk_id (32) via blake2b
-**Link graph:** `[[wikilinks]]`/`![[embeds]]` → `links` table → `vault_neighbors` MCP tool
-
-**Modules:** extractors/, chunking/, embeddings/, retrieval/, store/, indexer/, mcp/
-**Entry points:** cli.py, indexer/indexer.py, retrieval/retriever.py, mcp/tools.py, store/libsql_store.py
+| Module | Purpose |
+|--------|---------|
+| `cli.py` | CLI commands (scan, query, watch, mcp) |
+| `config.py` | Configuration management |
+| `extractors/` | File extractors (markdown, pdf, pptx, xlsx, images) |
+| `chunking/` | Text chunking with overlap |
+| `embeddings/` | Embedding providers (sentence_transformers, ollama) |
+| `retrieval/` | Hybrid search, reranking, boosts |
+| `store/` | SQLite/LibSQL storage |
+| `indexer/` | Scan and watch orchestration |
+| `mcp/` | MCP server for Claude Desktop |
 
 ### Retrieval Pipeline
 
-**Stages:** Lexical (FTS5) + Semantic (vector) → Fusion (RRF default, k=60) → Boosts → Optional Reranking
+**Stages:** Lexical (FTS5) + Semantic (vector) → Fusion (RRF, k=60) → Boosts → Optional Reranking
 
-**Boosts (✅ enabled, ❌ disabled):**
-| Signal | Default | Effect | Bias Risk |
-|--------|---------|--------|-----------|
-| Backlinks | ✅ | +10%/link (max 2x) | None |
-| Recency | ✅ | +10% <14d, +5% <60d, -2% >180d | None |
-| Heading | ❌ | H1 +5%, H2 +3%, H3 +2% | ⚠️ Favors markdown |
-| Tag | ❌ | +3%/tag (max 9%) | ⚠️ Favors markdown |
+**Boosts (enabled by default):**
+| Signal | Effect |
+|--------|--------|
+| Backlinks | +10%/link (max 2x) |
+| Recency | +10% <14d, +5% <60d, -2% >180d |
 
-**Diversity (MMR):** Max 2 chunks/doc (configurable). **Reranking:** `use_rerank = true` for 20-30% quality gain (cross-encoder).
-**Config:** `[retrieval]` section. **Code:** retrieval/hybrid.py, boosts.py, reranker.py, retriever.py
+**Diversity:** Max 2 chunks/doc. **Reranking:** `use_rerank = true` for 20-30% quality gain.
 
+### Image Analysis Providers
 
-### File Lifecycle
-
-**Scan:** Reconciliation (FS vs DB). **Watch:** Filesystem events (Watchdog). Both handle files/dirs (add/change/delete/move).
-**Cleanup:** documents/chunks/embeddings/fts_chunks/links/manifest all deleted. **Code:** indexer/indexer.py, change_detector.py, store/libsql_store.py
-
-### Chunk Metadata & Queries
-
-**Metadata fields:** full_path, vault_root/name/id, file_name/extension/size_bytes, modified_at, obsidian_uri
-**Query handling:** FTS5 auto-escaped (phrase search), handles special chars (hyphens/slashes). **Code:** indexer/indexer.py:_extract_and_chunk_one()
+| Provider | Auth | Use Case |
+|----------|------|----------|
+| `tesseract` | None | Local OCR |
+| `gemini` | API key | Personal |
+| `gemini-service-account` | Service acct | Enterprise |
+| `off` | N/A | Text-only vaults |
 
 ## Configuration
 
-TOML sections (see `examples/config.toml.example`): `[vault]`, `[index]`, `[chunking]`, `[embeddings]`, `[image_analysis]`, `[retrieval]`, `[indexing]`, `[mcp]`
+See `skills/Mneme/examples/config.toml.example` for full options.
+
+Key sections: `[vault]`, `[index]`, `[embeddings]`, `[image_analysis]`, `[retrieval]`, `[logging]`
 
 **Key options:**
-- **Chunking:** v2 chunker (overlap_chars=200), max_chunk_size
-- **Embeddings:** sentence_transformers/ollama, offline_mode, use_query_prefix (asymmetric), use_faiss (ANN), model_path (explicit local path)
-- **Image:** tesseract/gemini/gemini-service-account/aigateway/off
-- **Retrieval:** RRF/weighted fusion, boosts, diversity, reranking
-- **Indexing:** workers, batch sizes, parallel_scan
+- `offline_mode = true` - No HuggingFace downloads
+- `use_query_prefix = true` - Asymmetric BGE retrieval
+- `use_faiss = true` - For >10K chunks
+- `use_rerank = true` - Cross-encoder reranking
 
-### Config Details
+## Skill Deployment
 
-**Ignore patterns:** `folder/**`, `**/.DS_Store`, `**/~$*` (Office temp files)
-**Offline mode:** `offline_mode = true` (no HF downloads, env: `HF_OFFLINE_MODE`)
-**Model path:** `model_path = "~/.cache/huggingface/hub/BAAI/bge-large-en-v1.5/main"` (explicit local path, overrides model ID for loading)
-**Chunk overlap:** `chunker_version = "v2"`, `overlap_chars = 200`
-**Query prefix:** `use_query_prefix = true` (asymmetric BGE retrieval)
-**FAISS:** `use_faiss = true` for >10K chunks (5-10x speedup, IVF index)
-**Reranking:** `use_rerank = true` (20-30% quality gain, CPU ~100-200ms, GPU ~20-50ms)
+The skill is self-contained with bundled source (~776KB). Deploy to `~/.claude/skills/Mneme/`:
 
-### Image Providers
+```bash
+# Symlink (development)
+ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 
-AI providers extract: description, visible text (OCR), type, topics, entities
+# Or copy (distribution)
+cp -r skills/Mneme ~/.claude/skills/Mneme
+```
 
-| Provider | Auth | Latency | Use Case |
-|----------|------|---------|----------|
-| **tesseract** | None | ~100ms | Local OCR, text only |
-| **gemini** | API key | ~500ms | Personal, simple setup |
-| **gemini-service-account** | Service acct | ~500ms | Enterprise GCP, IAM |
-| **aigateway** | Gateway key | ~1000ms | Enterprise Microsoft |
-| **off** | N/A | 0ms | Text-only vaults |
+First use auto-installs mneme from bundled source (no git required).
 
-**Config:** `[image_analysis]` provider. **Workers critical** for API providers (8-10 for <100 images). **Code:** extractors/image.py
-
-### Image Resilience
-
-**Features:** Timeouts (30s), retry w/ backoff (3x), circuit breaker (5 failures → 60s reset)
-**Errors:** 429/5xx retry, 400 skip, 401/403 trip breaker. **Config:** timeout, max_retries, circuit_threshold. **Code:** extractors/resilience.py
-
-### Image Performance
-
-**Session Reuse (v3.6):** Credentials and API clients initialized once per extractor instance, not per image. Critical for performance.
-
-**Model Comparison (400 images):**
-
-| Model | Provider | Total Time | Median Latency | Throughput |
-|-------|----------|------------|----------------|------------|
-| **gemini-2.5-flash** | Service Account | **4.9 min** | **4.9s** | 82 img/min |
-| gemini-2.5-flash | AI Gateway | 6.0 min | 5.1s | 67 img/min |
-| gemini-3-pro-preview | Service Account | 15.1 min | 18.0s | 27 img/min |
-| gemini-3-pro-preview | AI Gateway | 7.1 min* | 19.4s | 22 img/min |
-
-*Circuit breaker tripped after ~156 images due to auth timeout
-
-**Recommendations:**
-- **Use gemini-2.5-flash** for production (3x faster than 3-pro-preview)
-- **Service Account faster** than AI Gateway (23% faster, no routing overhead)
-- **Session reuse critical** - eliminates ~2s credential loading per image
-- **10 workers optimal** for API-bound workloads with 10-20s latencies
-
-**Monitoring:** Set `level = "DEBUG"` in `[logging]` to capture per-image timing: `[provider] filename: SUCCESS - {ms}ms`
-
-## Security & Side Effects
-
-**Security:** config.toml/.gitignore, sensitive info at DEBUG level only
-**Side effects:** `offline_mode=true` sets `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` env vars globally (load config once at startup)
+See `skills/Mneme/DEPLOYMENT.md` for full deployment guide.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| **Office temp files** (`~$*.pptx`) | Close Office apps, use ignore pattern `**/~$*` |
-| **Offline mode error** | Set `offline_mode=false` to download model, or `HF_OFFLINE_MODE=0 mneme scan` |
-| **Pattern syntax** | `**/~$*` ✓, `**~$*` ✗ |
-
-**Testing:** Create `test_config.toml` (in .gitignore), use `--config test_config.toml`
+| **Office temp files** (`~$*.pptx`) | Add ignore pattern `**/~$*` |
+| **Offline mode error** | Set `offline_mode=false` to download model first |
+| **mneme not found** | Run `./skills/Mneme/Tools/mneme-wrapper.sh --install` |
