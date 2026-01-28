@@ -1,91 +1,60 @@
 # Mneme Skill Deployment Guide
 
-This guide explains how to deploy the Mneme skill to any project for use with Claude Code.
+Deploy the Mneme skill for use with Claude Code. Choose the deployment level that fits your needs.
 
-## Overview
+## Deployment Levels
 
-The Mneme skill is **self-contained and portable**. It can:
-- Auto-install mneme if not found
-- Work with existing project-local installations
-- Share a single user-wide installation across projects
+| Level | Skill Location | Mneme Location | Use Case |
+|-------|---------------|----------------|----------|
+| **Global** | `~/.claude/skills/Mneme/` | `~/.mneme/` | Single user, multiple projects |
+| **User** | `~/.claude/skills/Mneme/` | `~/.mneme/` | Same as global (recommended) |
+| **Project** | `./skills/Mneme/` | `./.mneme/` | Isolated project, specific version |
 
-## Quick Start
+---
 
-### Option 1: Symlink (Recommended for Development)
+## Global / User-Level Deployment (Recommended)
 
+Best for most users. One skill installation shared across all projects.
+
+### Step 1: Install the Skill
+
+**Option A: Download Release (Non-Developers)**
 ```bash
-# From any project directory
-ln -s /path/to/RAGtriever/skills/Mneme ~/.claude/skills/Mneme
+# Download and extract skill
+curl -L https://github.com/rartzi/RAGtriever/releases/latest/download/mneme-skill.zip -o mneme-skill.zip
+unzip mneme-skill.zip -d ~/.claude/skills/
+chmod +x ~/.claude/skills/Mneme/Tools/*.sh
 ```
 
-### Option 2: Copy (For Distribution)
-
+**Option B: Symlink (Developers)**
 ```bash
-# Copy entire skill directory
-cp -r /path/to/RAGtriever/skills/Mneme ~/.claude/skills/Mneme
+# Clone repo and symlink skill
+git clone https://github.com/rartzi/RAGtriever.git ~/RAGtriever
+ln -s ~/RAGtriever/skills/Mneme ~/.claude/skills/Mneme
 ```
 
-### Option 3: Git Submodule (For Teams)
+### Step 2: Install Mneme (Auto or Manual)
 
+**Automatic:** First use triggers auto-install from bundled source.
+
+**Manual:**
 ```bash
-# Add as submodule in your project
-git submodule add https://github.com/rartzi/RAGtriever.git vendor/RAGtriever
-ln -s vendor/RAGtriever/skills/Mneme .claude/skills/Mneme
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
 ```
 
-## Installation Locations
+This installs to `~/.mneme/` using bundled source (no git required).
 
-The skill's `mneme-wrapper.sh` searches for mneme in this order:
+### Step 3: Create Project Config
 
-| Priority | Location | Description |
-|----------|----------|-------------|
-| 1 | `PATH` | Global pip install (`pip install mneme`) |
-| 2 | `~/.mneme/venv/bin/mneme` | User-wide auto-install |
-| 3 | `./bin/mneme` | Project-local (RAGtriever dev) |
-
-If not found, the wrapper offers to **auto-install to `~/.mneme/`**.
-
-## Directory Structure
-
-```
-~/.mneme/                    # User-wide installation (auto-created)
-├── venv/                    # Python virtual environment
-│   └── bin/mneme           # The mneme CLI
-└── source/                  # Cloned RAGtriever source
-    ├── pyproject.toml
-    └── src/mneme/
-
-~/.claude/skills/Mneme/      # The skill (symlinked or copied)
-├── SKILL.md                 # Main routing file
-├── DEPLOYMENT.md            # This file
-├── Workflows/               # Execution procedures
-├── Tools/                   # Portable scripts
-│   ├── mneme-wrapper.sh    # Smart CLI wrapper
-│   └── manage-watcher.sh   # Watcher management
-└── ...context files
-```
-
-## First-Time Setup
-
-### 1. Deploy the Skill
-
-```bash
-# Symlink to Claude Code skills directory
-ln -s /path/to/RAGtriever/skills/Mneme ~/.claude/skills/Mneme
-```
-
-### 2. Create Project Config
-
-In your project directory, create `config.toml`:
+In each project directory, create `config.toml`:
 
 ```toml
-[[vaults]]
-name = "my-vault"
+[vault]
 root = "/path/to/your/obsidian/vault"
-ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store"]
+ignore = [".git/**", ".obsidian/cache/**", "**/.DS_Store", "**/~$*"]
 
 [index]
-dir = "~/.mneme/indexes/my-vault"
+dir = "~/.mneme/indexes/my-project"
 
 [embeddings]
 provider = "sentence_transformers"
@@ -101,30 +70,141 @@ dir = "logs"
 level = "INFO"
 ```
 
-### 3. Run Initial Scan
+### Step 4: Run Initial Scan
 
 ```bash
-# Using the skill's wrapper (auto-installs mneme if needed)
+cd ~/my-project
 ~/.claude/skills/Mneme/Tools/mneme-wrapper.sh scan --config config.toml --full
 ```
 
-Or via Claude Code - just ask:
-> "Run a full scan of my vault"
+Or via Claude Code: "Run a full scan of my vault"
 
-## Using the Skill
+### Directory Structure (Global)
 
-Once deployed, Claude Code automatically uses the skill when you:
+```
+~/.claude/skills/Mneme/          # Skill (shared)
+├── SKILL.md
+├── Tools/
+│   ├── mneme-wrapper.sh
+│   └── manage-watcher.sh
+├── Workflows/
+├── source/                      # Bundled source (~776KB)
+│   ├── pyproject.toml
+│   └── src/mneme/
+└── ...context files
+
+~/.mneme/                        # Mneme installation (shared)
+├── venv/bin/mneme              # The CLI
+└── source/                      # Installed source
+
+~/project-a/config.toml          # Project configs (separate)
+~/project-b/config.toml
+~/project-c/config.toml
+```
+
+---
+
+## Project-Level Deployment
+
+For isolated projects that need their own skill and mneme version.
+
+### Step 1: Add Skill to Project
+
+**Option A: Copy**
+```bash
+cd ~/my-project
+mkdir -p skills
+cp -r /path/to/RAGtriever/skills/Mneme ./skills/
+chmod +x ./skills/Mneme/Tools/*.sh
+```
+
+**Option B: Git Submodule**
+```bash
+cd ~/my-project
+git submodule add https://github.com/rartzi/RAGtriever.git vendor/RAGtriever
+ln -s vendor/RAGtriever/skills/Mneme ./skills/Mneme
+```
+
+### Step 2: Install Mneme Locally
+
+```bash
+./skills/Mneme/Tools/mneme-wrapper.sh --install-local
+```
+
+This installs to `./.mneme/` within the project.
+
+### Step 3: Create Config
+
+Create `config.toml` in project root (same format as above).
+
+### Step 4: Run Initial Scan
+
+```bash
+./skills/Mneme/Tools/mneme-wrapper.sh scan --config config.toml --full
+```
+
+### Directory Structure (Project)
+
+```
+~/my-project/
+├── config.toml                  # Project config
+├── logs/                        # Scan/watch logs
+├── skills/
+│   └── Mneme/                   # Skill (project-local)
+│       ├── SKILL.md
+│       ├── Tools/
+│       ├── Workflows/
+│       └── source/              # Bundled source
+└── .mneme/                      # Mneme installation (project-local)
+    ├── venv/bin/mneme
+    └── source/
+```
+
+### Add to .gitignore
+
+```gitignore
+# Mneme
+.mneme/
+logs/
+```
+
+---
+
+## Config File Location
+
+**Config is always relative to your current working directory:**
+
+```bash
+cd ~/project-a
+mneme query "search"              # Uses ~/project-a/config.toml
+
+cd ~/project-b
+mneme query "search"              # Uses ~/project-b/config.toml
+
+# Or specify explicitly:
+mneme query --config /path/to/config.toml "search"
+```
+
+---
+
+## Using the Skill with Claude Code
+
+Once deployed, just talk naturally:
 
 | You Say | Skill Does |
 |---------|------------|
 | "What does my vault say about X?" | Searches vault, returns answer with sources |
+| "Search my vault for meeting notes" | Searches and cites sources |
 | "Run a full scan" | Executes scan with logging |
 | "Start the watcher" | Starts continuous indexing |
+| "Is the watcher running?" | Checks watcher status |
 | "Setup mneme for my vault" | Guides through configuration |
 
-## Manual Commands
+---
 
-### Via Wrapper (Recommended)
+## Manual Commands Reference
+
+### Via Wrapper
 
 ```bash
 # Query
@@ -135,86 +215,71 @@ Once deployed, Claude Code automatically uses the skill when you:
 
 # Status
 ~/.claude/skills/Mneme/Tools/mneme-wrapper.sh status
+
+# Check installation
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --where
 ```
 
 ### Via Watcher Manager
 
 ```bash
-# Check status
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh status
-
-# Start
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh start
-
-# Stop
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
-
-# Health check
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 ```
+
+---
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MNEME_HOME` | `~/.mneme` | Installation directory |
-| `MNEME_REPO` | `https://github.com/rartzi/RAGtriever.git` | Source repository |
-| `MNEME_BRANCH` | `main` | Git branch to install |
+| `MNEME_HOME` | `~/.mneme` | Override installation directory |
+| `MNEME_PROJECT_LOCAL` | `0` | Set to `1` to install to `./.mneme` |
+| `MNEME_REPO` | GitHub URL | Override git repository |
+| `MNEME_BRANCH` | `main` | Git branch for updates |
+| `MNEME_AUTO_INSTALL` | `1` | Set to `0` to disable auto-install |
 | `CONFIG_FILE` | `config.toml` | Config file for watcher |
-| `LOG_DIR` | `logs` | Log output directory |
 
-## Updating Mneme
+---
+
+## Updating
+
+### Update Mneme
 
 ```bash
-# Update user-wide installation
+# From bundled source (re-copies from skill)
 ~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --update
+
+# From git (if installed from git)
+cd ~/.mneme/source && git pull origin main
+~/.mneme/venv/bin/pip install -e .
 ```
 
-Or manually:
+### Update Skill
+
 ```bash
-cd ~/.mneme/source
-git pull origin main
-~/.mneme/venv/bin/pip install -e .[dev]
+# If symlinked - update the source repo
+cd ~/RAGtriever && git pull
+
+# If copied - re-download
+curl -L https://github.com/rartzi/RAGtriever/releases/latest/download/mneme-skill.zip -o mneme-skill.zip
+unzip -o mneme-skill.zip -d ~/.claude/skills/
 ```
 
-## Multi-Project Setup
-
-The same `~/.mneme/` installation works for multiple projects:
-
-```
-~/projects/
-├── project-a/
-│   └── config.toml          # Points to project-a vault
-├── project-b/
-│   └── config.toml          # Points to project-b vault
-└── project-c/
-    └── config.toml          # Points to project-c vault
-
-~/.mneme/                     # Shared installation (used by all)
-~/.claude/skills/Mneme/       # Shared skill (used by all)
-```
-
-Each project just needs its own `config.toml` with vault paths.
+---
 
 ## Troubleshooting
 
 ### "mneme not found"
 
-The wrapper should auto-install, but if it fails:
-
 ```bash
+# Check where wrapper is looking
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --where
+
 # Manual install
 ~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
-
-# Or check where it's looking
-~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --where
-```
-
-### "Config file not found"
-
-```bash
-# Create config.toml in your project directory
-# See examples/config.toml.example in RAGtriever repo
 ```
 
 ### "Python 3.11+ not found"
@@ -227,42 +292,42 @@ brew install python@3.11
 sudo apt install python3.11
 ```
 
-### Permission Denied
+### "Config file not found"
+
+Create `config.toml` in your current directory. See examples above.
+
+### "Permission denied"
 
 ```bash
-# Ensure scripts are executable
 chmod +x ~/.claude/skills/Mneme/Tools/*.sh
 ```
 
+---
+
 ## Offline Installation
 
-For air-gapped environments:
+The skill includes bundled source, so no network is needed after downloading the skill.
 
-1. On a connected machine:
-   ```bash
-   # Clone and package
-   git clone https://github.com/rartzi/RAGtriever.git
-   cd RAGtriever
-   pip download -d wheels/ .[dev]
-   tar -czf mneme-offline.tar.gz .
-   ```
+For fully air-gapped environments with no pip access:
 
-2. Transfer `mneme-offline.tar.gz` to target machine
+```bash
+# On connected machine
+pip download -d wheels/ sentence-transformers torch
+tar -czf mneme-wheels.tar.gz wheels/
 
-3. On target machine:
-   ```bash
-   mkdir -p ~/.mneme/source
-   tar -xzf mneme-offline.tar.gz -C ~/.mneme/source
-   python3 -m venv ~/.mneme/venv
-   ~/.mneme/venv/bin/pip install --no-index --find-links=~/.mneme/source/wheels/ -e ~/.mneme/source[dev]
-   ```
+# Transfer and install
+tar -xzf mneme-wheels.tar.gz
+~/.mneme/venv/bin/pip install --no-index --find-links=wheels/ sentence-transformers torch
+```
+
+---
 
 ## Uninstalling
 
 ```bash
-# Remove user-wide installation
-rm -rf ~/.mneme
+# Remove mneme installation
+rm -rf ~/.mneme      # or ./.mneme for project-local
 
 # Remove skill
-rm -rf ~/.claude/skills/Mneme
+rm -rf ~/.claude/skills/Mneme   # or ./skills/Mneme
 ```
