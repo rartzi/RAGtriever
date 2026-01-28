@@ -9,6 +9,11 @@ Manage the continuous indexing watcher service.
 - "is the watcher running"
 - "restart watcher"
 
+## IMPORTANT: Logging is Mandatory
+
+The watcher **always writes to log files** in `logs/watch_YYYYMMDD.log` for audit purposes.
+The `manage_watcher.sh` script handles this automatically.
+
 ## Procedure
 
 ### Check Status
@@ -22,15 +27,24 @@ Or manually:
 pgrep -f "mneme watch" && echo "Running" || echo "Not running"
 ```
 
-### Start Watcher
+### Start Watcher (with automatic logging)
 
 ```bash
 ./scripts/manage_watcher.sh start
 ```
 
-Or manually:
+The script automatically:
+1. Creates `logs/` directory if needed
+2. Starts watcher with logging to `logs/watch_YYYYMMDD.log`
+3. Saves PID to `logs/watcher.pid`
+4. Sets offline mode environment variables
+
+Or manually (with explicit logging):
 ```bash
-nohup ./bin/mneme watch --config config.toml > /dev/null 2>&1 &
+mkdir -p logs
+nohup ./bin/mneme watch --config config.toml \
+    --log-file logs/watch_$(date +%Y%m%d).log \
+    > logs/watcher_stdout.log 2>&1 &
 echo $! > logs/watcher.pid
 ```
 
@@ -59,8 +73,8 @@ pkill -f "mneme watch"
 
 This checks:
 1. Process is running
-2. Recent log activity
-3. No errors in logs
+2. Log file exists and is recent
+3. No errors in recent log entries
 
 ## What the Watcher Handles
 

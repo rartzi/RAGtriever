@@ -42,11 +42,49 @@ check_dependencies() {
         errors=$((errors + 1))
     fi
 
-    # Check if venv exists
+    # Check if venv exists, create if missing
     if [ ! -f ".venv/bin/activate" ] && [ ! -f "venv/bin/activate" ]; then
-        echo -e "${RED}✗${NC} Virtual environment not found (.venv/ or venv/)"
-        echo "  Run: python -m venv .venv && source .venv/bin/activate && pip install -e ."
-        errors=$((errors + 1))
+        echo -e "${YELLOW}⚠${NC} Virtual environment not found (.venv/ or venv/)"
+        echo "  Creating virtual environment..."
+
+        # Check Python version (requires 3.11+)
+        PYTHON_CMD=""
+        for cmd in python3.11 python3.12 python3.13 python3; do
+            if command -v "$cmd" &> /dev/null; then
+                PY_VERSION=$("$cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+                PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
+                PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
+                if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 11 ]; then
+                    PYTHON_CMD="$cmd"
+                    break
+                fi
+            fi
+        done
+
+        if [ -z "$PYTHON_CMD" ]; then
+            echo -e "${RED}✗${NC} Python 3.11+ not found"
+            echo "  Install Python 3.11 or later and try again"
+            errors=$((errors + 1))
+        else
+            echo "  Using $PYTHON_CMD (version $PY_VERSION)"
+            "$PYTHON_CMD" -m venv .venv
+            if [ -f ".venv/bin/activate" ]; then
+                echo -e "${GREEN}✓${NC} Virtual environment created"
+                source .venv/bin/activate
+                echo "  Installing dependencies..."
+                pip install -e ".[dev]" > /dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}✓${NC} Dependencies installed"
+                else
+                    echo -e "${RED}✗${NC} Failed to install dependencies"
+                    echo "  Run manually: pip install -e \".[dev]\""
+                    errors=$((errors + 1))
+                fi
+            else
+                echo -e "${RED}✗${NC} Failed to create virtual environment"
+                errors=$((errors + 1))
+            fi
+        fi
     fi
 
     # Check if mneme is installed (after activating venv)
@@ -119,8 +157,13 @@ cmd_start() {
     export HF_HUB_OFFLINE=1
     export TRANSFORMERS_OFFLINE=1
 
+    # Log file with daily rotation
+    TODAY=$(date +%Y%m%d)
+    WATCH_LOG="$LOG_DIR/watch_$TODAY.log"
+
     # Start watcher in background using /bin/bash explicitly
-    /bin/bash -c "source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null; export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1; nohup mneme watch --config '$CONFIG_FILE' > /dev/null 2>&1 &
+    # IMPORTANT: Always log to file for audit purposes
+    /bin/bash -c "source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null; export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1; nohup mneme watch --config '$CONFIG_FILE' --log-file '$WATCH_LOG' >> '$WATCH_LOG' 2>&1 &
     echo \$!" > "$PID_FILE"
 
     # Get PID from file

@@ -51,8 +51,10 @@ User: "Is the watcher running?"
 - **Wrapper:** Always use `./bin/mneme` (auto-handles venv)
 - **Config:** `config.toml` in project root
 - **Search:** `./bin/mneme query "term" --k 10`
-- **Scan:** `./bin/mneme scan --config config.toml --full`
-- **Watch:** `./scripts/manage_watcher.sh status|start|stop`
+- **Scan:** `./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log`
+- **Watch:** `./scripts/manage_watcher.sh status|start|stop` (logs to `logs/watch_YYYYMMDD.log`)
+
+**IMPORTANT:** All scan and watch operations MUST include logging for audit purposes.
 
 ## Detailed Documentation
 

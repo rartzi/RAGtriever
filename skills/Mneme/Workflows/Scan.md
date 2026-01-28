@@ -8,44 +8,49 @@ Run scanning operations to index vault content.
 - "incremental scan"
 - "reindex"
 
+## IMPORTANT: Always Use Logging
+
+**All scan commands MUST include logging for audit purposes.**
+
 ## Procedure
 
 ### Full Scan (Re-index Everything)
 
 ```bash
-./bin/mneme scan --config config.toml --full
+mkdir -p logs
+./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ### Incremental Scan (Changed Files Only)
 
 ```bash
-./bin/mneme scan --config config.toml
-```
-
-### Scan with Logging
-
-```bash
-./bin/mneme scan --config config.toml --full --log-file logs/scan.log
+mkdir -p logs
+./bin/mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ### Scan with Verbose Logging
 
 ```bash
-./bin/mneme scan --config config.toml --full --log-file logs/scan.log --verbose
+mkdir -p logs
+./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log --verbose
 ```
 
 ### Scan with Profiling
 
 ```bash
-./bin/mneme scan --config config.toml --full --profile logs/profile.txt
+mkdir -p logs
+./bin/mneme scan --config config.toml --full \
+    --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log \
+    --profile logs/profile_$(date +%Y%m%d_%H%M%S).txt
 ```
 
-### Scan with Everything
+### Scan with Everything (Recommended for Troubleshooting)
 
 ```bash
+mkdir -p logs
 ./bin/mneme scan --config config.toml --full \
-    --log-file logs/scan.log \
-    --profile logs/profile.txt \
+    --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log \
+    --profile logs/profile_$(date +%Y%m%d_%H%M%S).txt \
     --verbose
 ```
 
