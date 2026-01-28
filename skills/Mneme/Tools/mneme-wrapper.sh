@@ -251,14 +251,21 @@ mneme_path=$(find_mneme) || {
         exit 1
     fi
 
-    read -p "Install mneme to $MNEME_HOME? [Y/n] " answer
-    if [[ ! "$answer" =~ ^[Nn] ]]; then
-        install_mneme
-        mneme_path="$MNEME_VENV/bin/mneme"
+    # Auto-install: prompt if interactive, auto-proceed if not
+    if [ -t 0 ]; then
+        # Interactive terminal - ask user
+        read -p "Install mneme to $MNEME_HOME? [Y/n] " answer
+        if [[ "$answer" =~ ^[Nn] ]]; then
+            echo "Aborted. Install manually with: pip install mneme"
+            exit 1
+        fi
     else
-        echo "Aborted. Install manually with: pip install mneme"
-        exit 1
+        # Non-interactive (e.g., from Claude Code) - auto-install
+        echo "Non-interactive mode: auto-installing to $MNEME_HOME"
     fi
+
+    install_mneme
+    mneme_path="$MNEME_VENV/bin/mneme"
 }
 
 # Run mneme
