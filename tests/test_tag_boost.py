@@ -38,9 +38,10 @@ class TestTagBoostConfig:
     def test_default_values(self):
         """Test that default tag boost config values are sensible."""
         config = BoostConfig()
-        assert config.tag_boost_enabled is True
-        assert config.tag_boost_weight == 0.15
-        assert config.tag_boost_cap == 3
+        # Tag boost is disabled by default (semantics matter most)
+        assert config.tag_boost_enabled is False
+        assert config.tag_boost_weight == 0.03  # 3% per matching tag
+        assert config.tag_boost_cap == 3  # Max tags counted
 
     def test_custom_values(self):
         """Test custom tag boost values."""
@@ -60,6 +61,7 @@ class TestSingleTagMatch:
     def test_single_tag_exact_match(self):
         """Test boost for single exact tag match."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -81,6 +83,7 @@ class TestSingleTagMatch:
     def test_single_tag_case_insensitive(self):
         """Test tag matching is case-insensitive."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -98,6 +101,7 @@ class TestSingleTagMatch:
     def test_single_tag_with_hash_prefix(self):
         """Test tag matching with # prefix."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -134,6 +138,7 @@ class TestSingleTagMatch:
     def test_single_tag_string_format(self):
         """Test tag as string instead of list."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -155,6 +160,7 @@ class TestMultipleTagMatches:
     def test_two_tag_matches(self):
         """Test boost for two matching tags."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -174,6 +180,7 @@ class TestMultipleTagMatches:
     def test_three_tag_matches(self):
         """Test boost for three matching tags (at cap)."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             tag_boost_cap=3,
             backlink_enabled=False,
@@ -196,6 +203,7 @@ class TestMultipleTagMatches:
     def test_tag_match_capping_at_max(self):
         """Test that tag matches are capped at max (3 tags = 45%)."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             tag_boost_cap=3,
             backlink_enabled=False,
@@ -224,6 +232,7 @@ class TestMultipleTagMatches:
     def test_custom_cap_value(self):
         """Test custom tag cap value."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             tag_boost_cap=5,  # Custom cap
             backlink_enabled=False,
@@ -248,6 +257,7 @@ class TestPartialWordMatches:
     def test_partial_word_match_hyphenated(self):
         """Test query 'machine' matches tag '#machine-learning'."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -265,6 +275,7 @@ class TestPartialWordMatches:
     def test_partial_word_match_underscored(self):
         """Test query 'deep' matches tag 'deep_learning'."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -299,6 +310,7 @@ class TestPartialWordMatches:
     def test_multiple_partial_matches(self):
         """Test multiple partial matches from same tag."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -317,6 +329,7 @@ class TestPartialWordMatches:
     def test_complex_multi_word_tags(self):
         """Test complex multi-word tags with various separators."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -470,6 +483,7 @@ class TestTagBoostEdgeCases:
     def test_special_characters_in_tags(self):
         """Test tags with special characters."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -487,6 +501,7 @@ class TestTagBoostEdgeCases:
     def test_numeric_tags(self):
         """Test tags with numbers."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -503,6 +518,7 @@ class TestTagBoostEdgeCases:
     def test_preserves_existing_metadata(self):
         """Test that tag boost preserves other metadata."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -541,7 +557,9 @@ class TestTagBoostRanking:
     def test_tag_boost_changes_ranking(self):
         """Test that tag boost can change result ordering."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
+            tag_boost_cap=3,  # Explicitly set cap
             backlink_enabled=False,
             recency_enabled=False,
             heading_boost_enabled=False,
@@ -553,9 +571,10 @@ class TestTagBoostRanking:
             make_result("chunk1", 0.9, tags=["javascript"]),
             make_result("chunk2", 0.7, tags=["python", "ml", "ai"]),
         ]
-        boosted = adjuster.apply_boosts(results, query="python machine learning ai")
+        # Use query terms that exactly match the tags
+        boosted = adjuster.apply_boosts(results, query="python ml ai")
 
-        # chunk1: 0.9 (no boost)
+        # chunk1: 0.9 (no boost - javascript doesn't match query)
         # chunk2: 0.7 * 1.45 = 1.015 (3 matches capped at 3)
         # chunk2 should now rank first
         assert boosted[0].chunk_id == "chunk2"
@@ -566,6 +585,7 @@ class TestTagBoostRanking:
     def test_multiple_results_resorting(self):
         """Test re-sorting of multiple results after tag boost."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -598,6 +618,7 @@ class TestTagBoostCombined:
     def test_tag_with_backlink_boost(self):
         """Test tag boost combined with backlink boost."""
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_weight=0.1,
             recency_enabled=False,
@@ -634,6 +655,8 @@ class TestTagBoostCombined:
         from datetime import datetime, timezone, timedelta
 
         config = BoostConfig(
+            tag_boost_enabled=True,  # Must explicitly enable
+            heading_boost_enabled=True,  # Must explicitly enable
             tag_boost_weight=0.15,
             backlink_weight=0.1,
             recency_fresh_boost=1.20,
