@@ -129,11 +129,11 @@ After configuration:
 
 ```bash
 # Run scan with a few images
-./bin/mneme scan --config config.toml --full
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 
 # Check logs for image processing
 grep -i "image" logs/scan*.log
 
 # Query for image content
-./bin/mneme query --config config.toml "diagram" --k 5
+mneme query --config config.toml "diagram" --k 5
 ```

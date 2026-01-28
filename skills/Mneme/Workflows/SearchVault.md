@@ -13,7 +13,7 @@ Search and answer questions from indexed vault content.
 ### 1. Run the Query
 
 ```bash
-./bin/mneme query --config config.toml "user's question keywords" --k 15
+mneme query --config config.toml "user's question keywords" --k 15
 ```
 
 **Options:**
@@ -54,7 +54,7 @@ Synthesize information from the search results into a clear answer.
 
 **Run:**
 ```bash
-./bin/mneme query --config config.toml "agentic workflows" --k 15
+mneme query --config config.toml "agentic workflows" --k 15
 ```
 
 **Response:**
@@ -84,11 +84,11 @@ If initial results don't fully answer the question:
 
 ```bash
 # First attempt (broad)
-./bin/mneme query "project team" --k 15
+mneme query "project team" --k 15
 
 # Results use "sponsor", "ownership" - not "team"
 # Second attempt (using document vocabulary)
-./bin/mneme query "sponsor ownership leads" --k 15
+mneme query "sponsor ownership leads" --k 15
 ```
 
 ## When to Ask for Clarification

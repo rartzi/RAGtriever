@@ -254,26 +254,28 @@ mneme mcp --config config.toml
 
 ## Watcher Management
 
-### Using the Management Script
+### Using the Skill's Management Script
+
+The Mneme skill provides a portable watcher management script:
 
 ```bash
 # Check status
-./scripts/manage_watcher.sh status
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status
 
-# Start watcher
-./scripts/manage_watcher.sh start
+# Start watcher (auto-installs mneme if needed)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 
 # Stop watcher
-./scripts/manage_watcher.sh stop
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
 
 # Restart
-./scripts/manage_watcher.sh restart
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
 
 # Health check
-./scripts/manage_watcher.sh health
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 
-# Check dependencies
-./scripts/manage_watcher.sh check
+# Check installation
+~/.claude/skills/Mneme/Tools/manage-watcher.sh check
 ```
 
 ### Manual Management
@@ -282,8 +284,9 @@ mneme mcp --config config.toml
 # Check if running
 pgrep -f "mneme watch"
 
-# Start in background
-nohup mneme watch --config config.toml &
+# Start in background with logging
+mkdir -p logs
+nohup mneme watch --config config.toml --log-file logs/watch_$(date +%Y%m%d).log &
 echo $! > logs/watcher.pid
 
 # Stop

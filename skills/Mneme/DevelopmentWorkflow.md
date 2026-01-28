@@ -33,22 +33,21 @@ mneme query --config config.toml "image description" --k 5
 # Verify results include image metadata
 ```
 
-## Test Scan & Watch (Automated)
+## Test Scan & Watch
 
 ```bash
-# Automated test with logging, profiling, and watcher
-./scripts/test_scan_and_watch.sh
+# Run full scan with logging
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 
-# This will:
-# 1. Clean database
-# 2. Run full scan with 10 workers and profiling
-# 3. Show profiling summary
-# 4. Show scan log summary
-# 5. Prompt to test watcher
+# Start watcher with logging
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 
-# Logs saved to: logs/scan_YYYYMMDD_HHMMSS.log
-# Profile saved to: logs/scan_profile_YYYYMMDD_HHMMSS.txt
-# Watch logs: logs/watch_YYYYMMDD_HHMMSS.log
+# Check watcher health
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
+
+# Stop watcher
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
 ```
 
 ## Key Files Reference
@@ -73,11 +72,9 @@ mneme query --config config.toml "image description" --k 5
 - `docs/troubleshooting.md` - Detailed troubleshooting
 - `IMPROVEMENTS.md` - Planned enhancements
 
-### Scripts
-- `bin/mneme` - **Main wrapper** - auto-creates venv, installs deps, runs commands
-- `scripts/manage_watcher.sh` - Watcher management (start/stop/restart/health)
-- `scripts/ensure_venv.sh` - Standalone venv setup (used by other scripts)
-- `scripts/test_scan_and_watch.sh` - Automated test with logging and profiling
+### Skill Tools
+- `skills/Mneme/Tools/mneme-wrapper.sh` - Auto-installing CLI wrapper
+- `skills/Mneme/Tools/manage-watcher.sh` - Watcher management (start/stop/restart/health)
 
 ## Additional Resources
 

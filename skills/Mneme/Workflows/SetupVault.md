@@ -8,12 +8,26 @@ Initialize and configure Mneme for a new vault.
 - "create index"
 - "configure mneme for my vault"
 
+## How to Run mneme
+
+The skill provides multiple ways to run mneme:
+
+```bash
+# 1. Skill wrapper (portable, auto-installs to ~/.mneme/)
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh <command>
+
+# 2. Global (if pip installed)
+mneme <command>
+```
+
+**The examples below use `mneme` - replace with the appropriate path for your setup.**
+
 ## Procedure
 
 ### 1. Initialize the Vault
 
 ```bash
-./bin/mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/vaultname"
+mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/vaultname"
 ```
 
 This creates a starter `config.toml` file.
@@ -58,7 +72,8 @@ ls ~/.cache/huggingface/hub/models--* &>/dev/null && \
 ### 5. Run Initial Scan
 
 ```bash
-./bin/mneme scan --config config.toml --full
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 Monitor output for:
@@ -70,27 +85,28 @@ Monitor output for:
 
 ```bash
 # Check status
-./bin/mneme status
+mneme status
 
 # Test query
-./bin/mneme query --config config.toml "test query" --k 5
+mneme query --config config.toml "test query" --k 5
 ```
 
 ### 7. (Optional) Start Watcher
 
 For continuous indexing:
 ```bash
-./scripts/manage_watcher.sh start
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 ```
 
 ## Quick Setup Commands
 
 ### With Tesseract (Local OCR)
 ```bash
-./bin/mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: set provider = "tesseract"
-./bin/mneme scan --config config.toml --full
-./bin/mneme query --config config.toml "test" --k 5
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+mneme query --config config.toml "test" --k 5
 ```
 
 ### With Gemini Service Account
@@ -99,9 +115,10 @@ export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/creds.json"
 unset GEMINI_API_KEY
 
-./bin/mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: configure [gemini_service_account] section
-./bin/mneme scan --config config.toml --full
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ## Checklist

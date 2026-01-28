@@ -4,83 +4,92 @@
 - Individual file changes (create, modify, delete, move)
 - Directory operations (delete entire folders, move/rename folders)
 - All files within deleted or moved directories are updated in the index
+- Catch-up on files modified while watcher was stopped
 - No manual intervention needed for vault reorganization
+
+## Using the Skill's Management Script
+
+The skill provides a portable management script in `Tools/manage-watcher.sh`:
+
+```bash
+# Check status
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status
+
+# Start watcher (auto-installs mneme if needed)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
+
+# Stop watcher
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
+
+# Restart watcher
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
+
+# Run health check
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
+
+# Check installation
+~/.claude/skills/Mneme/Tools/manage-watcher.sh check
+```
+
+**The script handles:**
+- Auto-installing mneme if not found
+- Log file creation with daily rotation
+- PID file management
+- Graceful shutdown
+- Health checks (process, logs, errors)
+- Offline mode environment variables
 
 ## Check if Watcher is Running
 
 ```bash
-# Check for running watcher process
-ps aux | grep -E "[r]agtriever watch"
+# Using the skill's script (recommended)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status
 
-# Or more precise:
-pgrep -f "mneme watch"
-
-# If output: process is running
-# If no output: watcher is not running
+# Or manually:
+pgrep -f "mneme watch" && echo "Running" || echo "Not running"
 ```
 
 ## Start the Watcher
 
 ```bash
-# Preferred: Use the management script (handles everything)
-./scripts/manage_watcher.sh start
+# Preferred: Use the skill's script (handles everything)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 
-# Or use the wrapper directly (foreground)
-./bin/mneme watch --config config.toml
-
-# Background with logging
-nohup ./bin/mneme watch --config config.toml > /dev/null 2>&1 &
-echo $! > logs/watcher.pid  # Save PID for later
+# Or manually with logging (REQUIRED for audit):
+mkdir -p logs
+nohup mneme watch --config config.toml --log-file logs/watch_$(date +%Y%m%d).log &
+echo $! > logs/watcher.pid
 ```
 
 ## Stop the Watcher
 
 ```bash
-# Method 1: Kill all mneme watch processes
+# Using the skill's script
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
+
+# Or manually:
 pkill -f "mneme watch"
-
-# Method 2: Kill specific PID (if you saved it)
-kill $(cat logs/watcher.pid)
-
-# Method 3: Find and kill interactively
-ps aux | grep "[r]agtriever watch"
-kill <PID>
-
-# Verify it stopped
-ps aux | grep -E "[r]agtriever watch" || echo "Watcher stopped"
 ```
 
 ## Restart the Watcher
 
 ```bash
-# Preferred: Use the management script
-./scripts/manage_watcher.sh restart
+# Using the skill's script
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
 
 # Or manually:
 pkill -f "mneme watch"
 sleep 2
-nohup ./bin/mneme watch --config config.toml &
-echo $! > logs/watcher.pid
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 ```
 
-## Check Watcher Status
+## Health Check
 
 ```bash
-# Is it running?
-if pgrep -f "mneme watch" > /dev/null; then
-    echo "Watcher is running"
-    ps aux | grep "[r]agtriever watch" | grep -v grep
-else
-    echo "Watcher is not running"
-fi
+# Full health check
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 
-# Check recent activity (if logging enabled)
-tail -20 logs/watch_$(date +%Y%m%d).log
-```
-
-## Watcher Health Check
-
-```bash
+# Manual checks:
 # 1. Check if process is running
 pgrep -f "mneme watch" > /dev/null || echo "ERROR: Watcher not running"
 
@@ -91,34 +100,6 @@ find logs/ -name "watch_*.log" -mmin -5 | grep -q . && echo "Recent activity" ||
 tail -100 logs/watch_$(date +%Y%m%d).log | grep -i error && echo "Errors found" || echo "No recent errors"
 ```
 
-## Watcher Management Script
-
-**For convenience, use the included management script:**
-
-```bash
-# Check status
-./scripts/manage_watcher.sh status
-
-# Start watcher
-./scripts/manage_watcher.sh start
-
-# Stop watcher
-./scripts/manage_watcher.sh stop
-
-# Restart watcher
-./scripts/manage_watcher.sh restart
-
-# Run health check
-./scripts/manage_watcher.sh health
-```
-
-**The script handles:**
-- Virtual environment activation
-- PID file management
-- Graceful shutdown
-- Health checks (process, logs, errors)
-- Log file detection
-
 ## When to Restart the Watcher
 
 Restart the watcher when:
@@ -128,18 +109,15 @@ Restart the watcher when:
 - After system reboot
 - Log errors indicate issues
 
-## Watcher Management Workflow
+## Environment Variables
 
-When user mentions watcher issues:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONFIG_FILE` | `config.toml` | Config file path |
+| `LOG_DIR` | `logs` | Log output directory |
+| `MNEME_HOME` | `~/.mneme` | Mneme installation directory |
+
+Example with custom config:
 ```bash
-# Use the management script - handles everything automatically
-./scripts/manage_watcher.sh status   # Check if running
-./scripts/manage_watcher.sh start    # Start (auto-creates venv if needed)
-./scripts/manage_watcher.sh restart  # Restart
-./scripts/manage_watcher.sh health   # Full health check
-
-# Manual alternative:
-pgrep -f "mneme watch" || echo "Not running"
-nohup ./bin/mneme watch --config config.toml &
-tail -20 logs/watch_$(date +%Y%m%d).log
+CONFIG_FILE=production.toml ~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 ```

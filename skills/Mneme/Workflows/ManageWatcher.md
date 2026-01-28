@@ -21,8 +21,8 @@ The skill provides a portable management script:
 # Skill wrapper (portable, recommended)
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh <command>
 
-# Project-local (if in RAGtriever directory)
-./scripts/manage_watcher.sh <command>
+# Or from within the RAGtriever project
+./skills/Mneme/Tools/manage-watcher.sh <command>
 ```
 
 ## Procedure

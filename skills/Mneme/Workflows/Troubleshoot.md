@@ -41,7 +41,7 @@ grep -i error logs/watch*.log | tail -20
 ### 4. Check Database
 
 ```bash
-./bin/mneme status
+mneme status
 ```
 
 ## Common Issues
@@ -76,7 +76,7 @@ export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 
 # Option 2: Temporarily download
 unset HF_HUB_OFFLINE TRANSFORMERS_OFFLINE
-./bin/mneme scan --config config.toml
+mneme scan --config config.toml
 ```
 
 ### Rate Limit Errors (429)
@@ -125,27 +125,27 @@ export GOOGLE_CLOUD_PROJECT="your-project"
 
 **Fix:**
 ```bash
-./scripts/manage_watcher.sh restart
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
 ```
 
 ### Empty Search Results
 
 **Check:**
-1. Database has content: `./bin/mneme status`
+1. Database has content: `mneme status`
 2. Query is reasonable: try simpler terms
 3. Index is fresh: run incremental scan
 
 **Fix:**
 ```bash
-./bin/mneme scan --config config.toml
-./bin/mneme query --config config.toml "simple term" --k 20
+mneme scan --config config.toml
+mneme query --config config.toml "simple term" --k 20
 ```
 
 ## Diagnostic Commands
 
 ```bash
 # Full health check
-./scripts/manage_watcher.sh health
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 
 # Count indexed files
 sqlite3 ~/.mneme/indexes/*/vaultrag.sqlite "SELECT COUNT(*) FROM documents WHERE deleted=0;"

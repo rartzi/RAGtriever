@@ -1,59 +1,20 @@
 # Scripts
 
-Operational scripts for testing, development, and watcher management.
+Development and testing scripts.
 
-## Available Scripts
+## Watcher Management
 
-### manage_watcher.sh
+**Watcher management has moved to the skill's Tools directory:**
 
-Watcher management script for starting, stopping, and monitoring the Mneme watcher.
-
-**Usage:**
 ```bash
-./scripts/manage_watcher.sh {status|start|stop|restart|health|check|help}
+~/.claude/skills/Mneme/Tools/manage-watcher.sh {status|start|stop|restart|health|check|help}
 ```
 
-**Commands:**
-- `status` - Check if watcher is running
-- `start` - Start the watcher in background
-- `stop` - Stop the watcher gracefully
-- `restart` - Restart the watcher
-- `health` - Run comprehensive health check
-- `check` - Verify dependencies only
-- `help` - Show usage information
-
-**Features:**
-- Automatic virtual environment activation
-- Automatic dependency checking
-- PID file management (`logs/watcher.pid`)
-- Graceful shutdown with fallback to force kill
-- Health checks: process, log activity, errors
-- Offline mode environment variables
-
-**Examples:**
-```bash
-# Check if watcher is running
-./scripts/manage_watcher.sh status
-
-# Start in background
-./scripts/manage_watcher.sh start
-
-# Check health
-./scripts/manage_watcher.sh health
-
-# Restart after config change
-./scripts/manage_watcher.sh restart
-
-# Verify dependencies
-./scripts/manage_watcher.sh check
-```
-
-**Environment:**
-- Uses `CONFIG_FILE` env var (default: `config.toml`)
-- Saves PID to `logs/watcher.pid`
-- Checks for logs in `logs/watch_YYYYMMDD.log`
+See `skills/Mneme/WatcherManagement.md` for full documentation.
 
 ---
+
+## Test Scripts
 
 ### test_scan_and_watch.sh
 
@@ -76,11 +37,22 @@ Automated test script for scanning and watching with logging and profiling.
 - Profile: `logs/scan_profile_YYYYMMDD_HHMMSS.txt`
 - Watch logs: `logs/watch_YYYYMMDD_HHMMSS.log`
 
-All logs are timestamped and saved to the `logs/` directory.
+---
+
+### test_parallel_gemini_providers.sh
+
+Test script for comparing Gemini provider performance.
+
+---
+
+### generate_provider_report.py
+
+Generate performance reports for image analysis providers.
 
 ---
 
 ## See Also
 
-- `docs/USERGUIDE.md` - Comprehensive user guide including watcher management
+- `skills/Mneme/Tools/` - Portable watcher and CLI wrapper scripts
+- `docs/USERGUIDE.md` - Comprehensive user guide
 - `docs/ARCHITECTURE.md` - System architecture
