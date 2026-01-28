@@ -364,6 +364,37 @@ The skill follows the PAI (Personal AI Infrastructure) standard with workflow-ba
 
 Plus context files for detailed documentation on search best practices, configuration, commands, and architecture.
 
+### Example Phrases for Claude Code
+
+Just talk naturally - Claude Code will invoke the appropriate workflow:
+
+**Searching your vault:**
+- "What does my vault say about project planning?"
+- "Search my vault for meeting notes"
+- "Find information about authentication in my notes"
+- "What do I have on machine learning?"
+
+**Managing the watcher:**
+- "Start the watcher"
+- "Is the watcher running?"
+- "Stop the watcher"
+- "Check watcher health"
+
+**Scanning:**
+- "Run a full scan"
+- "Do an incremental scan"
+- "Re-index my vault"
+
+**Setup and configuration:**
+- "Setup mneme for my vault at ~/Documents/notes"
+- "Configure image analysis with Gemini"
+- "Initialize a new vault"
+
+**Troubleshooting:**
+- "The watcher isn't working"
+- "I'm getting an error with scanning"
+- "Help me fix the indexing issue"
+
 ---
 
 ## Troubleshooting
