@@ -48,9 +48,12 @@ class TestBoostConfig:
         assert config.recency_fresh_days == 14
         assert config.recency_recent_days == 60
         assert config.recency_old_days == 180
-        assert config.recency_fresh_boost == 1.20
-        assert config.recency_recent_boost == 1.10
-        assert config.recency_old_penalty == 0.95
+        assert config.recency_fresh_boost == 1.10  # 10% boost for fresh
+        assert config.recency_recent_boost == 1.05  # 5% boost for recent
+        assert config.recency_old_penalty == 0.98  # 2% penalty for old
+        # Heading and tag boosts are disabled by default
+        assert config.heading_boost_enabled is False
+        assert config.tag_boost_enabled is False
 
     def test_custom_values(self):
         """Test custom config values."""

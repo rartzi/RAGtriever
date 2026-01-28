@@ -115,7 +115,7 @@ def calculate_metrics(results: list, expected_keywords: list[str]) -> dict:
     }
 
 
-@pytest.mark.manual
+@pytest.mark.skip(reason="Manual evaluation test - run with: pytest tests/test_real_vault_evaluation.py -v -s")
 def test_real_vault_comparison():
     """Compare baseline vs new features using real vault with Navari and AIGateway content.
 

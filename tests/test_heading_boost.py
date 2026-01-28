@@ -40,10 +40,11 @@ class TestHeadingBoostConfig:
     def test_default_values(self):
         """Test that default heading boost config values are sensible."""
         config = BoostConfig()
-        assert config.heading_boost_enabled is True
-        assert config.heading_h1_boost == 1.30
-        assert config.heading_h2_boost == 1.15
-        assert config.heading_h3_boost == 1.08
+        # Heading boost is disabled by default (semantics matter most)
+        assert config.heading_boost_enabled is False
+        assert config.heading_h1_boost == 1.05  # 5% boost for H1
+        assert config.heading_h2_boost == 1.03  # 3% boost for H2
+        assert config.heading_h3_boost == 1.02  # 2% boost for H3
 
     def test_custom_values(self):
         """Test custom heading boost values."""
@@ -65,6 +66,7 @@ class TestHeadingBoostH1:
     def test_h1_boost_applied(self):
         """Test that H1 boost is applied correctly (30% = 1.30x)."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             backlink_enabled=False,
             recency_enabled=False,
@@ -85,6 +87,7 @@ class TestHeadingBoostH1:
     def test_h1_boost_multiple_results(self):
         """Test H1 boost with multiple results."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             backlink_enabled=False,
             recency_enabled=False,
@@ -115,6 +118,7 @@ class TestHeadingBoostH2:
     def test_h2_boost_applied(self):
         """Test that H2 boost is applied correctly (15% = 1.15x)."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h2_boost=1.15,
             backlink_enabled=False,
             recency_enabled=False,
@@ -133,6 +137,7 @@ class TestHeadingBoostH2:
     def test_h2_boost_custom_value(self):
         """Test H2 boost with custom value."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h2_boost=1.25,
             backlink_enabled=False,
             recency_enabled=False,
@@ -153,6 +158,7 @@ class TestHeadingBoostH3:
     def test_h3_boost_applied(self):
         """Test that H3 boost is applied correctly (8% = 1.08x)."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h3_boost=1.08,
             backlink_enabled=False,
             recency_enabled=False,
@@ -171,6 +177,7 @@ class TestHeadingBoostH3:
     def test_h3_boost_minimal_effect(self):
         """Test that H3 boost has minimal effect (as designed)."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h3_boost=1.08,
             backlink_enabled=False,
             recency_enabled=False,
@@ -191,6 +198,7 @@ class TestHeadingBoostMixedLevels:
     def test_mixed_heading_levels(self):
         """Test that different heading levels get different boosts."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             heading_h2_boost=1.15,
             heading_h3_boost=1.08,
@@ -222,6 +230,7 @@ class TestHeadingBoostMixedLevels:
     def test_heading_boost_ranking_change(self):
         """Test that heading boost can change result ordering."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             heading_h2_boost=1.15,
             backlink_enabled=False,
@@ -246,6 +255,7 @@ class TestHeadingBoostMixedLevels:
     def test_heading_boost_significant_ranking_change(self):
         """Test heading boost with closer original scores."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             heading_h2_boost=1.15,
             backlink_enabled=False,
@@ -276,6 +286,7 @@ class TestHeadingBoostFallback:
     def test_fallback_heading_anchor_type(self):
         """Test fallback boost for chunks with 'heading' in anchor_type but no level."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h3_boost=1.08,
             backlink_enabled=False,
             recency_enabled=False,
@@ -308,6 +319,7 @@ class TestHeadingBoostFallback:
     def test_fallback_case_insensitive(self):
         """Test that fallback is case-insensitive for 'heading'."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h3_boost=1.08,
             backlink_enabled=False,
             recency_enabled=False,
@@ -423,6 +435,8 @@ class TestHeadingBoostEdgeCases:
     def test_invalid_level_type(self):
         """Test handling of invalid level type (non-integer)."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
+            heading_h3_boost=1.08,
             backlink_enabled=False,
             recency_enabled=False,
             tag_boost_enabled=False,
@@ -440,28 +454,66 @@ class TestHeadingBoostEdgeCases:
                 anchor_type="md_heading",
                 anchor_ref="h",
             ),
-            metadata={"level": "not-a-number"},
+            metadata={"level": "not-a-number", "anchor_type": "md_heading"},
         )
 
         boosted = adjuster.apply_boosts([result])
 
-        # Should fall back to anchor_type check
+        # Should fall back to anchor_type check and apply H3 boost
         assert boosted[0].score == pytest.approx(0.864)  # 0.8 * 1.08 (H3 fallback)
         assert boosted[0].metadata["heading_level"] is None
 
     def test_level_out_of_range(self):
         """Test handling of heading levels beyond H3."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             backlink_enabled=False,
             recency_enabled=False,
             tag_boost_enabled=False,
         )
         adjuster = BoostAdjuster(config=config)
 
+        # Use anchor_type that doesn't contain "heading" to avoid fallback boost
         results = [
-            make_result("chunk_h4", 0.8, level=4),
-            make_result("chunk_h5", 0.8, level=5),
-            make_result("chunk_h6", 0.8, level=6),
+            SearchResult(
+                chunk_id="chunk_h4",
+                score=0.8,
+                snippet="Content",
+                source_ref=SourceRef(
+                    vault_id="v1",
+                    rel_path="test.md",
+                    file_type="md",
+                    anchor_type="md_block",  # Not a heading type
+                    anchor_ref="para",
+                ),
+                metadata={"level": 4, "anchor_type": "md_block"},
+            ),
+            SearchResult(
+                chunk_id="chunk_h5",
+                score=0.8,
+                snippet="Content",
+                source_ref=SourceRef(
+                    vault_id="v1",
+                    rel_path="test.md",
+                    file_type="md",
+                    anchor_type="md_block",
+                    anchor_ref="para",
+                ),
+                metadata={"level": 5, "anchor_type": "md_block"},
+            ),
+            SearchResult(
+                chunk_id="chunk_h6",
+                score=0.8,
+                snippet="Content",
+                source_ref=SourceRef(
+                    vault_id="v1",
+                    rel_path="test.md",
+                    file_type="md",
+                    anchor_type="md_block",
+                    anchor_ref="para",
+                ),
+                metadata={"level": 6, "anchor_type": "md_block"},
+            ),
         ]
         boosted = adjuster.apply_boosts(results)
 
@@ -489,6 +541,8 @@ class TestHeadingBoostEdgeCases:
     def test_preserves_existing_metadata(self):
         """Test that heading boost preserves other metadata."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
+            heading_h1_boost=1.30,
             backlink_enabled=False,
             recency_enabled=False,
             tag_boost_enabled=False,
@@ -523,6 +577,7 @@ class TestHeadingBoostCombined:
     def test_heading_with_backlink_boost(self):
         """Test heading boost combined with backlink boost."""
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h1_boost=1.30,
             backlink_weight=0.1,
             recency_enabled=False,
@@ -555,6 +610,7 @@ class TestHeadingBoostCombined:
         from datetime import datetime, timezone, timedelta
 
         config = BoostConfig(
+            heading_boost_enabled=True,  # Must explicitly enable
             heading_h2_boost=1.15,
             backlink_weight=0.1,
             recency_fresh_boost=1.20,

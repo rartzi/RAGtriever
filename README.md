@@ -383,7 +383,7 @@ The MCP server accepts JSON-RPC requests. Here are example tool calls:
 
 ## Claude Code Skill (Optional)
 
-For users of [Claude Code](https://claude.ai/code), Mneme includes a workflow skill to assist with setup, configuration, and troubleshooting.
+For users of [Claude Code](https://claude.ai/code), Mneme includes a workflow skill to assist with setup, configuration, and troubleshooting. The skill follows the PAI (Personal AI Infrastructure) standard with workflow-based routing.
 
 ### Installation
 
@@ -395,14 +395,39 @@ ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 cp -r skills/Mneme ~/.claude/skills/Mneme
 ```
 
-### Usage
+### Skill Structure
 
-The `Mneme` skill provides:
-- Setup and configuration guidance
-- Common command workflows
-- Troubleshooting assistance
-- Pre-flight checks and checklists
-- Architecture and key file references
+The skill uses a modular PAI-compliant structure:
+
+```
+skills/Mneme/
+├── SKILL.md                    # Main routing file with workflow table
+├── SearchBestPractices.md      # Search strategy and source citation
+├── Configuration.md            # Config checklist, image providers
+├── Commands.md                 # CLI command reference
+├── Troubleshooting.md          # Issue/solution pairs
+├── WatcherManagement.md        # Watcher operations
+├── DevelopmentWorkflow.md      # Dev workflow, testing
+├── Architecture.md             # Data flow, execution modes
+└── Workflows/                  # Execution procedures
+    ├── SearchVault.md          # Search and cite sources
+    ├── SetupVault.md           # Initial vault setup
+    ├── ConfigureImageAnalysis.md  # Image provider config
+    ├── ManageWatcher.md        # Watcher management
+    ├── Scan.md                 # Scanning operations
+    └── Troubleshoot.md         # Diagnostic procedures
+```
+
+### Available Workflows
+
+| Workflow | Trigger |
+|----------|---------|
+| **SearchVault** | "what does the vault say about", answering content questions |
+| **SetupVault** | "setup mneme", "initialize vault" |
+| **ConfigureImageAnalysis** | "configure images", "setup gemini" |
+| **ManageWatcher** | "start watcher", "stop watcher", "watcher status" |
+| **Scan** | "run scan", "full scan", "incremental scan" |
+| **Troubleshoot** | "error", "not working", troubleshooting |
 
 Once installed, Claude Code will automatically use this skill when helping you with Mneme tasks.
 
@@ -490,7 +515,7 @@ mypy src/
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 - [Gemini Service Account Setup](docs/gemini_service_account_setup.md) - Gemini with GCP service account configuration
 - [Improvements](IMPROVEMENTS.md) - Planned enhancements and roadmap
-- [Mneme Skill](skills/Mneme/skill.md) - Claude Code workflow skill
+- [Mneme Skill](skills/Mneme/SKILL.md) - Claude Code workflow skill (PAI-compliant)
 - [MCP Tool Spec](docs/MCP_TOOL_SPEC.json) - MCP protocol specification
 
 ---

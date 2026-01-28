@@ -254,26 +254,28 @@ mneme mcp --config config.toml
 
 ## Watcher Management
 
-### Using the Management Script
+### Using the Skill's Management Script
+
+The Mneme skill provides a portable watcher management script:
 
 ```bash
 # Check status
-./scripts/manage_watcher.sh status
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status
 
-# Start watcher
-./scripts/manage_watcher.sh start
+# Start watcher (auto-installs mneme if needed)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 
 # Stop watcher
-./scripts/manage_watcher.sh stop
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
 
 # Restart
-./scripts/manage_watcher.sh restart
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
 
 # Health check
-./scripts/manage_watcher.sh health
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 
-# Check dependencies
-./scripts/manage_watcher.sh check
+# Check installation
+~/.claude/skills/Mneme/Tools/manage-watcher.sh check
 ```
 
 ### Manual Management
@@ -282,8 +284,9 @@ mneme mcp --config config.toml
 # Check if running
 pgrep -f "mneme watch"
 
-# Start in background
-nohup mneme watch --config config.toml &
+# Start in background with logging
+mkdir -p logs
+nohup mneme watch --config config.toml --log-file logs/watch_$(date +%Y%m%d).log &
 echo $! > logs/watcher.pid
 
 # Stop
@@ -350,11 +353,47 @@ ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 
 ### What It Provides
 
-- Setup and configuration guidance
-- Common command workflows
-- Troubleshooting assistance
-- Pre-flight checks
-- Architecture references
+The skill follows the PAI (Personal AI Infrastructure) standard with workflow-based routing:
+
+- **SearchVault** - Search and answer questions from vault content with source citations
+- **SetupVault** - Initial vault setup and configuration
+- **ConfigureImageAnalysis** - Configure image analysis providers (Tesseract/Gemini)
+- **ManageWatcher** - Start/stop/status for the watcher service
+- **Scan** - Run full or incremental scans
+- **Troubleshoot** - Diagnose and fix common issues
+
+Plus context files for detailed documentation on search best practices, configuration, commands, and architecture.
+
+### Example Phrases for Claude Code
+
+Just talk naturally - Claude Code will invoke the appropriate workflow:
+
+**Searching your vault:**
+- "What does my vault say about project planning?"
+- "Search my vault for meeting notes"
+- "Find information about authentication in my notes"
+- "What do I have on machine learning?"
+
+**Managing the watcher:**
+- "Start the watcher"
+- "Is the watcher running?"
+- "Stop the watcher"
+- "Check watcher health"
+
+**Scanning:**
+- "Run a full scan"
+- "Do an incremental scan"
+- "Re-index my vault"
+
+**Setup and configuration:**
+- "Setup mneme for my vault at ~/Documents/notes"
+- "Configure image analysis with Gemini"
+- "Initialize a new vault"
+
+**Troubleshooting:**
+- "The watcher isn't working"
+- "I'm getting an error with scanning"
+- "Help me fix the indexing issue"
 
 ---
 
