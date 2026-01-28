@@ -350,11 +350,16 @@ ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 
 ### What It Provides
 
-- Setup and configuration guidance
-- Common command workflows
-- Troubleshooting assistance
-- Pre-flight checks
-- Architecture references
+The skill follows the PAI (Personal AI Infrastructure) standard with workflow-based routing:
+
+- **SearchVault** - Search and answer questions from vault content with source citations
+- **SetupVault** - Initial vault setup and configuration
+- **ConfigureImageAnalysis** - Configure image analysis providers (Tesseract/Gemini)
+- **ManageWatcher** - Start/stop/status for the watcher service
+- **Scan** - Run full or incremental scans
+- **Troubleshoot** - Diagnose and fix common issues
+
+Plus context files for detailed documentation on search best practices, configuration, commands, and architecture.
 
 ---
 
