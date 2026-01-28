@@ -9,6 +9,21 @@ Claude Code skill for working with Mneme (pronounced NEE-mee) — a local-first 
 
 **Primary Purpose:** Search and answer questions from the indexed vault content, not the Mneme codebase.
 
+## Skill Structure
+
+This skill is **self-contained and portable**. It can be deployed to any project.
+
+```
+skills/Mneme/
+├── SKILL.md              # This file (routing)
+├── DEPLOYMENT.md         # Deployment guide
+├── Tools/                # Portable scripts
+│   ├── mneme-wrapper.sh  # Auto-installing CLI wrapper
+│   └── manage-watcher.sh # Watcher management
+├── Workflows/            # Execution procedures
+└── ...context files      # Detailed documentation
+```
+
 ## Workflow Routing
 
 | Workflow | Trigger | File |
@@ -26,7 +41,7 @@ Claude Code skill for working with Mneme (pronounced NEE-mee) — a local-first 
 ```
 User: "What types of agentic workflows exist?"
 -> Invokes SearchVault workflow
--> Runs: ./bin/mneme query "agentic workflows" --k 15
+-> Runs: mneme query "agentic workflows" --k 15
 -> Returns answer with Sources section citing file paths
 ```
 
@@ -42,24 +57,64 @@ User: "Setup Mneme for my vault at ~/Documents/notes"
 ```
 User: "Is the watcher running?"
 -> Invokes ManageWatcher workflow
--> Checks process status, reports health
+-> Uses Tools/manage-watcher.sh to check status
 -> Returns status and recent activity
 ```
 
 ## Quick Reference
 
-- **Wrapper:** Always use `./bin/mneme` (auto-handles venv)
-- **Config:** `config.toml` in project root
-- **Search:** `./bin/mneme query "term" --k 10`
-- **Scan:** `./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log`
-- **Watch:** `./scripts/manage_watcher.sh status|start|stop` (logs to `logs/watch_YYYYMMDD.log`)
+### Running mneme Commands
+
+The skill provides a portable wrapper that auto-installs mneme:
+
+```bash
+# Via skill wrapper (portable, auto-installs)
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh <command>
+
+# Via project-local wrapper (in RAGtriever directory)
+./bin/mneme <command>
+
+# Via global install (if pip installed)
+mneme <command>
+```
+
+### Common Commands
+
+```bash
+# Search
+mneme query "search term" --k 10
+
+# Full scan with logging (REQUIRED)
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+
+# Status
+mneme status
+
+# Watcher management
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status|start|stop|health
+```
 
 **IMPORTANT:** All scan and watch operations MUST include logging for audit purposes.
+
+### Installation
+
+```bash
+# Install mneme (auto-installs to ~/.mneme/)
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
+
+# Update mneme
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --update
+
+# Check where mneme is installed
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --where
+```
 
 ## Detailed Documentation
 
 | Topic | File |
 |-------|------|
+| **Deployment guide** | `DEPLOYMENT.md` |
 | Search strategy & vocabulary mismatch | `SearchBestPractices.md` |
 | Config checklist & image providers | `Configuration.md` |
 | Common commands reference | `Commands.md` |
@@ -74,4 +129,4 @@ User: "Is the watcher running?"
 2. **ALWAYS cite sources** - Every response MUST end with a "Sources" section
 3. **Vault content != Mneme code** - Don't confuse vault search with codebase search
 4. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing
-5. **Use `./bin/mneme` wrapper** - Auto-handles venv setup
+5. **Use the portable wrapper** - `Tools/mneme-wrapper.sh` handles installation automatically

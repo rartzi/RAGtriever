@@ -12,34 +12,51 @@ Run scanning operations to index vault content.
 
 **All scan commands MUST include logging for audit purposes.**
 
+## How to Run mneme
+
+The skill provides a portable wrapper that auto-installs mneme if needed:
+
+```bash
+# Skill wrapper (portable, auto-installs)
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh <command>
+
+# Project-local (if in RAGtriever directory)
+./bin/mneme <command>
+
+# Global (if pip installed)
+mneme <command>
+```
+
+**The examples below use `mneme` - replace with the appropriate path for your setup.**
+
 ## Procedure
 
 ### Full Scan (Re-index Everything)
 
 ```bash
 mkdir -p logs
-./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ### Incremental Scan (Changed Files Only)
 
 ```bash
 mkdir -p logs
-./bin/mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ### Scan with Verbose Logging
 
 ```bash
 mkdir -p logs
-./bin/mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log --verbose
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log --verbose
 ```
 
 ### Scan with Profiling
 
 ```bash
 mkdir -p logs
-./bin/mneme scan --config config.toml --full \
+mneme scan --config config.toml --full \
     --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log \
     --profile logs/profile_$(date +%Y%m%d_%H%M%S).txt
 ```
@@ -48,7 +65,7 @@ mkdir -p logs
 
 ```bash
 mkdir -p logs
-./bin/mneme scan --config config.toml --full \
+mneme scan --config config.toml --full \
     --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log \
     --profile logs/profile_$(date +%Y%m%d_%H%M%S).txt \
     --verbose
@@ -60,10 +77,10 @@ Default is parallel processing. Override with:
 
 ```bash
 # Explicit workers
-./bin/mneme scan --config config.toml --full --workers 8
+mneme scan --config config.toml --full --workers 8
 
 # Disable parallelization
-./bin/mneme scan --config config.toml --full --no-parallel
+mneme scan --config config.toml --full --no-parallel
 ```
 
 Configure in `config.toml`:
@@ -84,13 +101,13 @@ Scan complete: 135 files, 963 chunks in 133.0s
 
 **Log file:**
 ```bash
-grep '\[scan\] Complete:' logs/scan.log
-grep '\[scan\] Phase' logs/scan.log
+grep '\[scan\] Complete:' logs/scan_*.log
+grep '\[scan\] Phase' logs/scan_*.log
 ```
 
 **Database check:**
 ```bash
-./bin/mneme status
+mneme status
 ```
 
 ## Expected Output
@@ -118,14 +135,7 @@ grep '\[scan\] Phase' logs/scan.log
 
 **Network errors:** Enable offline mode if model is cached.
 
-## Automated Testing
-
+**mneme not found:** Run the skill wrapper to auto-install:
 ```bash
-./scripts/test_scan_and_watch.sh
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
 ```
-
-This will:
-1. Clean database
-2. Run full scan with profiling
-3. Show summaries
-4. Prompt for watcher test

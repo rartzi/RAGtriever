@@ -1,24 +1,39 @@
 # Common Commands
 
-**Note:** All commands use `./bin/mneme` which auto-handles venv setup.
+## How to Run mneme
+
+The skill provides multiple ways to run mneme:
+
+```bash
+# 1. Skill wrapper (portable, auto-installs to ~/.mneme/)
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh <command>
+
+# 2. Project-local wrapper (in RAGtriever directory)
+./bin/mneme <command>
+
+# 3. Global (if pip installed)
+mneme <command>
+```
+
+**The examples below use `mneme` - replace with the appropriate path for your setup.**
 
 ## Pre-flight Checks
 
-**IMPORTANT: Always use `./bin/mneme` instead of `mneme` directly.**
-
-The `./bin/mneme` wrapper automatically:
-- Creates virtual environment if missing (Python 3.11+)
-- Installs dependencies if needed
-- Activates venv and runs the command
+### Install mneme (if not installed)
 
 ```bash
-# These just work - no manual venv setup needed
-./bin/mneme scan --config config.toml --full
-./bin/mneme watch --config config.toml
-./bin/mneme query "search term" --k 10
+# Auto-install to ~/.mneme/
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --install
+
+# Check where mneme is installed
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --where
+
+# Update existing installation
+~/.claude/skills/Mneme/Tools/mneme-wrapper.sh --update
 ```
 
-**Manual setup (only if wrapper fails):**
+### Manual setup (alternative)
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -58,74 +73,107 @@ mneme scan --help | grep -A 2 log
 ## Initial Setup
 
 ```bash
-# Generate starter config (auto-creates venv if needed)
-./bin/mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
+# Generate starter config
+mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
 
 # Edit config.toml to configure image analysis and embeddings
 ```
 
 ## Scanning and Indexing
 
+**IMPORTANT: Always include logging for audit purposes.**
+
 ```bash
-# Full scan (re-index everything) - uses parallel processing by default
-./bin/mneme scan --config config.toml --full
+# Full scan with logging (REQUIRED)
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 
 # Full scan with explicit parallel settings
-./bin/mneme scan --config config.toml --full --workers 8
+mneme scan --config config.toml --full --workers 8 --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 
 # Sequential scan (disable parallelization)
-./bin/mneme scan --config config.toml --full --no-parallel
+mneme scan --config config.toml --full --no-parallel --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 
 # Incremental scan (only changed files)
-./bin/mneme scan --config config.toml
-
-# Watch mode (continuous indexing)
-./bin/mneme watch --config config.toml
+mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
-## Scanning with Logging and Profiling
+## Scanning with Verbose Logging and Profiling
 
 ```bash
-# Scan with logging to file
-./bin/mneme scan --config config.toml --full --log-file logs/scan.log
-
 # Scan with verbose (DEBUG) logging
-./bin/mneme scan --config config.toml --full --log-file logs/scan.log --verbose
+mneme scan --config config.toml --full --log-file logs/scan.log --verbose
 
 # Scan with profiling (performance analysis)
-./bin/mneme scan --config config.toml --full --profile logs/profile.txt
+mneme scan --config config.toml --full --profile logs/profile.txt --log-file logs/scan.log
 
 # Scan with both logging and profiling
-./bin/mneme scan --config config.toml --full \
-    --log-file logs/scan.log \
-    --profile logs/profile.txt \
+mneme scan --config config.toml --full \
+    --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log \
+    --profile logs/profile_$(date +%Y%m%d_%H%M%S).txt \
     --verbose
-
-# Watch mode with logging
-./bin/mneme watch --config config.toml --log-file logs/watch.log --verbose
 ```
 
 ## Querying
 
 ```bash
 # Basic search (hybrid: semantic + lexical)
-./bin/mneme query --config config.toml "search term" --k 10
+mneme query "search term" --k 10
 
 # More results
-./bin/mneme query --config config.toml "kubernetes deployment" --k 20
+mneme query "kubernetes deployment" --k 20
+
+# With config file
+mneme query --config config.toml "search term" --k 10
+```
+
+## Watcher Management
+
+**Use the portable management script:**
+
+```bash
+# Check status
+~/.claude/skills/Mneme/Tools/manage-watcher.sh status
+
+# Start watcher (auto-installs mneme, creates logs)
+~/.claude/skills/Mneme/Tools/manage-watcher.sh start
+
+# Stop watcher
+~/.claude/skills/Mneme/Tools/manage-watcher.sh stop
+
+# Restart watcher
+~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
+
+# Health check
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
+```
+
+**Manual watcher management:**
+
+```bash
+# Start in background with logging
+mkdir -p logs
+nohup mneme watch --config config.toml --log-file logs/watch_$(date +%Y%m%d).log &
+echo $! > logs/watcher.pid
+
+# Check if running
+pgrep -f "mneme watch" && echo "Watcher running"
+
+# Stop watcher
+pkill -f "mneme watch"
 ```
 
 ## MCP Server (Claude Desktop Integration)
 
 ```bash
 # Start MCP server
-./bin/mneme mcp --config config.toml
+mneme mcp --config config.toml
 
-# Add to Claude Desktop config.json (use absolute path to wrapper):
+# Add to Claude Desktop config.json:
 {
   "mcpServers": {
     "mneme": {
-      "command": "/full/path/to/RAGtriever/bin/mneme",
+      "command": "~/.mneme/venv/bin/mneme",
       "args": ["mcp", "--config", "/full/path/to/config.toml"]
     }
   }
@@ -136,42 +184,28 @@ mneme scan --help | grep -A 2 log
 
 ### Setup New Vault (Tesseract)
 ```bash
-./bin/mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: set provider = "tesseract"
-./bin/mneme scan --config config.toml --full
-./bin/mneme query --config config.toml "test query" --k 5
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+mneme query "test query" --k 5
 ```
 
-### Setup with Gemini service account
+### Setup with Gemini Service Account
 ```bash
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/creds.json"
 unset GEMINI_API_KEY
-./bin/mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
+mneme init --vault ~/vault --index ~/.mneme/indexes/myvault
 # Edit config.toml: configure [gemini_service_account] section
-./bin/mneme scan --config config.toml --full
-./bin/mneme query --config config.toml "image content" --k 5
+mkdir -p logs
+mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
+mneme query "image content" --k 5
 ```
 
 ### Incremental Updates
 ```bash
-./bin/mneme scan --config config.toml  # Only changed files
-```
-
-### Watch Mode (Background)
-```bash
-# Preferred: Use management script
-./scripts/manage_watcher.sh start
-
-# Or manually:
-nohup ./bin/mneme watch --config config.toml &
-echo $! > logs/watcher.pid
-
-# Check if running
-pgrep -f "mneme watch" && echo "Watcher running"
-
-# Stop watcher later
-pkill -f "mneme watch"
+mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ```
 
 ## Verifying Successful Indexing
@@ -182,29 +216,25 @@ pkill -f "mneme watch"
 Scan complete: 135 files, 963 chunks in 133.0s
 ```
 
-**Log file (if logging enabled):**
+**Log file:**
 ```bash
 # View summary
-grep '\[scan\] Complete:' logs/scan_20260123.log
+grep '\[scan\] Complete:' logs/scan_*.log
 
 # Check phases
-grep '\[scan\] Phase' logs/scan_20260123.log
+grep '\[scan\] Phase' logs/scan_*.log
 ```
 
 ### Watch Mode
 **Individual file indexing (INFO level):**
 ```bash
 # List all indexed files
-grep '\[watch\] Indexed:' logs/watch_20260123.log
+grep '\[watch\] Indexed:' logs/watch_*.log
 ```
 
 **Real-time monitoring:**
 ```bash
-# Terminal 1: Run watcher
-mneme watch
-
-# Terminal 2: Monitor indexing
-tail -f logs/watch_20260123.log | grep '\[watch\] Indexed:'
+tail -f logs/watch_$(date +%Y%m%d).log | grep '\[watch\]'
 ```
 
 ### Check for Failures
@@ -213,10 +243,10 @@ tail -f logs/watch_20260123.log | grep '\[watch\] Indexed:'
 grep -E 'Failed:|ERROR' logs/*.log
 
 # Count indexed files
-grep -c '\[watch\] Indexed:' logs/watch_20260123.log
+grep -c '\[watch\] Indexed:' logs/watch_*.log
 ```
 
-### Verify in Database
+### Check Status
 ```bash
 mneme status
 # Output: Indexed files: 135, Indexed chunks: 963
