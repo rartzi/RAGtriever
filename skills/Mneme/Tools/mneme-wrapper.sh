@@ -80,6 +80,15 @@ find_python() {
     return 1
 }
 
+# Check if UV is available
+find_uv() {
+    if command -v uv &> /dev/null; then
+        echo "uv"
+        return 0
+    fi
+    return 1
+}
+
 # Check if mneme is available in a location
 find_mneme() {
     # 1. Check PATH (pip installed globally or in active venv)
@@ -141,6 +150,13 @@ install_mneme() {
     local py_version=$("$python_cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
     echo -e "  Python: $python_cmd ($py_version)"
 
+    # Check for UV (faster installation)
+    local use_uv=false
+    if find_uv &> /dev/null; then
+        use_uv=true
+        echo -e "  ${GREEN}✓${NC} UV detected (fast installation mode)"
+    fi
+
     # Create directory
     mkdir -p "$install_dir"
 
@@ -179,18 +195,30 @@ install_mneme() {
     # Create virtual environment
     if [ ! -f "$venv_dir/bin/activate" ]; then
         echo "  Creating virtual environment..."
-        "$python_cmd" -m venv "$venv_dir"
+        if [ "$use_uv" = true ]; then
+            uv venv "$venv_dir" --python "$python_cmd" > /dev/null 2>&1
+        else
+            "$python_cmd" -m venv "$venv_dir"
+        fi
     fi
     echo -e "  ${GREEN}✓${NC} Virtual environment ready"
 
     # Install mneme
-    echo "  Installing dependencies (this may take a minute)..."
-    source "$venv_dir/bin/activate"
-    pip install --upgrade pip > /dev/null 2>&1
-    pip install -e "$source_dir" > /dev/null 2>&1 || {
-        echo -e "${YELLOW}Retrying with verbose output...${NC}"
-        pip install -e "$source_dir"
-    }
+    if [ "$use_uv" = true ]; then
+        echo "  Installing dependencies with UV (fast)..."
+        uv pip install -e "$source_dir" --python "$venv_dir/bin/python" > /dev/null 2>&1 || {
+            echo -e "${YELLOW}Retrying with verbose output...${NC}"
+            uv pip install -e "$source_dir" --python "$venv_dir/bin/python"
+        }
+    else
+        echo "  Installing dependencies (this may take a minute)..."
+        source "$venv_dir/bin/activate"
+        pip install --upgrade pip > /dev/null 2>&1
+        pip install -e "$source_dir" > /dev/null 2>&1 || {
+            echo -e "${YELLOW}Retrying with verbose output...${NC}"
+            pip install -e "$source_dir"
+        }
+    fi
     touch "$source_dir/.installed"
     echo -e "  ${GREEN}✓${NC} Dependencies installed"
 
@@ -253,9 +281,13 @@ update_mneme_silent() {
     cp -r "$BUNDLED_SOURCE" "$source_dir"
     touch "$source_dir/.installed"
 
-    # Reinstall
-    source "$venv_dir/bin/activate"
-    pip install -e "$source_dir" > /dev/null 2>&1
+    # Reinstall (use UV if available for faster updates)
+    if find_uv &> /dev/null; then
+        uv pip install -e "$source_dir" --python "$venv_dir/bin/python" > /dev/null 2>&1
+    else
+        source "$venv_dir/bin/activate"
+        pip install -e "$source_dir" > /dev/null 2>&1
+    fi
 
     echo -e "${GREEN}✓${NC} Updated to latest version"
 }
@@ -296,8 +328,14 @@ update_mneme() {
         return
     fi
 
-    source "$venv_dir/bin/activate"
-    pip install -e "$source_dir" > /dev/null 2>&1
+    # Reinstall (use UV if available for faster updates)
+    if find_uv &> /dev/null; then
+        echo "  Reinstalling with UV (fast)..."
+        uv pip install -e "$source_dir" --python "$venv_dir/bin/python" > /dev/null 2>&1
+    else
+        source "$venv_dir/bin/activate"
+        pip install -e "$source_dir" > /dev/null 2>&1
+    fi
 
     echo -e "${GREEN}✓ mneme updated!${NC}"
     "$venv_dir/bin/mneme" --version 2>/dev/null || echo "  (version command not available)"
@@ -334,6 +372,13 @@ show_help() {
         echo "  ${GREEN}✓${NC} Bundled source available at $BUNDLED_SOURCE"
     else
         echo "  • No bundled source - will clone from $MNEME_REPO"
+    fi
+    echo ""
+    echo "Performance:"
+    if find_uv &> /dev/null; then
+        echo "  ${GREEN}✓${NC} UV detected (fast installation mode enabled)"
+    else
+        echo "  • Install UV for faster installation: curl -LsSf https://astral.sh/uv/install.sh | sh"
     fi
     echo ""
     echo "Auto-Update:"
