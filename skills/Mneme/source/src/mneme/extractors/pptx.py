@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 import logging
+import zipfile
+import xml.etree.ElementTree as ET
 
 from .base import Extracted
 
@@ -39,6 +41,83 @@ class PptxExtractor:
                 # Shape type not recognized or no shapes attribute
                 pass
 
+    def _extract_smartart_text(self, path: Path) -> dict[int, list[str]]:
+        """Extract text from SmartArt diagrams in PPTX.
+
+        SmartArt diagrams are stored as graphicFrame elements with text data
+        in separate /ppt/diagrams/data*.xml files. This method:
+        1. Reads slide relationship files to find diagram references
+        2. Extracts text from diagram data XML files
+        3. Returns a mapping of {slide_number: [diagram_texts]}
+        """
+        smartart_by_slide: dict[int, list[str]] = {}
+
+        try:
+            with zipfile.ZipFile(path, 'r') as zf:
+                # Namespace for DrawingML
+                ns = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
+
+                # Get list of all diagram data files
+                diagram_files = [name for name in zf.namelist() if name.startswith('ppt/diagrams/data') and name.endswith('.xml')]
+
+                # Build a mapping of diagram ID to text content
+                diagram_texts: dict[str, list[str]] = {}
+                for diagram_file in diagram_files:
+                    try:
+                        xml_content = zf.read(diagram_file)
+                        root = ET.fromstring(xml_content)
+
+                        # Extract all text elements
+                        texts = []
+                        for t_elem in root.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t'):
+                            if t_elem.text:
+                                text = t_elem.text.strip()
+                                # Filter out placeholder text and empty strings
+                                if text and not text.startswith('[') and len(text) > 1:
+                                    texts.append(text)
+
+                        if texts:
+                            # Use filename as key (e.g., "data1.xml")
+                            diagram_id = diagram_file.split('/')[-1]
+                            diagram_texts[diagram_id] = texts
+
+                    except Exception as e:
+                        logger.warning(f"Failed to parse diagram {diagram_file}: {e}")
+                        continue
+
+                # Now map diagrams to slides via relationship files
+                slide_rel_files = [name for name in zf.namelist() if name.startswith('ppt/slides/_rels/slide') and name.endswith('.xml.rels')]
+
+                for rel_file in slide_rel_files:
+                    try:
+                        # Extract slide number from filename (e.g., "ppt/slides/_rels/slide2.xml.rels" -> 2)
+                        filename = rel_file.split('/')[-1]  # Get "slide2.xml.rels"
+                        slide_num = int(filename.replace('slide', '').replace('.xml.rels', ''))
+
+                        # Parse relationships to find diagram references
+                        xml_content = zf.read(rel_file)
+                        root = ET.fromstring(xml_content)
+
+                        # Look for relationships pointing to diagram files
+                        for rel in root.findall('.//{http://schemas.openxmlformats.org/package/2006/relationships}Relationship'):
+                            target = rel.get('Target', '')
+                            if '../diagrams/data' in target:
+                                # Extract diagram filename (e.g., "../diagrams/data1.xml" -> "data1.xml")
+                                diagram_id = target.split('/')[-1]
+                                if diagram_id in diagram_texts:
+                                    if slide_num not in smartart_by_slide:
+                                        smartart_by_slide[slide_num] = []
+                                    smartart_by_slide[slide_num].extend(diagram_texts[diagram_id])
+
+                    except Exception as e:
+                        logger.warning(f"Failed to parse slide relationships {rel_file}: {e}")
+                        continue
+
+        except Exception as e:
+            logger.warning(f"Failed to extract SmartArt text from {path}: {e}")
+
+        return smartart_by_slide
+
     def extract(self, path: Path) -> Extracted:
         """Extract PowerPoint slide text and embedded images.
 
@@ -55,6 +134,9 @@ class PptxExtractor:
         prs = Presentation(str(path))
         slides_out: list[str] = []
         embedded_images: list[dict[str, Any]] = []
+
+        # Extract SmartArt diagram text (stored separately from shapes)
+        smartart_texts = self._extract_smartart_text(path)
 
         for idx, slide in enumerate(prs.slides, start=1):
             parts: list[str] = [f"[[[SLIDE {idx}]]]"]
@@ -78,6 +160,10 @@ class PptxExtractor:
                     pass
                 except Exception as e:
                     logger.warning(f"Failed to extract image from slide {idx}: {e}")
+
+            # Add SmartArt diagram text for this slide
+            if idx in smartart_texts:
+                parts.extend(smartart_texts[idx])
 
             slides_out.append("\n".join(parts))
 
