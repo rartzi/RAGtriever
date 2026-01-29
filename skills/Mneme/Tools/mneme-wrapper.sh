@@ -191,6 +191,7 @@ install_mneme() {
         echo -e "${YELLOW}Retrying with verbose output...${NC}"
         pip install -e "$source_dir"
     }
+    touch "$source_dir/.installed"
     echo -e "  ${GREEN}✓${NC} Dependencies installed"
 
     # Verify installation
@@ -206,6 +207,57 @@ install_mneme() {
         echo -e "${RED}Error:${NC} Installation failed"
         exit 1
     fi
+}
+# Check if auto-update is needed
+check_auto_update() {
+    # Skip if auto-update is disabled
+    if [ "${MNEME_AUTO_UPDATE:-1}" = "0" ]; then
+        return 0
+    fi
+
+    # Only check if bundled source exists
+    if ! has_bundled_source; then
+        return 0
+    fi
+
+    # Only check if installation exists
+    local source_dir="$MNEME_HOME/source"
+    if [ ! -d "$source_dir" ]; then
+        return 0
+    fi
+
+    # Check if bundled source is newer than installed source
+    local marker_file="$source_dir/.installed"
+
+    # If marker doesn't exist, create it (for existing installations)
+    if [ ! -f "$marker_file" ]; then
+        touch "$marker_file"
+    fi
+
+    # Check if any Python file in bundled source is newer than marker
+    local newer_files=$(find "$BUNDLED_SOURCE" -type f \( -name "*.py" -o -name "pyproject.toml" \) -newer "$marker_file" 2>/dev/null | head -1)
+
+    if [ -n "$newer_files" ]; then
+        echo -e "${YELLOW}⟳${NC} Detecting updated source - auto-updating..."
+        update_mneme_silent
+    fi
+}
+
+# Silent update (called by auto-update check)
+update_mneme_silent() {
+    local source_dir="$MNEME_HOME/source"
+    local venv_dir="$MNEME_HOME/venv"
+
+    # Update source
+    rm -rf "$source_dir"
+    cp -r "$BUNDLED_SOURCE" "$source_dir"
+    touch "$source_dir/.installed"
+
+    # Reinstall
+    source "$venv_dir/bin/activate"
+    pip install -e "$source_dir" > /dev/null 2>&1
+
+    echo -e "${GREEN}✓${NC} Updated to latest version"
 }
 
 # Update existing installation
@@ -227,6 +279,7 @@ update_mneme() {
         echo "  Updating from bundled source..."
         rm -rf "$source_dir"
         cp -r "$BUNDLED_SOURCE" "$source_dir"
+        touch "$source_dir/.installed"
         echo -e "  ${GREEN}✓${NC} Source updated (bundled)"
     elif [ -d "$source_dir/.git" ]; then
         cd "$source_dir"
@@ -234,6 +287,7 @@ update_mneme() {
         git checkout "$MNEME_BRANCH"
         git pull origin "$MNEME_BRANCH"
         cd - > /dev/null
+        touch "$source_dir/.installed"
         echo -e "  ${GREEN}✓${NC} Source updated (git)"
     else
         echo -e "${YELLOW}Warning:${NC} Cannot update - no git repo and no bundled source"
@@ -282,9 +336,14 @@ show_help() {
         echo "  • No bundled source - will clone from $MNEME_REPO"
     fi
     echo ""
+    echo "Auto-Update:"
+    echo "  Automatically updates when bundled source changes"
+    echo "  Set MNEME_AUTO_UPDATE=0 to disable auto-updates"
+    echo ""
     echo "Environment:"
     echo "  MNEME_HOME=$MNEME_HOME"
     echo "  MNEME_PROJECT_LOCAL=${MNEME_PROJECT_LOCAL:-0}"
+    echo "  MNEME_AUTO_UPDATE=${MNEME_AUTO_UPDATE:-1}"
     echo "  MNEME_REPO=$MNEME_REPO"
     echo "  MNEME_BRANCH=$MNEME_BRANCH"
 }
@@ -368,6 +427,9 @@ mneme_path=$(find_mneme) || {
         mneme_path="./.mneme/venv/bin/mneme"
     fi
 }
+
+# Check for auto-update before running
+check_auto_update
 
 # Run mneme
 exec "$mneme_path" "$@"
