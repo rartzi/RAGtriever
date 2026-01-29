@@ -78,6 +78,28 @@ pytest
 
 ---
 
+## Updating
+
+**Mneme automatically updates when skill source changes!** No manual action needed.
+
+When you pull skill updates (via `git pull` if symlinked, or re-download if copied), the next mneme command will auto-detect the changes and update the runtime installation transparently.
+
+```bash
+# Update skill source (if symlinked)
+cd ~/RAGtriever && git pull
+
+# Or re-download (if copied)
+curl -L https://github.com/rartzi/RAGtriever/releases/latest/download/mneme-skill.zip -o mneme-skill.zip
+unzip -o mneme-skill.zip -d ~/.claude/skills/
+
+# Next mneme command auto-updates!
+# You'll see: ⟳ Detecting updated source - auto-updating...
+```
+
+To disable auto-updates: `export MNEME_AUTO_UPDATE=0`
+
+---
+
 ## Usage
 
 ### With Claude Code (Natural Language)

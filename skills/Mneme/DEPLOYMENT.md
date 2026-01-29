@@ -246,7 +246,26 @@ Once deployed, just talk naturally:
 
 ## Updating
 
-### Update Mneme
+### Automatic Updates (Default)
+
+**Mneme automatically updates when skill source changes!** No manual action needed.
+
+When you run any mneme command, the wrapper checks if the bundled source in your skill directory is newer than the installed version. If so, it auto-updates transparently before running your command.
+
+**How it works:**
+1. Updates skill: `cd ~/RAGtriever && git pull` (if symlinked) or re-download (if copied)
+2. Next mneme command auto-detects changes and updates runtime installation
+3. See message: `⟳ Detecting updated source - auto-updating...`
+4. Takes 1-2 seconds, happens once per update
+
+**To disable auto-updates:**
+```bash
+export MNEME_AUTO_UPDATE=0  # Add to ~/.bashrc or ~/.zshrc
+```
+
+### Manual Update
+
+If you disabled auto-updates or want to force an update:
 
 ```bash
 # From bundled source (re-copies from skill)
@@ -257,7 +276,7 @@ cd ~/.mneme/source && git pull origin main
 ~/.mneme/venv/bin/pip install -e .
 ```
 
-### Update Skill
+### Update Skill Source
 
 ```bash
 # If symlinked - update the source repo
