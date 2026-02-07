@@ -88,7 +88,7 @@ class Retriever:
                     model_name=self.cfg.rerank_model,
                     device=self.cfg.rerank_device
                 )
-                logging.getLogger(__name__).info(f"Reranker initialized: {self.cfg.rerank_model}")
+                logging.getLogger(__name__).info(f"Reranker enabled (lazy): {self.cfg.rerank_model}")
 
     def search(self, query: str, k: int | None = None, filters: dict[str, Any] | None = None) -> list[SearchResult]:
         k = k or self.cfg.top_k
@@ -104,10 +104,11 @@ class Retriever:
         # Apply boosts (backlinks, recency, headings, tags)
         if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
             or self.cfg.heading_boost_enabled or self.cfg.tag_boost_enabled):
-            # Fetch backlink counts if needed
+            # Fetch backlink counts only for result doc_ids (not all docs)
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
-                backlink_counts = self.store.get_backlink_counts()
+                result_doc_ids = list({r.source_ref.rel_path for r in merged})
+                backlink_counts = self.store.get_backlink_counts(doc_ids=result_doc_ids)
             merged = self.boost_adjuster.apply_boosts(
                 merged, backlink_counts=backlink_counts, query=query
             )
@@ -263,10 +264,11 @@ class MultiVaultRetriever:
         # Apply boosts (backlinks, recency, headings, tags)
         if (self.cfg.backlink_boost_enabled or self.cfg.recency_boost_enabled
             or self.cfg.heading_boost_enabled or self.cfg.tag_boost_enabled):
-            # Fetch backlink counts if needed
+            # Fetch backlink counts only for result doc_ids (not all docs)
             backlink_counts = None
             if self.cfg.backlink_boost_enabled:
-                backlink_counts = self.store.get_backlink_counts()
+                result_doc_ids = list({r.source_ref.rel_path for r in merged})
+                backlink_counts = self.store.get_backlink_counts(doc_ids=result_doc_ids)
             merged = self.boost_adjuster.apply_boosts(
                 merged, backlink_counts=backlink_counts, query=query
             )

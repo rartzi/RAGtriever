@@ -735,6 +735,9 @@ class Indexer:
         all_texts: list[str] = []
         all_chunk_ids: list[str] = []
 
+        # Deduplicate chunks by chunk_id (last writer wins)
+        chunk_map: dict[str, tuple[Chunk, str]] = {}
+
         for result in results:
             doc = Document(
                 doc_id=result.doc_id,
@@ -760,9 +763,12 @@ class Indexer:
                     text_hash=chunk_data.text_hash,
                     metadata=chunk_data.metadata,
                 )
-                all_chunks.append(chunk)
-                all_texts.append(chunk_data.text)
-                all_chunk_ids.append(chunk_data.chunk_id)
+                chunk_map[chunk_data.chunk_id] = (chunk, chunk_data.text)
+
+        for chunk, text in chunk_map.values():
+            all_chunks.append(chunk)
+            all_texts.append(text)
+            all_chunk_ids.append(chunk.chunk_id)
 
         # Batch write documents
         for doc in all_docs:
@@ -809,6 +815,10 @@ class Indexer:
         all_texts: list[str] = []
         all_chunk_ids: list[str] = []
 
+        # Use dict to deduplicate chunks by chunk_id (last writer wins,
+        # matching ON CONFLICT behavior but avoiding wasted embeddings)
+        chunk_map: dict[str, tuple[Chunk, str]] = {}
+
         for result in results:
             doc = Document(
                 doc_id=result.doc_id,
@@ -834,9 +844,13 @@ class Indexer:
                     text_hash=chunk_data.text_hash,
                     metadata=chunk_data.metadata,
                 )
-                all_chunks.append(chunk)
-                all_texts.append(chunk_data.text)
-                all_chunk_ids.append(chunk_data.chunk_id)
+                chunk_map[chunk_data.chunk_id] = (chunk, chunk_data.text)
+
+        # Build deduplicated lists (preserves insertion order in Python 3.7+)
+        for chunk, text in chunk_map.values():
+            all_chunks.append(chunk)
+            all_texts.append(text)
+            all_chunk_ids.append(chunk.chunk_id)
 
         # Compute embeddings OUTSIDE transaction (CPU-bound, no DB lock)
         all_vectors: list[tuple[list[str], np.ndarray]] = []

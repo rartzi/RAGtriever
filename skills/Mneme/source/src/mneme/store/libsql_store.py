@@ -511,6 +511,11 @@ class LibSqlStore:
             where += " AND f.vault_id=?"
             params.append(vault_id)
 
+        # Push path_prefix filter to SQL for efficiency
+        if path_prefix:
+            where += " AND f.rel_path LIKE ?"
+            params.append(f"{path_prefix}%")
+
         # Join with chunks table to get full metadata
         sql = f"""
         SELECT f.chunk_id, bm25(fts_chunks) AS rank, f.rel_path, f.text, f.vault_id, c.metadata_json
@@ -530,8 +535,6 @@ class LibSqlStore:
             # Parse full metadata from chunks table
             meta = json.loads(r["metadata_json"] or "{}")
             rel = meta.get("rel_path", r["rel_path"] or "")
-            if path_prefix and not rel.startswith(path_prefix):
-                continue
             snippet = (r["text"] or "")[:600]
             row_vault_id = r["vault_id"] if "vault_id" in r.keys() else (vault_id or "")
             sr = SourceRef(
@@ -747,25 +750,34 @@ class LibSqlStore:
         """Get count of incoming links (backlinks) for documents.
 
         Args:
-            doc_ids: Optional list of doc_ids to filter. If None, returns all.
+            doc_ids: Optional list of doc_ids (rel_paths) to filter.
+                     If provided, filters in SQL for efficiency.
+                     If None, returns all.
 
         Returns:
             Dict mapping doc_id -> number of documents linking to it
         """
-        # Query the links table - group by target, count distinct sources
-        # The 'dst_target' column stores the wikilink target (rel_path typically)
-        # Need to join with documents to get doc_id
-        query = """
-            SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
-            FROM links l
-            JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
-            WHERE d.deleted = 0
-            GROUP BY d.doc_id
-        """
-
-        cursor = self._get_conn().execute(query)
-        result = {row["doc_id"]: row["backlink_count"] for row in cursor.fetchall()}
+        params: list[Any] = []
 
         if doc_ids:
-            return {k: v for k, v in result.items() if k in doc_ids}
-        return result
+            # Filter in SQL to avoid scanning all links
+            placeholders = ",".join("?" * len(doc_ids))
+            query = f"""
+                SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
+                FROM links l
+                JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
+                WHERE d.deleted = 0 AND d.rel_path IN ({placeholders})
+                GROUP BY d.doc_id
+            """
+            params = list(doc_ids)
+        else:
+            query = """
+                SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
+                FROM links l
+                JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
+                WHERE d.deleted = 0
+                GROUP BY d.doc_id
+            """
+
+        cursor = self._get_conn().execute(query, params)
+        return {row["doc_id"]: row["backlink_count"] for row in cursor.fetchall()}

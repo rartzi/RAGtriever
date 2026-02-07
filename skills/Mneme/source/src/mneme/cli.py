@@ -297,6 +297,8 @@ def _setup_logging(log_file: str | None, log_level: str, verbose: bool) -> None:
     # Configure root logger for mneme
     logger = logging.getLogger("mneme")
     logger.setLevel(level)
+    # Clear existing handlers to prevent duplicate output on repeated calls
+    logger.handlers.clear()
     for h in handlers:
         logger.addHandler(h)
 

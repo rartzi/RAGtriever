@@ -112,7 +112,9 @@ cmd_start() {
     export TRANSFORMERS_OFFLINE=1
 
     # Start watcher in background
-    nohup "$MNEME_CMD" watch --config "$CONFIG_FILE" --log-file "$WATCH_LOG" >> "$WATCH_LOG" 2>&1 &
+    # Note: --log-file handles file logging; redirect stdout/stderr to /dev/null
+    # to avoid duplicate lines (console handler + shell redirect to same file)
+    nohup "$MNEME_CMD" watch --config "$CONFIG_FILE" --log-file "$WATCH_LOG" > /dev/null 2>&1 &
     echo $! > "$PID_FILE"
 
     # Wait for startup

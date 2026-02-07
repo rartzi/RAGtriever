@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mneme"
-version = "3.0.0"
+version = "3.3.0"
 description = "Memory for your Second Brain — local-first vault indexer + hybrid retrieval with MCP interface."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+faiss = [
+  "faiss-cpu>=1.7.4,<2.0",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.5.0",
