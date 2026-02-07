@@ -91,7 +91,8 @@ Or via Claude Code: "Run a full scan of my vault"
 ├── source/                      # Bundled source (~776KB)
 │   ├── pyproject.toml
 │   └── src/mneme/
-└── ...context files
+├── docs/                       # Documentation
+└── examples/                   # Example configs
 
 ~/.mneme/                        # Mneme installation (shared)
 ├── venv/bin/mneme              # The CLI

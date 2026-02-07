@@ -16,6 +16,7 @@ Comprehensive guide for using Mneme — Memory for your Second Brain.
   - [query](#query-command)
   - [mcp](#mcp-command)
 - [Watcher Management](#watcher-management)
+  - [Query Server](#query-server)
 - [MCP Server Integration](#mcp-server-integration)
 - [Claude Code Skill](#claude-code-skill)
 - [Troubleshooting](#troubleshooting)
@@ -28,6 +29,9 @@ Comprehensive guide for using Mneme — Memory for your Second Brain.
 # 1. Install
 pip install -e .
 
+# Optional: FAISS support for large vaults (>10K chunks)
+pip install -e ".[faiss]"
+
 # 2. Create config
 mneme init --vault "/path/to/vault" --index "~/.mneme/indexes/myvault"
 
@@ -37,7 +41,7 @@ mneme scan --full
 # 4. Search
 mneme query "your search term"
 
-# 5. Watch for changes (optional)
+# 5. Watch for changes + query server (optional)
 mneme watch
 ```
 
@@ -161,6 +165,34 @@ key = "your-api-key"
 model = "gemini-2.5-flash"
 ```
 
+### Retrieval Configuration
+
+```toml
+[retrieval]
+top_k = 10                   # Default results per query
+k_vec = 20                   # Candidates from vector search
+k_lex = 20                   # Candidates from lexical search
+fusion_algorithm = "rrf"     # "rrf" (recommended) or "weighted"
+rrf_k = 60                   # RRF constant (higher = more weight to lower-ranked)
+
+# Cross-encoder reranking (20-30% quality improvement, +100-200ms)
+use_rerank = false
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_device = "cpu"        # cpu | cuda | mps
+
+# FAISS vector index (for vaults with >10K chunks)
+use_faiss = false            # pip install mneme[faiss] required
+
+# Boosts (all enabled by default)
+backlink_boost_enabled = true
+backlink_boost_weight = 0.1  # +10% per backlink
+backlink_boost_cap = 2.0     # Max 2x boost
+recency_boost_enabled = true
+recency_fresh_days = 14      # +10% for files < 14 days old
+recency_recent_days = 60     # +5% for files < 60 days old
+recency_old_days = 180       # -2% for files > 180 days old
+```
+
 ### Logging Configuration
 
 ```toml
@@ -204,10 +236,10 @@ mneme scan --full --log-file logs/scan.log --verbose
 
 ### watch Command
 
-Continuously monitor vault for changes.
+Continuously monitor vault for changes. The watcher also starts a built-in **query server** that provides ~0.1s query response times (vs ~5s cold-start).
 
 ```bash
-# Start watcher
+# Start watcher (includes query server)
 mneme watch
 
 # With custom config
@@ -220,19 +252,24 @@ mneme watch --log-file logs/watch.log --verbose
 mneme watch --batch-size 20 --batch-timeout 10
 ```
 
+When the watcher is running, `mneme query` automatically routes through the query server via unix socket for fast responses. Use `--no-socket` to bypass:
+
 ### query Command
 
-Search your indexed vault.
+Search your indexed vault. When the watcher is running, queries automatically route through its built-in query server (~0.1s vs ~5s cold-start).
 
 ```bash
-# Basic search
+# Basic search (auto-routes through watcher socket if available)
 mneme query "search term"
 
 # More results
 mneme query "kubernetes deployment" --k 20
 
-# With reranking (better quality)
+# With reranking (better quality, +100-200ms)
 mneme query "machine learning" --rerank
+
+# Force cold-start (bypass watcher socket)
+mneme query "search term" --no-socket
 
 # JSON output
 mneme query "project status" --json
@@ -296,12 +333,32 @@ pkill -f "mneme watch"
 tail -f logs/watch_$(date +%Y%m%d).log
 ```
 
+### Query Server
+
+The watcher includes a built-in query server that dramatically improves query latency:
+
+| Mode | Latency | How |
+|------|---------|-----|
+| **Cold-start** | ~3-5s | Python startup + model loading |
+| **Query server** | ~0.1-0.3s | Pre-loaded models via unix socket |
+
+The query server starts automatically with the watcher. The `mneme query` CLI transparently routes through the socket when available and falls back to cold-start when the watcher is not running.
+
+```bash
+# Check if query server is active
+~/.claude/skills/Mneme/Tools/manage-watcher.sh health
+
+# Force cold-start (bypass socket)
+mneme query "search term" --no-socket
+```
+
 ### What the Watcher Handles
 
 - Individual file changes (create, modify, delete, move)
 - Directory operations (delete/move entire folders)
 - Batched processing for efficiency
 - Automatic index updates
+- Built-in query server for fast CLI queries
 
 ---
 
@@ -493,8 +550,12 @@ sqlite3 ~/.mneme/indexes/myvault/vaultrag.sqlite \
 ### Scan Output
 
 ```
-Scan complete: 135 files, 963 chunks in 133.0s
-  (3 deleted files removed from index)
+Scan complete: 149 files, 3106 chunks in 182.3s
+  (7 images analyzed, 0 deleted files removed from index)
+
+# Incremental scan (manifest-based skip)
+Scan complete: 0 files, 0 chunks in 0.0s
+  (149 files skipped unchanged)
 ```
 
 ### Log Messages

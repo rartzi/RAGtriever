@@ -77,6 +77,67 @@ enable_watch_logging = true                 # Auto-enable for watch (true = alwa
 
 **Priority:** CLI flags > config settings > no logging
 
+## Retrieval Configuration
+
+### Cross-Encoder Reranking
+
+Adds a second-pass cross-encoder model that reads query+document together for 20-30% quality improvement at +100-200ms latency. The reranker loads lazily on first query to avoid startup cost.
+
+```toml
+[retrieval]
+use_rerank = false                                    # Enable reranking
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2" # HuggingFace model
+rerank_device = "cpu"                                 # cpu | cuda | mps
+```
+
+Enable via config or per-query with `mneme query "term" --rerank`.
+
+### FAISS Vector Index
+
+For vaults with >10K chunks, FAISS provides faster approximate nearest neighbor search:
+
+```toml
+[retrieval]
+use_faiss = true    # Requires: pip install mneme[faiss]
+```
+
+Mneme auto-warns when chunk count exceeds 10K without FAISS enabled.
+
+### Boost Configuration
+
+Boosts adjust scores based on document signals:
+
+```toml
+[retrieval]
+# Backlink boost (hub documents rank higher)
+backlink_boost_enabled = true
+backlink_boost_weight = 0.1    # +10% per incoming backlink
+backlink_boost_cap = 2.0       # Maximum 2x multiplier
+
+# Recency boost (fresh content ranks higher)
+recency_boost_enabled = true
+recency_fresh_days = 14        # +10% for files < 14 days old
+recency_recent_days = 60       # +5% for files < 60 days old
+recency_old_days = 180         # -2% for files > 180 days old
+
+# Heading boost (matches in headings rank higher)
+heading_boost_enabled = true
+
+# Tag boost (matches in tagged content rank higher)
+tag_boost_enabled = true
+```
+
+### Fusion Algorithm
+
+```toml
+[retrieval]
+fusion_algorithm = "rrf"   # "rrf" (recommended) or "weighted"
+rrf_k = 60                 # RRF constant (higher = more weight to lower-ranked)
+top_k = 10                 # Default results per query
+k_vec = 20                 # Vector search candidates
+k_lex = 20                 # Lexical search candidates
+```
+
 ## Parallel Scanning Configuration
 
 Parallel scanning is enabled by default. Configure in `config.toml`:

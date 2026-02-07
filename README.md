@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-3.3.0-blue.svg" alt="Version 3.3.0"/>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"/>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"/>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform"/>
@@ -28,13 +29,27 @@ Mneme is a **Claude Code skill** that indexes your Obsidian-compatible vault int
 
 ## Features
 
-- **Hybrid Retrieval** - Combines vector embeddings with full-text search
-- **RRF Fusion** - Reciprocal Rank Fusion for robust result merging
+### Retrieval
+- **Hybrid Retrieval** - Combines vector embeddings with full-text search (FTS5)
+- **RRF Fusion** - Reciprocal Rank Fusion (k=60) for robust result merging
+- **Cross-Encoder Reranking** - Optional second-pass reranking for 20-30% quality improvement
 - **Backlink & Recency Boost** - Hub documents and fresh content rank higher
-- **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
+- **Heading & Tag Boost** - Matches in headings or tagged content score higher
+- **MMR Diversity** - Maximal Marginal Relevance prevents duplicate-heavy results
+
+### Indexing
+- **Parallel Scanning** - Multi-threaded extraction and embedding (8 workers default)
+- **Manifest-Based Incremental** - Near-instant re-scans by skipping unchanged files
+- **Chunk Deduplication** - Eliminates duplicate embeddings, saves compute
+- **FAISS Support** - Optional FAISS index for vaults with >10K chunks
 - **Multi-Format Support** - Markdown, PDF, PPTX, XLSX, and images
 - **AI Image Analysis** - Tesseract OCR, Gemini Vision, or Vertex AI
+
+### Platform
+- **Query Server** - Watcher includes built-in query server (~0.1s vs ~5s cold-start)
 - **Watch Mode** - Continuously index changes as you edit
+- **Thread-Safe Storage** - Concurrent access with proper locking and transactions
+- **Obsidian-Aware** - Understands YAML frontmatter, `[[wikilinks]]`, `![[embeds]]`, and `#tags`
 - **Self-Contained Skill** - Auto-installs, works offline after setup
 - **100% Local** - Your data never leaves your machine
 
@@ -71,6 +86,9 @@ source .venv/bin/activate
 
 # Install
 pip install -e ".[dev]"
+
+# Optional: FAISS support for large vaults
+pip install -e ".[faiss]"
 
 # Run tests
 pytest
@@ -147,11 +165,15 @@ dir = "~/.mneme/indexes/myvault"
 [embeddings]
 provider = "sentence_transformers"
 model = "BAAI/bge-small-en-v1.5"
-device = "cpu"
+device = "cpu"               # cpu | cuda | mps (Apple Silicon)
 offline_mode = true
 
 [image_analysis]
-provider = "tesseract"  # or "gemini", "off"
+provider = "tesseract"       # or "gemini", "gemini-service-account", "off"
+
+[retrieval]
+use_rerank = false           # Enable cross-encoder reranking (+100-200ms, +20-30% quality)
+use_faiss = false            # Enable FAISS for large vaults (>10K chunks)
 ```
 
 See [examples/config.toml.example](skills/Mneme/examples/config.toml.example) for full options.

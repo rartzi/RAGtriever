@@ -116,26 +116,37 @@ mneme scan --config config.toml --full \
 
 ## Querying
 
+When the watcher is running, queries automatically route through its built-in query server (~0.1s vs ~5s cold-start).
+
 ```bash
-# Basic search (hybrid: semantic + lexical)
+# Basic search (hybrid: semantic + lexical, auto-routes via watcher socket)
 mneme query "search term" --k 10
 
 # More results
 mneme query "kubernetes deployment" --k 20
 
+# With cross-encoder reranking (+20-30% quality, +100-200ms)
+mneme query "machine learning" --rerank
+
+# Force cold-start (bypass watcher query server)
+mneme query "search term" --no-socket
+
 # With config file
 mneme query --config config.toml "search term" --k 10
+
+# JSON output
+mneme query "project status" --json
 ```
 
 ## Watcher Management
 
-**Use the portable management script:**
+The watcher monitors vault changes and includes a **built-in query server** that provides ~0.1s query latency (vs ~5s cold-start). Use the portable management script:
 
 ```bash
 # Check status
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh status
 
-# Start watcher (auto-installs mneme, creates logs)
+# Start watcher + query server (auto-installs mneme, creates logs)
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh start
 
 # Stop watcher
@@ -144,7 +155,7 @@ mneme query --config config.toml "search term" --k 10
 # Restart watcher
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh restart
 
-# Health check
+# Health check (verifies watcher + query server socket)
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh health
 ```
 
@@ -213,7 +224,8 @@ mneme scan --config config.toml --log-file logs/scan_$(date +%Y%m%d_%H%M%S).log
 ### Scan Mode
 **Console output:**
 ```
-Scan complete: 135 files, 963 chunks in 133.0s
+Scan complete: 149 files, 3106 chunks in 182.3s
+  (7 images analyzed, 149 files skipped unchanged)
 ```
 
 **Log file:**
@@ -249,7 +261,7 @@ grep -c '\[watch\] Indexed:' logs/watch_*.log
 ### Check Status
 ```bash
 mneme status
-# Output: Indexed files: 135, Indexed chunks: 963
+# Output: Indexed files: 149, Indexed chunks: 3106
 ```
 
 ## Database Queries
