@@ -264,9 +264,12 @@ def _setup_logging(log_file: str | None, log_level: str, verbose: bool) -> None:
     console.setFormatter(logging.Formatter(fmt, datefmt))
     handlers.append(console)
 
-    # Add file handler if specified
+    # Add rotating file handler if specified
     if log_file:
-        file_handler = logging.FileHandler(log_file)
+        from logging.handlers import RotatingFileHandler
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+        )
         file_handler.setFormatter(logging.Formatter(fmt, datefmt))
         handlers.append(file_handler)
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
+import threading
 from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Sequence, Optional
@@ -9,6 +11,9 @@ import numpy as np
 
 from ..models import Document, Chunk, SearchResult, SourceRef, OpenResult
 from .faiss_index import FAISSIndex, FAISS_AVAILABLE
+from .schema_manager import SchemaManager
+
+logger = logging.getLogger(__name__)
 
 
 def _escape_fts5_query(query: str) -> str:
@@ -141,9 +146,12 @@ class LibSqlStore:
     ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # check_same_thread=False enables use from watch mode threads
-        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+
+        # Thread-local storage for per-thread connections
+        self._local = threading.local()
+        # Track all connections for cleanup
+        self._connections: list[sqlite3.Connection] = []
+        self._conn_lock = threading.Lock()
 
         # FAISS setup
         self.use_faiss = use_faiss
@@ -151,6 +159,7 @@ class LibSqlStore:
         self.faiss_index_type = faiss_index_type
         self.faiss_nlist = faiss_nlist
         self.faiss_nprobe = faiss_nprobe
+        self._faiss_lock = threading.Lock()
 
         if use_faiss:
             if not FAISS_AVAILABLE:
@@ -158,12 +167,51 @@ class LibSqlStore:
                     "FAISS requested but not installed. Install with: pip install faiss-cpu or pip install faiss-gpu"
                 )
 
-            # FAISS index will be initialized lazily after tables exist
-            # See _initialize_faiss() called from init() or after first embedding
+    def _get_conn(self) -> sqlite3.Connection:
+        """Get a thread-local SQLite connection.
+
+        Each thread gets its own connection with WAL mode and busy timeout.
+        Connections are tracked for cleanup via close().
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            self._local.conn = conn
+            with self._conn_lock:
+                self._connections.append(conn)
+        return conn
+
+    def close(self) -> None:
+        """Close all thread-local connections."""
+        with self._conn_lock:
+            for conn in self._connections:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self._connections.clear()
+
+    def begin_transaction(self) -> None:
+        """Begin an explicit transaction on the current thread's connection."""
+        self._get_conn().execute("BEGIN IMMEDIATE")
+
+    def commit_transaction(self) -> None:
+        """Commit the current transaction."""
+        self._get_conn().commit()
+
+    def rollback_transaction(self) -> None:
+        """Rollback the current transaction."""
+        self._get_conn().rollback()
 
     def init(self) -> None:
-        self._conn.executescript(SCHEMA_SQL)
-        self._conn.commit()
+        self._get_conn().executescript(SCHEMA_SQL)
+        self._get_conn().commit()
+
+        # Run schema migrations
+        SchemaManager(self._get_conn()).ensure_current()
 
         # Initialize FAISS index if enabled
         if self.use_faiss:
@@ -171,44 +219,48 @@ class LibSqlStore:
 
     def _initialize_faiss(self) -> None:
         """Initialize FAISS index from existing embeddings (if any)."""
-        if not self.use_faiss or self.faiss_index is not None:
-            return
+        with self._faiss_lock:
+            if not self.use_faiss or self.faiss_index is not None:
+                return
 
-        # Check if we have any embeddings to determine dimensions
-        cursor = self._conn.execute("SELECT dims FROM embeddings LIMIT 1")
-        row = cursor.fetchone()
-        if row:
-            embedding_dim = row["dims"]
-            self.faiss_index = FAISSIndex(
-                embedding_dim=embedding_dim,
-                index_type=self.faiss_index_type,
-                nlist=self.faiss_nlist,
-                nprobe=self.faiss_nprobe,
-                metric="cosine",
-            )
+            # Check if we have any embeddings to determine dimensions
+            cursor = self._get_conn().execute("SELECT dims FROM embeddings LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                embedding_dim = row["dims"]
+                self.faiss_index = FAISSIndex(
+                    embedding_dim=embedding_dim,
+                    index_type=self.faiss_index_type,
+                    nlist=self.faiss_nlist,
+                    nprobe=self.faiss_nprobe,
+                    metric="cosine",
+                )
 
-            # Try to load existing FAISS index
-            faiss_path = self.db_path.parent / "faiss"
-            if (faiss_path / "faiss.index").exists():
-                try:
-                    self.faiss_index.load(faiss_path)
-                    print(f"Loaded FAISS index with {self.faiss_index.size()} vectors")
-                except Exception as e:
-                    print(f"Warning: Failed to load FAISS index: {e}")
-                    print("Building new FAISS index from embeddings...")
-                    self._build_faiss_index()
-            else:
-                # Build index from existing embeddings
-                print("Building FAISS index from embeddings...")
-                self._build_faiss_index()
+                # Try to load existing FAISS index
+                faiss_path = self.db_path.parent / "faiss"
+                if (faiss_path / "faiss.index").exists():
+                    try:
+                        self.faiss_index.load(faiss_path)
+                        logger.info(f"Loaded FAISS index with {self.faiss_index.size()} vectors")
+                    except Exception as e:
+                        logger.warning(f"Failed to load FAISS index: {e}")
+                        logger.info("Building new FAISS index from embeddings...")
+                        self._build_faiss_index_locked()
+                else:
+                    # Build index from existing embeddings
+                    logger.info("Building FAISS index from embeddings...")
+                    self._build_faiss_index_locked()
 
-    def _build_faiss_index(self) -> None:
-        """Build FAISS index from all embeddings in database."""
+    def _build_faiss_index_locked(self) -> None:
+        """Build FAISS index from all embeddings in database.
+
+        Must be called while holding self._faiss_lock.
+        """
         if not self.faiss_index:
             return
 
-        print("Loading embeddings from database...")
-        cursor = self._conn.execute("""
+        logger.info("Loading embeddings from database...")
+        cursor = self._get_conn().execute("""
             SELECT chunk_id, vector
             FROM embeddings
         """)
@@ -221,20 +273,20 @@ class LibSqlStore:
             vectors.append(_blob_to_vec(row["vector"]))
 
         if not vectors:
-            print("No embeddings found in database")
+            logger.info("No embeddings found in database")
             return
 
         vectors_array = np.vstack(vectors)
-        print(f"Adding {len(vectors)} vectors to FAISS index...")
+        logger.info(f"Adding {len(vectors)} vectors to FAISS index...")
         self.faiss_index.add(chunk_ids, vectors_array)
 
         # Save index
         faiss_path = self.db_path.parent / "faiss"
         self.faiss_index.save(faiss_path)
-        print(f"FAISS index saved to {faiss_path}")
+        logger.info(f"FAISS index saved to {faiss_path}")
 
-    def upsert_document(self, doc: Document) -> None:
-        self._conn.execute(
+    def upsert_document(self, doc: Document, *, _commit: bool = True) -> None:
+        self._get_conn().execute(
             """INSERT INTO documents(doc_id, vault_id, rel_path, file_type, mtime, size, content_hash, extractor_version, deleted, metadata_json)
                VALUES(?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(doc_id) DO UPDATE SET
@@ -244,10 +296,11 @@ class LibSqlStore:
             """,
             (doc.doc_id, doc.vault_id, doc.rel_path, doc.file_type, doc.mtime, doc.size, doc.content_hash, doc.metadata.get("extractor_version","v1"), int(doc.deleted), _json_dumps(doc.metadata or {})),
         )
-        self._conn.commit()
+        if _commit:
+            self._get_conn().commit()
 
-    def upsert_chunks(self, chunks: Sequence[Chunk]) -> None:
-        cur = self._conn.cursor()
+    def upsert_chunks(self, chunks: Sequence[Chunk], *, _commit: bool = True) -> None:
+        cur = self._get_conn().cursor()
         for ch in chunks:
             cur.execute(
                 """INSERT INTO chunks(chunk_id, doc_id, vault_id, anchor_type, anchor_ref, text, text_hash, metadata_json)
@@ -263,31 +316,32 @@ class LibSqlStore:
             cur.execute("DELETE FROM fts_chunks WHERE chunk_id = ?", (ch.chunk_id,))
             cur.execute("INSERT INTO fts_chunks(chunk_id, vault_id, rel_path, text) VALUES(?,?,?,?)",
                         (ch.chunk_id, ch.vault_id, ch.metadata.get("rel_path",""), ch.text))
-        self._conn.commit()
+        if _commit:
+            self._get_conn().commit()
 
     def delete_document(self, vault_id: str, rel_path: str) -> None:
         # Find doc_id
-        row = self._conn.execute("SELECT doc_id FROM documents WHERE vault_id=? AND rel_path=? AND deleted=0", (vault_id, rel_path)).fetchone()
+        row = self._get_conn().execute("SELECT doc_id FROM documents WHERE vault_id=? AND rel_path=? AND deleted=0", (vault_id, rel_path)).fetchone()
         if not row:
             return
         doc_id = row["doc_id"]
         # Delete chunks and embeddings and fts
-        chunk_rows = self._conn.execute("SELECT chunk_id FROM chunks WHERE doc_id=?", (doc_id,)).fetchall()
+        chunk_rows = self._get_conn().execute("SELECT chunk_id FROM chunks WHERE doc_id=?", (doc_id,)).fetchall()
         for r in chunk_rows:
             cid = r["chunk_id"]
-            self._conn.execute("DELETE FROM embeddings WHERE chunk_id=?", (cid,))
-            self._conn.execute("DELETE FROM fts_chunks WHERE chunk_id=?", (cid,))
-        self._conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
-        self._conn.execute("UPDATE documents SET deleted=1 WHERE doc_id=?", (doc_id,))
+            self._get_conn().execute("DELETE FROM embeddings WHERE chunk_id=?", (cid,))
+            self._get_conn().execute("DELETE FROM fts_chunks WHERE chunk_id=?", (cid,))
+        self._get_conn().execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
+        self._get_conn().execute("UPDATE documents SET deleted=1 WHERE doc_id=?", (doc_id,))
         # Clean up links table (outgoing links from this file)
-        self._conn.execute("DELETE FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path))
+        self._get_conn().execute("DELETE FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path))
         # Clean up manifest table
-        self._conn.execute("DELETE FROM manifest WHERE vault_id=? AND rel_path=?", (vault_id, rel_path))
-        self._conn.commit()
+        self._get_conn().execute("DELETE FROM manifest WHERE vault_id=? AND rel_path=?", (vault_id, rel_path))
+        self._get_conn().commit()
 
     def get_indexed_files(self, vault_id: str) -> set[str]:
         """Get set of rel_paths for all non-deleted documents in vault."""
-        rows = self._conn.execute(
+        rows = self._get_conn().execute(
             "SELECT rel_path FROM documents WHERE vault_id=? AND deleted=0",
             (vault_id,)
         ).fetchall()
@@ -300,7 +354,7 @@ class LibSqlStore:
             Dict mapping rel_path to mtime (unix timestamp) from last index.
             Used by watcher to detect files modified while stopped.
         """
-        rows = self._conn.execute(
+        rows = self._get_conn().execute(
             "SELECT rel_path, mtime FROM manifest WHERE vault_id=?",
             (vault_id,)
         ).fetchall()
@@ -321,14 +375,14 @@ class LibSqlStore:
             path_prefix = path_prefix + "/"
 
         # Query files where rel_path starts with the prefix
-        rows = self._conn.execute(
+        rows = self._get_conn().execute(
             "SELECT rel_path FROM documents WHERE vault_id=? AND deleted=0 AND rel_path LIKE ?",
             (vault_id, f"{path_prefix}%")
         ).fetchall()
         return [row["rel_path"] for row in rows]
 
-    def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
-        cur = self._conn.cursor()
+    def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray, *, _commit: bool = True) -> None:
+        cur = self._get_conn().cursor()
         for cid, vec in zip(chunk_ids, vectors, strict=False):
             blob = _vec_to_blob(vec)
             dims = int(np.asarray(vec).size)
@@ -339,30 +393,58 @@ class LibSqlStore:
                 """,
                 (cid, model_id, dims, blob),
             )
-        self._conn.commit()
+        if _commit:
+            self._get_conn().commit()
 
-        # Initialize FAISS index if needed (on first embeddings)
-        if self.use_faiss and self.faiss_index is None and len(chunk_ids) > 0:
-            # Get embedding dimension from first vector
-            embedding_dim = vectors.shape[1]
-            self.faiss_index = FAISSIndex(
-                embedding_dim=embedding_dim,
-                index_type=self.faiss_index_type,
-                nlist=self.faiss_nlist,
-                nprobe=self.faiss_nprobe,
-                metric="cosine",
-            )
-            print(f"Initialized FAISS {self.faiss_index_type} index (dim={embedding_dim})")
+        # FAISS operations under lock
+        if self.use_faiss and len(chunk_ids) > 0:
+            with self._faiss_lock:
+                # Initialize FAISS index if needed (on first embeddings)
+                if self.faiss_index is None:
+                    embedding_dim = vectors.shape[1]
+                    self.faiss_index = FAISSIndex(
+                        embedding_dim=embedding_dim,
+                        index_type=self.faiss_index_type,
+                        nlist=self.faiss_nlist,
+                        nprobe=self.faiss_nprobe,
+                        metric="cosine",
+                    )
+                    logger.info(f"Initialized FAISS {self.faiss_index_type} index (dim={embedding_dim})")
 
-        # Add to FAISS index if enabled
-        if self.use_faiss and self.faiss_index and len(chunk_ids) > 0:
-            self.faiss_index.add(list(chunk_ids), vectors)
+                # Add to FAISS index
+                if self.faiss_index:
+                    self.faiss_index.add(list(chunk_ids), vectors)
 
-            # Periodically save FAISS index (every 100 vectors)
-            if self.faiss_index.size() % 100 == 0:
-                faiss_path = self.db_path.parent / "faiss"
-                self.faiss_index.save(faiss_path)
-                print(f"FAISS index saved ({self.faiss_index.size()} vectors)")
+                    # Periodically save FAISS index (every 1000 vectors)
+                    if self.faiss_index.size() % 1000 == 0:
+                        faiss_path = self.db_path.parent / "faiss"
+                        self.faiss_index.save(faiss_path)
+                        logger.info(f"FAISS index saved ({self.faiss_index.size()} vectors)")
+
+    def upsert_manifest(
+        self,
+        vault_id: str,
+        rel_path: str,
+        file_hash: str,
+        chunk_count: int,
+        mtime: int = 0,
+        size: int = 0,
+        status: str = "ok",
+    ) -> None:
+        """Write or update a manifest entry for an indexed file.
+
+        Called inside the same transaction as document/chunk writes
+        to ensure atomicity.
+        """
+        self._get_conn().execute(
+            """INSERT INTO manifest (vault_id, rel_path, mtime, size, content_hash, last_indexed_at, last_error)
+               VALUES (?, ?, ?, ?, ?, datetime('now'), ?)
+               ON CONFLICT(vault_id, rel_path) DO UPDATE SET
+                 mtime=excluded.mtime, size=excluded.size, content_hash=excluded.content_hash,
+                 last_indexed_at=excluded.last_indexed_at, last_error=excluded.last_error
+            """,
+            (vault_id, rel_path, mtime, size, file_hash, None if status == "ok" else status),
+        )
 
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         vault_id = filters.get("vault_id")
@@ -392,7 +474,7 @@ class LibSqlStore:
         # Escape special characters in query for FTS5
         escaped_query = _escape_fts5_query(query)
         params2 = params + [escaped_query, k]
-        rows = self._conn.execute(sql, params2).fetchall()
+        rows = self._get_conn().execute(sql, params2).fetchall()
 
         results: list[SearchResult] = []
         for r in rows:
@@ -447,7 +529,8 @@ class LibSqlStore:
         """FAISS-accelerated vector search with multi-vault support."""
         # FAISS search (returns chunk_ids and scores)
         assert self.faiss_index is not None  # Caller ensures this
-        chunk_ids, scores = self.faiss_index.search(query_vec, k * 2)  # Over-fetch for filtering
+        with self._faiss_lock:
+            chunk_ids, scores = self.faiss_index.search(query_vec, k * 2)  # Over-fetch for filtering
 
         if not chunk_ids:
             return []
@@ -470,7 +553,7 @@ class LibSqlStore:
             query_sql += " AND c.vault_id = ?"
             params.append(vault_id)
 
-        rows = self._conn.execute(query_sql, params).fetchall()
+        rows = self._get_conn().execute(query_sql, params).fetchall()
 
         # Build chunk_id to row mapping
         chunk_data = {r["chunk_id"]: r for r in rows}
@@ -534,14 +617,14 @@ class LibSqlStore:
             # Filter by list of vault_ids
             placeholders = ",".join("?" * len(vault_ids))
             sql = base_sql + f" WHERE c.vault_id IN ({placeholders})"
-            rows = self._conn.execute(sql, vault_ids).fetchall()
+            rows = self._get_conn().execute(sql, vault_ids).fetchall()
         elif vault_id:
             # Filter by single vault_id
             sql = base_sql + " WHERE c.vault_id=?"
-            rows = self._conn.execute(sql, (vault_id,)).fetchall()
+            rows = self._get_conn().execute(sql, (vault_id,)).fetchall()
         else:
             # No vault filter - search all
-            rows = self._conn.execute(base_sql).fetchall()
+            rows = self._get_conn().execute(base_sql).fetchall()
 
         scored = []
         for r in rows:
@@ -580,20 +663,20 @@ class LibSqlStore:
     def open(self, source_ref: SourceRef) -> OpenResult:
         # In v1, open by chunk_id stored as anchor_ref or locator. Agent should implement anchor-based open.
         cid = source_ref.anchor_ref
-        row = self._conn.execute("SELECT text, metadata_json FROM chunks WHERE chunk_id=?", (cid,)).fetchone()
+        row = self._get_conn().execute("SELECT text, metadata_json FROM chunks WHERE chunk_id=?", (cid,)).fetchone()
         if not row:
             return OpenResult(content="", source_ref=source_ref, metadata={"error": "not_found"})
         meta = json.loads(row["metadata_json"] or "{}")
         return OpenResult(content=row["text"], source_ref=source_ref, metadata=meta)
 
     def status(self, vault_id: str) -> dict[str, Any]:
-        files = self._conn.execute("SELECT COUNT(*) AS n FROM documents WHERE vault_id=? AND deleted=0", (vault_id,)).fetchone()["n"]
-        chunks = self._conn.execute("SELECT COUNT(*) AS n FROM chunks WHERE vault_id=?", (vault_id,)).fetchone()["n"]
+        files = self._get_conn().execute("SELECT COUNT(*) AS n FROM documents WHERE vault_id=? AND deleted=0", (vault_id,)).fetchone()["n"]
+        chunks = self._get_conn().execute("SELECT COUNT(*) AS n FROM chunks WHERE vault_id=?", (vault_id,)).fetchone()["n"]
         return {"vault_id": vault_id, "indexed_files": int(files), "indexed_chunks": int(chunks), "last_scan_at": None, "errors": []}
 
     def neighbors(self, vault_id: str, rel_path: str, depth: int = 1) -> dict[str, Any]:
-        outlinks = [r["dst_target"] for r in self._conn.execute("SELECT dst_target FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path)).fetchall()]
-        backlinks = [r["src_rel_path"] for r in self._conn.execute("SELECT src_rel_path FROM links WHERE vault_id=? AND dst_target=?", (vault_id, rel_path)).fetchall()]
+        outlinks = [r["dst_target"] for r in self._get_conn().execute("SELECT dst_target FROM links WHERE vault_id=? AND src_rel_path=?", (vault_id, rel_path)).fetchall()]
+        backlinks = [r["src_rel_path"] for r in self._get_conn().execute("SELECT src_rel_path FROM links WHERE vault_id=? AND dst_target=?", (vault_id, rel_path)).fetchall()]
         return {"outlinks": outlinks, "backlinks": backlinks}
 
     def get_backlink_counts(self, doc_ids: list[str] | None = None) -> dict[str, int]:
@@ -616,7 +699,7 @@ class LibSqlStore:
             GROUP BY d.doc_id
         """
 
-        cursor = self._conn.execute(query)
+        cursor = self._get_conn().execute(query)
         result = {row["doc_id"]: row["backlink_count"] for row in cursor.fetchall()}
 
         if doc_ids:

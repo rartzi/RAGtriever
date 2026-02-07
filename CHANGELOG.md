@@ -5,6 +5,12 @@ All notable changes to Mneme (formerly RAGtriever) will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-02-06
+
+### Fixed
+
+- **Resilient frontmatter parsing**: Markdown extractor no longer crashes on files with invalid YAML frontmatter (e.g., Obsidian templates using `{{date}}` syntax). Files with unparseable frontmatter are now indexed with their content intact and empty metadata, logged as a warning instead of failing the scan.
+
 ## [3.1.0] - 2026-01-26
 
 ### Added

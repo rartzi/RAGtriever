@@ -20,9 +20,14 @@ class MarkdownExtractor:
 
     def extract(self, path: Path) -> Extracted:
         raw = path.read_text(encoding="utf-8", errors="replace")
-        post = frontmatter.loads(raw)
-        text = post.content
-        fm = dict(post.metadata or {})
+        try:
+            post = frontmatter.loads(raw)
+            text = post.content
+            fm = dict(post.metadata or {})
+        except Exception:
+            logger.warning(f"Failed to parse frontmatter in {path.name}, indexing content without metadata")
+            text = self._strip_frontmatter(raw)
+            fm = {}
 
         links = parse_wikilinks(raw)
         tags_inline = parse_tags(raw)
@@ -38,6 +43,15 @@ class MarkdownExtractor:
             "image_references": image_refs,
         }
         return Extracted(text=text, metadata=meta)
+
+    @staticmethod
+    def _strip_frontmatter(raw: str) -> str:
+        """Remove YAML frontmatter delimiters when the parser fails."""
+        if raw.startswith("---"):
+            end = raw.find("---", 3)
+            if end != -1:
+                return raw[end + 3:].lstrip("\n")
+        return raw
 
     def _parse_image_references(self, raw: str, md_path: Path) -> list[dict[str, Any]]:
         """Parse markdown and wikilink image references.
