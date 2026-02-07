@@ -15,13 +15,22 @@ This skill is **self-contained and portable**. It can be deployed to any project
 
 ```
 skills/Mneme/
-├── SKILL.md              # This file (routing)
+├── SKILL.md              # This file (routing + quick reference)
 ├── DEPLOYMENT.md         # Deployment guide
 ├── Tools/                # Portable scripts
 │   ├── mneme-wrapper.sh  # Auto-installing CLI wrapper
 │   └── manage-watcher.sh # Watcher management
-├── Workflows/            # Execution procedures
-└── ...context files      # Detailed documentation
+├── Workflows/            # Execution procedures (6 workflows)
+├── docs/                 # Reference documentation
+│   ├── ARCHITECTURE.md   # System architecture + Sprint 1/2 features
+│   ├── Commands.md       # CLI command reference
+│   ├── Configuration.md  # Config options + image providers
+│   ├── SearchBestPractices.md  # Search strategy tips
+│   ├── DevelopmentWorkflow.md  # Dev setup + testing
+│   ├── USERGUIDE.md      # End-user guide
+│   └── PRD.md            # Product requirements
+├── examples/             # Example config files
+└── source/               # Bundled source code
 ```
 
 ## Workflow Routing
@@ -81,8 +90,11 @@ mneme <command>
 ### Common Commands
 
 ```bash
-# Search
+# Search (auto-routes through watcher if running for ~0.1s response)
 mneme query "search term" --k 10
+
+# Search (force cold-start, skip watcher socket)
+mneme query "search term" --k 10 --no-socket
 
 # Full scan with logging (REQUIRED)
 mkdir -p logs
@@ -91,11 +103,15 @@ mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%
 # Status
 mneme status
 
-# Watcher management
+# Watcher management (also starts query server for fast CLI queries)
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh status|start|stop|health
 ```
 
 **IMPORTANT:** All scan and watch operations MUST include logging for audit purposes.
+
+### Query Performance
+
+When the watcher is running, `mneme query` automatically routes through the watcher's built-in query server via unix socket, skipping Python and model startup (~5s -> ~0.1s). If the watcher is not running, queries fall back to cold-start automatically.
 
 ### Installation
 
@@ -115,13 +131,13 @@ mneme status
 | Topic | File |
 |-------|------|
 | **Deployment guide** | `DEPLOYMENT.md` |
-| Search strategy & vocabulary mismatch | `SearchBestPractices.md` |
-| Config checklist & image providers | `Configuration.md` |
-| Common commands reference | `Commands.md` |
-| Issue/solution pairs | `Troubleshooting.md` |
-| Watcher operations | `WatcherManagement.md` |
-| Dev workflow & testing | `DevelopmentWorkflow.md` |
-| Data flow & execution modes | `Architecture.md` |
+| Architecture & Sprint 1/2 features | `docs/ARCHITECTURE.md` |
+| Search strategy & vocabulary mismatch | `docs/SearchBestPractices.md` |
+| Config checklist & image providers | `docs/Configuration.md` |
+| Common commands reference | `docs/Commands.md` |
+| Dev workflow & testing | `docs/DevelopmentWorkflow.md` |
+| Issue/solution pairs | `Workflows/Troubleshoot.md` |
+| Watcher operations | `Workflows/ManageWatcher.md` |
 
 ## Tips for Claude Code Users
 

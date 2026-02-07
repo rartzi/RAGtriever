@@ -10,9 +10,6 @@ from pathlib import Path
 import typer
 
 from .config import VaultConfig, MultiVaultConfig, load_config
-from .indexer.indexer import Indexer, MultiVaultIndexer
-from .mcp.server import run_stdio_server
-from .retrieval.retriever import Retriever, MultiVaultRetriever
 
 # Suppress harmless multiprocessing resource tracker warnings (common on macOS)
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
@@ -109,6 +106,7 @@ def scan(
     import cProfile
     import pstats
     from io import StringIO
+    from .indexer.indexer import Indexer, MultiVaultIndexer
 
     cfg = _multi_cfg(config)
 
@@ -192,9 +190,29 @@ def scan(
 def query(q: str, config: str = typer.Option("config.toml"), k: int = typer.Option(10),
           path: str = typer.Option("", help="Path prefix filter"),
           rerank: bool = typer.Option(None, help="Override use_rerank config (true/false)"),
-          vaults: list[str] = typer.Option(None, help="Vault names to search (multi-vault only, default: all)")):
+          vaults: list[str] = typer.Option(None, help="Vault names to search (multi-vault only, default: all)"),
+          no_socket: bool = typer.Option(False, "--no-socket", help="Skip watcher query server, use cold-start")):
     """Search the vault(s) with optional reranking. Supports both single-vault and multi-vault configs."""
     cfg = _multi_cfg(config)
+
+    # Try routing through watcher's query server for fast response
+    if not no_socket:
+        from .query_server import query_via_socket, get_socket_path
+        socket_path = get_socket_path(cfg.index_dir)
+        filt = {}
+        if path:
+            filt["path_prefix"] = path
+        resp = query_via_socket(socket_path, q, k=k, filters=filt, vault_names=vaults)
+        if resp is not None and "results" not in resp:
+            typer.echo(f"Watcher query error: {resp.get('error', 'unknown')}", err=True)
+        elif resp is not None:
+            typer.echo(json.dumps(resp["results"], indent=2))
+            elapsed = resp.get("elapsed", 0)
+            typer.echo(f"  (via watcher, {elapsed:.3f}s compute)", err=True)
+            return
+
+    # Fall back to cold-start query (imports heavy ML dependencies)
+    from .retrieval.retriever import Retriever, MultiVaultRetriever
 
     if isinstance(cfg, MultiVaultConfig):
         # Multi-vault query
@@ -244,6 +262,7 @@ def query(q: str, config: str = typer.Option("config.toml"), k: int = typer.Opti
 @app.command()
 def open(chunk_id: str, config: str = typer.Option("config.toml")):
     """Open a chunk by ID (skeleton)."""
+    from .retrieval.retriever import Retriever
     cfg = _cfg(config)
     r = Retriever(cfg)
     from .models import SourceRef
@@ -316,6 +335,8 @@ def watch(config: str = typer.Option("config.toml"),
     if batch_timeout is not None:
         object.__setattr__(cfg, 'watch_batch_timeout', batch_timeout)
 
+    from .indexer.indexer import Indexer, MultiVaultIndexer
+
     if isinstance(cfg, MultiVaultConfig):
         idx = MultiVaultIndexer(cfg)
         # Multi-vault indexer uses legacy mode (batching not implemented yet)
@@ -359,6 +380,8 @@ def status(config: str = typer.Option("config.toml"),
     """Show indexing status for vault(s)."""
     cfg = _multi_cfg(config)
 
+    from .retrieval.retriever import Retriever, MultiVaultRetriever
+
     if isinstance(cfg, MultiVaultConfig):
         r = MultiVaultRetriever(cfg)
         status_info = r.status(vault_names=vaults)
@@ -384,6 +407,7 @@ def status(config: str = typer.Option("config.toml"),
 @app.command()
 def mcp(config: str = typer.Option("config.toml")):
     """Run MCP server (stdio)."""
+    from .mcp.server import run_stdio_server
     cfg = _multi_cfg(config)
     run_stdio_server(cfg)
 

@@ -16,9 +16,12 @@ Search and answer questions from indexed vault content.
 mneme query --config config.toml "user's question keywords" --k 15
 ```
 
+**Performance:** If the watcher is running, queries route through its built-in query server automatically (~0.1s vs ~5s cold-start). No extra flags needed.
+
 **Options:**
 - `--k 15` - Return 15 results (increase for broad questions)
 - `--k 30 --rerank` - Best coverage for complex questions
+- `--no-socket` - Force cold-start (skip watcher query server)
 
 ### 2. Analyze Results
 
