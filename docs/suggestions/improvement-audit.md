@@ -17,7 +17,7 @@ However, four areas present significant improvement opportunities:
 | **Scale** | 50K chunk ceiling | O(n) brute-force search, in-memory buffering |
 | **Performance** | Good for small vaults | Serial DB writes ✅fixed, model reload per query ✅fixed, FAISS save too frequent ✅fixed |
 | **Quality** | Good with caveats | Thread safety gaps ✅fixed, no transaction boundaries ✅fixed, edge case gaps |
-| **Architecture** | 7/10 | Config duplication, no schema migration, weak DI |
+| **Architecture** | 7/10 | Config duplication, ~~no schema migration~~ ✅, weak DI |
 
 **Total issues identified:** 50+ across all categories
 **Estimated improvement effort:** ~6-10 weeks for comprehensive fixes
@@ -190,6 +190,7 @@ Deleting a document cascades to 4+ separate DELETE queries per chunk. A 1000-chu
 | P3 | Reduce FAISS save from every 100 to 5000 vectors | `libsql_store.py` | 20-50% scan speedup | ✅ Sprint 2 |
 | P4 | Global embedding model cache | `sentence_transformers.py` | 100-500ms saved per query | ✅ Sprint 1 |
 | P5 | Filter backlink counts by result doc_ids | `retriever.py:106-112` | 5-30% query speedup | |
+| P5b | Watcher query server (eliminate cold-start) | `query_server.py` (new) | 30x query speedup (5s→0.1s) | ✅ Exploration |
 | P6 | FTS5 content deduplication (`content=chunks`) | `libsql_store.py:88-95` | 50% FTS5 size reduction | |
 
 ### Medium-Effort Optimizations
@@ -313,13 +314,11 @@ Retriever and Indexer import all concrete implementations directly. Cannot swap 
 
 **Fix:** `RetrieverDependencies` container + `create_retriever_dependencies()` factory. Allow constructor injection: `Retriever(cfg=cfg, deps=mock_deps)`.
 
-### 5.4 No Schema Migration System (Rating: 3/10)
+### 5.4 ~~No~~ Schema Migration System (Rating: 3/10 → ✅ Fixed Sprint 1)
 
-**File:** `store/libsql_store.py:41-117`
+**File:** `store/schema_manager.py` (new)
 
-Static schema with no version tracking. Config has `extractor_version`/`chunker_version` fields but they're unused. Schema changes break existing indices with no upgrade path.
-
-**Fix:** Implement `SchemaManager` with version tracking table, sequential migration functions, and automatic upgrade on startup.
+~~Static schema with no version tracking.~~ **FIXED:** `SchemaManager` implemented with version tracking table (`schema_version`), sequential migration functions, and automatic upgrade on startup. Stamping of pre-migration databases as v1.
 
 ### 5.5 Limited Plugin System (Rating: 7/10)
 
@@ -375,16 +374,22 @@ Minimal metrics. ScanStats has basic counts but no timing breakdown. No search p
 
 **Result:** Scales from 50K to 250K chunks
 
-### Phase 3: Architecture (Week 5-6) - Maintainability
+### Phase 3: Retrieval Quality & Polish (Week 5-6) - Better Results, Fewer Bugs
 
-| Task | Effort | Impact | Files |
-|------|--------|--------|-------|
-| Extract SharedVaultSettings | 5h | Eliminate 300 lines duplication | `config.py` |
-| Factory Pattern for components | 3h | Reduce coupling, improve testability | New factory files |
-| Schema migration system | 4h | Safe upgrades between versions | New `schema_manager.py` |
-| Dependency injection container | 4h | Testable components | New `dependencies.py` |
+| Task | Effort | Impact | Files | Status |
+|------|--------|--------|-------|--------|
+| Schema migration system | 4h | Safe upgrades between versions | New `schema_manager.py` | ✅ Done (Sprint 1) |
+| Fix scan chunk count over-reporting | 2h | Scan reports pre-dedup count (3106) vs actual DB count (2923) | `indexer.py` | |
+| Fix duplicate watcher log lines | 2h | Each log line appears 2x in watch mode (duplicate handlers) | `indexer.py`, `cli.py` | |
+| Filter backlink counts by result doc_ids (P5) | 3h | 5-30% query speedup (avoid scanning all backlinks) | `retriever.py` | |
+| FTS5 content deduplication (P6) | 3h | 50% FTS5 index size reduction via `content=chunks` | `libsql_store.py` | |
+| Lazy-load reranker model on first use (P8) | 2h | 500ms-2s saved at init when reranker not needed | `reranker.py` | |
+| Move path_prefix filter to SQL WHERE (P10) | 2h | 5-20% filtered query speedup | `libsql_store.py` | |
+| Extract SharedVaultSettings | 5h | Eliminate 300 lines config duplication | `config.py` | |
+| Add log rotation | 1h | Prevent disk fill from unbounded logs | `cli.py` | |
+| Pin dependency upper bounds | 1h | Prevent breaking changes from numpy 2.0 etc | `pyproject.toml` | |
 
-**Result:** Cleaner, more maintainable, testable codebase
+**Result:** Higher quality search results, cleaner reporting, production-ready logging
 
 ### Phase 4: Quality (Week 7-8) - Reliability
 

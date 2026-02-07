@@ -58,7 +58,7 @@ class TestRerankerIntegration:
              patch('mneme.retrieval.reranker.CrossEncoder'), \
              caplog.at_level("INFO", logger="mneme.retrieval.retriever"):
             Retriever(config_with_rerank)
-            assert "Reranker initialized" in caplog.text
+            assert "Reranker enabled (lazy)" in caplog.text
             assert "cross-encoder/test-model" in caplog.text
 
     def test_reranking_integrates_with_search(self, minimal_config):

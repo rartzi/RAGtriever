@@ -5,6 +5,24 @@ All notable changes to Mneme (formerly RAGtriever) will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-02-07
+
+### Improved
+
+- **Backlink boost filtering**: Backlink count queries now filter to result doc_ids in SQL instead of scanning all links (5-30% query speedup on large vaults)
+- **Path prefix SQL push-down**: `path_prefix` filter applied in FTS5 SQL WHERE clause instead of post-filtering in Python (5-20% filtered query speedup)
+- **Lazy reranker loading**: CrossEncoder model loaded on first `rerank()` call, not at Retriever init (saves 500ms-2s startup when reranking enabled but not every query uses it)
+- **Chunk deduplication before embedding**: Duplicate `chunk_id`s deduplicated before embedding computation, avoiding wasted GPU/CPU work and ensuring scan output matches actual stored count
+
+### Fixed
+
+- **Duplicate watcher log lines**: Fixed `manage-watcher.sh` redirecting stdout to the same log file that `--log-file` writes to, causing every line to appear 2x
+- **Logging handler accumulation**: `_setup_logging()` now clears existing handlers before adding new ones, preventing duplicate log output on repeated calls
+
+### Added
+
+- **FAISS optional dependency**: `pip install mneme[faiss]` for discoverable FAISS installation
+
 ## [3.2.0] - 2026-02-07
 
 ### Performance

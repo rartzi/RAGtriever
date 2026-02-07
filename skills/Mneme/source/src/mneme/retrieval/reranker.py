@@ -35,12 +35,8 @@ class CrossEncoderReranker:
                 "sentence-transformers required for cross-encoder reranking. "
                 "Install with: pip install sentence-transformers"
             )
-
-        # Suppress harmless multiprocessing resource tracker warnings on macOS
-        import warnings
-        warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
-
-        self.model = CrossEncoder(self.model_name, device=self.device)
+        # Defer model loading until first rerank() call to save 500ms-2s at init
+        self._model = None
 
     def rerank(
         self,
@@ -61,11 +57,17 @@ class CrossEncoderReranker:
         if not results:
             return []
 
+        # Lazy-load model on first use
+        if self._model is None:
+            import warnings
+            warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*leaked semaphore")
+            self._model = CrossEncoder(self.model_name, device=self.device)
+
         # Create query-document pairs
         pairs = [(query, r.snippet) for r in results]
 
         # Get cross-encoder scores
-        scores = self.model.predict(pairs, convert_to_numpy=True)
+        scores = self._model.predict(pairs, convert_to_numpy=True)
 
         # Sort by cross-encoder score
         scored = list(zip(results, scores))
