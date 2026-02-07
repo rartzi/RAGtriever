@@ -177,6 +177,8 @@ def scan(
 
     if stats.elapsed_seconds > 0:
         typer.echo(f"Scan complete{vault_info}: {stats.files_indexed} files, {stats.chunks_created} chunks in {stats.elapsed_seconds:.1f}s")
+        if stats.files_skipped_unchanged > 0:
+            typer.echo(f"  ({stats.files_skipped_unchanged} unchanged files skipped)")
         if stats.files_deleted > 0:
             typer.echo(f"  ({stats.files_deleted} deleted files removed from index)")
         if stats.files_failed > 0:

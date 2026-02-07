@@ -90,6 +90,7 @@ class ProcessResult:
     links: list[tuple[str, str]] = field(default_factory=list)  # (target, link_type)
     error: str | None = None
     skipped: bool = False
+    skipped_unchanged: bool = False  # True when skipped due to manifest mtime+size match
     # Enriched metadata for faster operations
     full_path: str = ""
     vault_root: str = ""
@@ -121,6 +122,7 @@ class ScanStats:
     files_indexed: int = 0
     files_deleted: int = 0
     files_failed: int = 0
+    files_skipped_unchanged: int = 0
     chunks_created: int = 0
     embeddings_created: int = 0
     images_processed: int = 0

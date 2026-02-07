@@ -160,6 +160,7 @@ class LibSqlStore:
         self.faiss_nlist = faiss_nlist
         self.faiss_nprobe = faiss_nprobe
         self._faiss_lock = threading.Lock()
+        self._brute_force_warned = False
 
         if use_faiss:
             if not FAISS_AVAILABLE:
@@ -301,21 +302,37 @@ class LibSqlStore:
 
     def upsert_chunks(self, chunks: Sequence[Chunk], *, _commit: bool = True) -> None:
         cur = self._get_conn().cursor()
-        for ch in chunks:
-            cur.execute(
-                """INSERT INTO chunks(chunk_id, doc_id, vault_id, anchor_type, anchor_ref, text, text_hash, metadata_json)
-                   VALUES(?,?,?,?,?,?,?,?)
-                   ON CONFLICT(chunk_id) DO UPDATE SET
-                     doc_id=excluded.doc_id, vault_id=excluded.vault_id, anchor_type=excluded.anchor_type,
-                     anchor_ref=excluded.anchor_ref, text=excluded.text, text_hash=excluded.text_hash,
-                     metadata_json=excluded.metadata_json
-                """,
-                (ch.chunk_id, ch.doc_id, ch.vault_id, ch.anchor_type, ch.anchor_ref, ch.text, ch.text_hash, _json_dumps(ch.metadata or {})),
-            )
-            # FTS upsert: easiest is delete then insert
-            cur.execute("DELETE FROM fts_chunks WHERE chunk_id = ?", (ch.chunk_id,))
-            cur.execute("INSERT INTO fts_chunks(chunk_id, vault_id, rel_path, text) VALUES(?,?,?,?)",
-                        (ch.chunk_id, ch.vault_id, ch.metadata.get("rel_path",""), ch.text))
+
+        # Batch upsert chunks with executemany
+        chunk_rows = [
+            (ch.chunk_id, ch.doc_id, ch.vault_id, ch.anchor_type, ch.anchor_ref,
+             ch.text, ch.text_hash, _json_dumps(ch.metadata or {}))
+            for ch in chunks
+        ]
+        cur.executemany(
+            """INSERT INTO chunks(chunk_id, doc_id, vault_id, anchor_type, anchor_ref, text, text_hash, metadata_json)
+               VALUES(?,?,?,?,?,?,?,?)
+               ON CONFLICT(chunk_id) DO UPDATE SET
+                 doc_id=excluded.doc_id, vault_id=excluded.vault_id, anchor_type=excluded.anchor_type,
+                 anchor_ref=excluded.anchor_ref, text=excluded.text, text_hash=excluded.text_hash,
+                 metadata_json=excluded.metadata_json
+            """,
+            chunk_rows,
+        )
+
+        # Batch FTS upsert: delete then insert
+        fts_ids = [(ch.chunk_id,) for ch in chunks]
+        cur.executemany("DELETE FROM fts_chunks WHERE chunk_id = ?", fts_ids)
+
+        fts_rows = [
+            (ch.chunk_id, ch.vault_id, ch.metadata.get("rel_path", ""), ch.text)
+            for ch in chunks
+        ]
+        cur.executemany(
+            "INSERT INTO fts_chunks(chunk_id, vault_id, rel_path, text) VALUES(?,?,?,?)",
+            fts_rows,
+        )
+
         if _commit:
             self._get_conn().commit()
 
@@ -325,12 +342,17 @@ class LibSqlStore:
         if not row:
             return
         doc_id = row["doc_id"]
-        # Delete chunks and embeddings and fts
+
+        # Collect chunk_ids for batch deletion
         chunk_rows = self._get_conn().execute("SELECT chunk_id FROM chunks WHERE doc_id=?", (doc_id,)).fetchall()
-        for r in chunk_rows:
-            cid = r["chunk_id"]
-            self._get_conn().execute("DELETE FROM embeddings WHERE chunk_id=?", (cid,))
-            self._get_conn().execute("DELETE FROM fts_chunks WHERE chunk_id=?", (cid,))
+        chunk_ids = [r["chunk_id"] for r in chunk_rows]
+
+        if chunk_ids:
+            # Batch delete embeddings and FTS entries using IN clause
+            placeholders = ",".join("?" * len(chunk_ids))
+            self._get_conn().execute(f"DELETE FROM embeddings WHERE chunk_id IN ({placeholders})", chunk_ids)
+            self._get_conn().execute(f"DELETE FROM fts_chunks WHERE chunk_id IN ({placeholders})", chunk_ids)
+
         self._get_conn().execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
         self._get_conn().execute("UPDATE documents SET deleted=1 WHERE doc_id=?", (doc_id,))
         # Clean up links table (outgoing links from this file)
@@ -360,6 +382,19 @@ class LibSqlStore:
         ).fetchall()
         return {row["rel_path"]: row["mtime"] for row in rows}
 
+    def get_manifest_entries(self, vault_id: str) -> dict[str, tuple[int, int]]:
+        """Get (mtime, size) from manifest for all indexed files in vault.
+
+        Returns:
+            Dict mapping rel_path to (mtime, size) tuple from last index.
+            Used by scan to skip unchanged files.
+        """
+        rows = self._get_conn().execute(
+            "SELECT rel_path, mtime, size FROM manifest WHERE vault_id=?",
+            (vault_id,)
+        ).fetchall()
+        return {row["rel_path"]: (row["mtime"], row["size"]) for row in rows}
+
     def get_files_under_path(self, vault_id: str, path_prefix: str) -> list[str]:
         """Get all indexed files under a directory path prefix.
 
@@ -383,16 +418,22 @@ class LibSqlStore:
 
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray, *, _commit: bool = True) -> None:
         cur = self._get_conn().cursor()
+
+        # Batch upsert embeddings with executemany
+        emb_rows = []
         for cid, vec in zip(chunk_ids, vectors, strict=False):
             blob = _vec_to_blob(vec)
             dims = int(np.asarray(vec).size)
-            cur.execute(
-                """INSERT INTO embeddings(chunk_id, model_id, dims, vector)
-                   VALUES(?,?,?,?)
-                   ON CONFLICT(chunk_id) DO UPDATE SET model_id=excluded.model_id, dims=excluded.dims, vector=excluded.vector
-                """,
-                (cid, model_id, dims, blob),
-            )
+            emb_rows.append((cid, model_id, dims, blob))
+
+        cur.executemany(
+            """INSERT INTO embeddings(chunk_id, model_id, dims, vector)
+               VALUES(?,?,?,?)
+               ON CONFLICT(chunk_id) DO UPDATE SET model_id=excluded.model_id, dims=excluded.dims, vector=excluded.vector
+            """,
+            emb_rows,
+        )
+
         if _commit:
             self._get_conn().commit()
 
@@ -415,11 +456,19 @@ class LibSqlStore:
                 if self.faiss_index:
                     self.faiss_index.add(list(chunk_ids), vectors)
 
-                    # Periodically save FAISS index (every 1000 vectors)
-                    if self.faiss_index.size() % 1000 == 0:
+                    # Periodically save FAISS index (every 5000 vectors)
+                    if self.faiss_index.size() % 5000 == 0:
                         faiss_path = self.db_path.parent / "faiss"
                         self.faiss_index.save(faiss_path)
-                        logger.info(f"FAISS index saved ({self.faiss_index.size()} vectors)")
+                        logger.info(f"FAISS index checkpoint ({self.faiss_index.size()} vectors)")
+
+    def save_faiss_index(self) -> None:
+        """Save the FAISS index to disk. Call at end of scan to ensure final state is persisted."""
+        if self.use_faiss and self.faiss_index and self.faiss_index.size() > 0:
+            with self._faiss_lock:
+                faiss_path = self.db_path.parent / "faiss"
+                self.faiss_index.save(faiss_path)
+                logger.info(f"FAISS index saved ({self.faiss_index.size()} vectors)")
 
     def upsert_manifest(
         self,
@@ -502,11 +551,17 @@ class LibSqlStore:
             ))
         return results[:k]
 
+    def get_total_chunk_count(self) -> int:
+        """Get total number of chunks across all vaults."""
+        row = self._get_conn().execute("SELECT COUNT(*) AS n FROM chunks").fetchone()
+        return int(row["n"]) if row else 0
+
     def vector_search(self, query_vec: np.ndarray, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         """Vector search with optional FAISS acceleration.
 
         Uses FAISS approximate nearest neighbor if enabled, otherwise brute-force.
         Supports single vault_id or list of vault_ids for multi-vault search.
+        Warns when brute-force is used on >10K chunks (FAISS recommended).
         """
         vault_id = filters.get("vault_id")
         vault_ids = filters.get("vault_ids")  # Support list of vault_ids for multi-vault
@@ -516,6 +571,15 @@ class LibSqlStore:
         if self.use_faiss and self.faiss_index and self.faiss_index.size() > 0:
             return self._faiss_vector_search(query_vec, k, vault_id, vault_ids, path_prefix)
         else:
+            # Warn if brute-force on large index
+            if not self._brute_force_warned:
+                total = self.get_total_chunk_count()
+                if total > 10_000:
+                    logger.warning(
+                        f"Brute-force vector search on {total:,} chunks. "
+                        f"Enable FAISS (use_faiss=true) for 100-1000x faster queries."
+                    )
+                    self._brute_force_warned = True
             return self._brute_force_vector_search(query_vec, k, vault_id, vault_ids, path_prefix)
 
     def _faiss_vector_search(

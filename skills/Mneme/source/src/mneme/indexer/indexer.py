@@ -32,6 +32,8 @@ from .queue import JobQueue, Job
 from .change_detector import ChangeDetector
 from .reconciler import Reconciler
 
+logger = logging.getLogger(__name__)
+
 
 class BatchCollector:
     """Collects filesystem events into batches for efficient processing.
@@ -279,10 +281,19 @@ class Indexer:
         if files_deleted > 0:
             logger.info(f"[scan] Phase 0: Removed {files_deleted} deleted file(s)")
 
+        # Load manifest for incremental skip (unless full rescan requested)
+        if full:
+            self._manifest_entries: dict[str, tuple[int, int]] = {}
+        else:
+            self._manifest_entries = self.store.get_manifest_entries(self.vault_id)
+            if self._manifest_entries:
+                logger.info(f"[scan] Loaded manifest with {len(self._manifest_entries)} entries for incremental skip")
+
         # Phase 1: Parallel extraction and chunking using unified _process_file()
         process_results: list[ProcessResult] = []
         image_tasks: list[ImageTask] = []
         files_failed = 0
+        files_skipped_unchanged = 0
 
         with ThreadPoolExecutor(max_workers=self.cfg.extraction_workers) as executor:
             futures = {
@@ -297,6 +308,8 @@ class Indexer:
 
                     # Skip files that should be skipped
                     if result.skipped:
+                        if result.skipped_unchanged:
+                            files_skipped_unchanged += 1
                         continue
 
                     # Handle errors
@@ -316,7 +329,7 @@ class Indexer:
 
         logger.info(
             f"[scan] Phase 1: {len(process_results)} files extracted, "
-            f"{files_failed} failed"
+            f"{files_skipped_unchanged} unchanged, {files_failed} failed"
         )
 
         # Phase 2: Batched embedding and storage
@@ -334,15 +347,20 @@ class Indexer:
             images_processed = self._parallel_process_images(image_tasks)
             logger.info(f"[scan] Phase 3: {images_processed} images processed")
 
+        # Save FAISS index at end of scan (ensures final state is persisted)
+        self.store.save_faiss_index()
+
         elapsed = time.time() - start
         logger.info(
-            f"[scan] Complete: {len(process_results)} files indexed in {elapsed:.1f}s"
+            f"[scan] Complete: {len(process_results)} files indexed, "
+            f"{files_skipped_unchanged} unchanged in {elapsed:.1f}s"
         )
         return ScanStats(
             files_scanned=len(paths),
             files_indexed=len(process_results),
             files_deleted=files_deleted,
             files_failed=files_failed,
+            files_skipped_unchanged=files_skipped_unchanged,
             chunks_created=chunks_created,
             embeddings_created=embeddings_created,
             images_processed=images_processed,
@@ -545,6 +563,18 @@ class Indexer:
 
         try:
             st = abs_path.stat()
+
+            # Manifest-based incremental skip: if mtime and size unchanged, skip extraction
+            manifest_entries = getattr(self, "_manifest_entries", {})
+            if manifest_entries:
+                prev = manifest_entries.get(rel)
+                if prev is not None:
+                    prev_mtime, prev_size = prev
+                    if int(st.st_mtime) == prev_mtime and int(st.st_size) == prev_size:
+                        result = skipped_result()
+                        result.skipped_unchanged = True
+                        return result
+
             chash = hash_file(abs_path)
             doc_id = blake2b_hex(f"{self.vault_id}:{rel}".encode("utf-8"))[:24]
             file_type = abs_path.suffix.lower().lstrip(".")
@@ -1168,7 +1198,7 @@ class Indexer:
         detector_thread = threading.Thread(target=detector.watch, daemon=True)
         detector_thread.start()
 
-        print(f"Watching {self.cfg.vault_root} for changes. Press Ctrl+C to stop.")
+        logger.info(f"Watching {self.cfg.vault_root} for changes. Press Ctrl+C to stop.")
 
         try:
             # Consume jobs from queue in main thread
@@ -1181,16 +1211,16 @@ class Indexer:
                 try:
                     if job.kind == "upsert":
                         abs_path = self.cfg.vault_root / job.rel_path
-                        print(f"Indexing: {job.rel_path}")
+                        logger.info(f"[watch] Indexing: {job.rel_path}")
                         self._index_one(abs_path, force=True)
 
                     elif job.kind == "delete":
-                        print(f"Deleting: {job.rel_path}")
+                        logger.info(f"[watch] Deleting: {job.rel_path}")
                         self.store.delete_document(self.vault_id, job.rel_path)
 
                     elif job.kind == "move":
                         # Delete old path
-                        print(f"Moving: {job.rel_path} -> {job.new_rel_path}")
+                        logger.info(f"[watch] Moving: {job.rel_path} -> {job.new_rel_path}")
                         self.store.delete_document(self.vault_id, job.rel_path)
 
                         # Index new path
@@ -1199,12 +1229,12 @@ class Indexer:
                             self._index_one(abs_path, force=True)
 
                 except Exception as e:
-                    print(f"Error processing {job.kind} job for {job.rel_path}: {e}")
+                    logger.error(f"[watch] Error processing {job.kind} job for {job.rel_path}: {e}")
                 finally:
                     q.task_done()
 
         except KeyboardInterrupt:
-            print("\nStopping watch mode...")
+            logger.info("Stopping watch mode...")
             # Give detector thread a moment to clean up
             detector_thread.join(timeout=2.0)
 
@@ -1249,7 +1279,7 @@ class Indexer:
             f"timeout={self.cfg.watch_batch_timeout}s, "
             f"workers={self.cfg.watch_workers}"
         )
-        print(f"Watching {self.cfg.vault_root} for changes (batched mode). Press Ctrl+C to stop.")
+        logger.info(f"Watching {self.cfg.vault_root} for changes (batched mode). Press Ctrl+C to stop.")
 
         def process_batch_if_ready(batch: list[Job] | None) -> None:
             """Process batch if available."""
@@ -1279,7 +1309,7 @@ class Indexer:
                 logger.info(f"[watch] Flushing {len(batch)} remaining jobs...")
                 self._process_batch(batch)
 
-            print("\nStopping watch mode...")
+            logger.info("Stopping watch mode...")
             detector_thread.join(timeout=2.0)
             logger.info("[watch] Watch mode stopped")
 
@@ -1299,7 +1329,6 @@ class Indexer:
         doc_id = blake2b_hex(f"{self.vault_id}:{rel}".encode("utf-8"))[:24]
         file_type = abs_path.suffix.lower().lstrip(".")
 
-        # TODO: consult manifest to skip unchanged if not force
         extracted = extractor.extract(abs_path)
 
         # Determine chunker type label
@@ -1437,6 +1466,17 @@ class Indexer:
                 modified_at=modified_at,
                 obsidian_uri=obsidian_uri,
             )
+
+        # Write manifest entry for incremental scan compatibility
+        self.store.upsert_manifest(
+            vault_id=self.vault_id,
+            rel_path=rel,
+            file_hash=chash,
+            chunk_count=len(chunks),
+            mtime=int(st.st_mtime),
+            size=int(st.st_size),
+        )
+        self.store._get_conn().commit()
 
     def _process_embedded_images(
         self,
@@ -1816,6 +1856,7 @@ class MultiVaultIndexer:
             files_indexed=a.files_indexed + b.files_indexed,
             files_deleted=a.files_deleted + b.files_deleted,
             files_failed=a.files_failed + b.files_failed,
+            files_skipped_unchanged=a.files_skipped_unchanged + b.files_skipped_unchanged,
             chunks_created=a.chunks_created + b.chunks_created,
             embeddings_created=a.embeddings_created + b.embeddings_created,
             images_processed=a.images_processed + b.images_processed,
@@ -1843,10 +1884,10 @@ class MultiVaultIndexer:
             logger.warning("No vaults to watch")
             return
 
-        print(f"Watching {len(target_indexers)} vault(s). Press Ctrl+C to stop.")
+        logger.info(f"Watching {len(target_indexers)} vault(s). Press Ctrl+C to stop.")
         for name, indexer in target_indexers:
             vault_def = next(v for v in self.cfg.vaults if v.name == name)
-            print(f"  - {name}: {vault_def.root}")
+            logger.info(f"  - {name}: {vault_def.root}")
 
         # Start watch threads for each vault
         threads: list[threading.Thread] = []
@@ -1865,7 +1906,7 @@ class MultiVaultIndexer:
                 import time
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nStopping watch mode...")
+            logger.info("Stopping watch mode...")
 
     def _watch_single_vault(self, name: str, indexer: Indexer) -> None:
         """Watch a single vault (runs in separate thread)."""
