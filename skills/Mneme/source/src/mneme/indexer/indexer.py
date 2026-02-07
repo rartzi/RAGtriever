@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+import numpy as np
+
 from ..config import VaultConfig, MultiVaultConfig, VaultDefinition
 from .parallel_types import ExtractionResult, ChunkData, ImageTask, ScanStats, ProcessResult, BatchStats
 from ..hashing import hash_file, blake2b_hex
@@ -806,27 +808,48 @@ class Indexer:
                 all_texts.append(chunk_data.text)
                 all_chunk_ids.append(chunk_data.chunk_id)
 
-        # Batch write documents
-        for doc in all_docs:
-            self.store.upsert_document(doc)
-
-        # Batch write chunks
-        if all_chunks:
-            self.store.upsert_chunks(all_chunks)
-
-        # Batch embedding (cross-file) in chunks of embed_batch_size
+        # Compute embeddings OUTSIDE transaction (CPU-bound, no DB lock)
+        all_vectors: list[tuple[list[str], np.ndarray]] = []
         embeddings_created = 0
         if all_texts:
             batch_size = self.cfg.embed_batch_size
             for i in range(0, len(all_texts), batch_size):
                 batch_texts = all_texts[i:i + batch_size]
                 batch_ids = all_chunk_ids[i:i + batch_size]
-
                 vectors = self.embedder.embed_texts(batch_texts)
-                self.store.upsert_embeddings(
-                    batch_ids, model_id=self.embedder.model_id, vectors=vectors
-                )
+                all_vectors.append((batch_ids, vectors))
                 embeddings_created += len(batch_ids)
+
+        # Write all data in a single transaction (atomic)
+        try:
+            self.store.begin_transaction()
+
+            for doc in all_docs:
+                self.store.upsert_document(doc, _commit=False)
+
+            if all_chunks:
+                self.store.upsert_chunks(all_chunks, _commit=False)
+
+            for batch_ids, vectors in all_vectors:
+                self.store.upsert_embeddings(
+                    batch_ids, model_id=self.embedder.model_id, vectors=vectors, _commit=False
+                )
+
+            # Upsert manifest entries for each result
+            for result in results:
+                self.store.upsert_manifest(
+                    vault_id=result.vault_id,
+                    rel_path=result.rel_path,
+                    file_hash=result.content_hash,
+                    chunk_count=len(result.chunks),
+                    mtime=result.mtime,
+                    size=result.size,
+                )
+
+            self.store.commit_transaction()
+        except Exception:
+            self.store.rollback_transaction()
+            raise
 
         logger.debug(
             f"[batch] Stored {len(all_docs)} docs, {len(all_chunks)} chunks, "

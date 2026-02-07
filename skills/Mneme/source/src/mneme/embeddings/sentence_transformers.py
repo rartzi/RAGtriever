@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
 import numpy as np
 
 from .base import Embedder
 
 logger = logging.getLogger(__name__)
+
+# Global model cache to prevent duplicate SentenceTransformer loads (~400MB each)
+_model_cache: dict[str, Any] = {}
+_cache_lock = threading.Lock()
 
 
 def _find_cached_model(model_id: str) -> str | None:
@@ -64,7 +69,22 @@ class SentenceTransformersEmbedder:
             else:
                 logger.info(f"Loading embedding model: {self.model_id} (will use network if not in standard cache)")
 
-        self._model = SentenceTransformer(model_to_load, device=self.device)
+        # Use global model cache (thread-safe, double-check locking)
+        cache_key = f"{model_to_load}::{self.device}"
+        model = _model_cache.get(cache_key)
+        if model is None:
+            with _cache_lock:
+                model = _model_cache.get(cache_key)
+                if model is None:
+                    model = SentenceTransformer(model_to_load, device=self.device)
+                    _model_cache[cache_key] = model
+                    logger.info(f"Loaded model into global cache: {cache_key}")
+                else:
+                    logger.info(f"Using cached model: {cache_key}")
+        else:
+            logger.info(f"Using cached model: {cache_key}")
+
+        self._model = model
         # Determine dims from a small encode
         v = self._model.encode(["dimension_probe"], batch_size=1, convert_to_numpy=True, normalize_embeddings=True)
         self.dims = int(v.shape[1])

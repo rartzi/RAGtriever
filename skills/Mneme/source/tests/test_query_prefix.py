@@ -3,6 +3,16 @@ import pytest
 from unittest.mock import Mock, patch
 import numpy as np
 
+import mneme.embeddings.sentence_transformers as st_module
+
+
+@pytest.fixture(autouse=True)
+def clear_model_cache():
+    """Clear the global model cache before each test."""
+    st_module._model_cache.clear()
+    yield
+    st_module._model_cache.clear()
+
 
 def test_sentence_transformers_query_prefix():
     """Test that SentenceTransformersEmbedder applies prefix to queries."""
