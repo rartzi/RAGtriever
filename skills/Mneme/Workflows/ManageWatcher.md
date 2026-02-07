@@ -98,21 +98,40 @@ This verifies:
 1. mneme is installed (installs if needed)
 2. config.toml exists
 
+## Query Server (Built-in)
+
+The watcher automatically starts a **query server** on a unix socket when it launches. This allows `mneme query` to skip Python and model startup (~5s -> ~0.1s).
+
+- **Socket path:** `<index_dir>/query.sock`
+- **Starts automatically** with `mneme watch`
+- **Stops automatically** when watcher exits
+- **Transparent:** `mneme query` detects and uses the socket automatically
+- **Fallback:** If the socket is unavailable, queries fall back to cold-start
+- **Override:** Use `mneme query --no-socket` to force cold-start
+
+**Performance:**
+| Path | Latency |
+|------|---------|
+| Via watcher socket | ~0.05-0.15s |
+| Cold-start (no watcher) | ~5s |
+
 ## What the Watcher Handles
 
 - Individual file changes (create, modify, delete, move)
 - Directory operations (delete entire folders, move/rename folders)
 - All files within deleted or moved directories
 - Catch-up on files modified while watcher was stopped
+- **Serving fast queries** via built-in query server
 
 ## When to Restart
 
 Restart the watcher when:
 - Config changes have been made
-- Code has been updated
+- Code has been updated (e.g., after `pip install -e .` or skill update)
 - Watcher stops responding
 - After system reboot
 - Log errors indicate issues
+- Query server not responding (stale socket)
 
 ## Monitoring
 

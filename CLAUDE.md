@@ -64,6 +64,7 @@ cd ../../..
 |--------|---------|
 | `cli.py` | CLI commands (scan, query, watch, mcp) |
 | `config.py` | Configuration management |
+| `query_server.py` | Unix socket query server (runs inside watcher) |
 | `extractors/` | File extractors (markdown, pdf, pptx, xlsx, images) |
 | `chunking/` | Text chunking with overlap |
 | `embeddings/` | Embedding providers (sentence_transformers, ollama) |

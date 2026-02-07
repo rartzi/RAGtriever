@@ -158,6 +158,17 @@ cmd_stop() {
     if ! is_running; then
         echo -e "${GREEN}✓${NC} Watcher stopped"
         rm -f "$PID_FILE"
+        # Clean up query server socket if present
+        if [ -f "$CONFIG_FILE" ]; then
+            INDEX_DIR=$(python3 -c "
+import tomllib; c=tomllib.load(open('$CONFIG_FILE','rb'))
+print(c.get('index',{}).get('dir','~/.mneme/indexes'))
+" 2>/dev/null || true)
+            if [ -n "$INDEX_DIR" ]; then
+                SOCK_PATH="$(eval echo "$INDEX_DIR")/query.sock"
+                rm -f "$SOCK_PATH" 2>/dev/null && echo "  Cleaned up query socket"
+            fi
+        fi
     else
         echo -e "${RED}✗${NC} Failed to stop watcher"
         return 1
@@ -215,6 +226,27 @@ cmd_health() {
         fi
     else
         echo -e "${YELLOW}⚠${NC} (no log to check)"
+    fi
+
+    # 5. Query server check
+    echo -n "5. Query server: "
+    if [ -f "$CONFIG_FILE" ]; then
+        INDEX_DIR=$(python3 -c "
+import tomllib; c=tomllib.load(open('$CONFIG_FILE','rb'))
+print(c.get('index',{}).get('dir','~/.mneme/indexes'))
+" 2>/dev/null || true)
+        if [ -n "$INDEX_DIR" ]; then
+            SOCK_PATH="$(eval echo "$INDEX_DIR")/query.sock"
+            if [ -S "$SOCK_PATH" ]; then
+                echo -e "${GREEN}✓${NC} (socket: $SOCK_PATH)"
+            else
+                echo -e "${YELLOW}⚠${NC} (no socket found)"
+            fi
+        else
+            echo -e "${YELLOW}⚠${NC} (could not determine index dir)"
+        fi
+    else
+        echo -e "${YELLOW}⚠${NC} (no config file)"
     fi
 
     echo ""

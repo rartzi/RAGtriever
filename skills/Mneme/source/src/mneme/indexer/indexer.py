@@ -1866,6 +1866,8 @@ class MultiVaultIndexer:
     def watch(self, vault_names: list[str] | None = None) -> None:
         """Watch specified vaults for changes.
 
+        Also starts a query server so CLI queries can use the warm model.
+
         Args:
             vault_names: List of vault names to watch, or None for all
         """
@@ -1889,6 +1891,19 @@ class MultiVaultIndexer:
             vault_def = next(v for v in self.cfg.vaults if v.name == name)
             logger.info(f"  - {name}: {vault_def.root}")
 
+        # Start query server with a warm retriever
+        query_server = None
+        try:
+            from ..query_server import QueryServer, get_socket_path
+            from ..retrieval.retriever import MultiVaultRetriever
+
+            retriever = MultiVaultRetriever(self.cfg)
+            socket_path = get_socket_path(self.cfg.index_dir)
+            query_server = QueryServer(retriever, socket_path)
+            query_server.start()
+        except Exception as e:
+            logger.warning(f"Failed to start query server: {e}")
+
         # Start watch threads for each vault
         threads: list[threading.Thread] = []
         for name, indexer in target_indexers:
@@ -1907,6 +1922,9 @@ class MultiVaultIndexer:
                 time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Stopping watch mode...")
+        finally:
+            if query_server:
+                query_server.stop()
 
     def _watch_single_vault(self, name: str, indexer: Indexer) -> None:
         """Watch a single vault (runs in separate thread)."""

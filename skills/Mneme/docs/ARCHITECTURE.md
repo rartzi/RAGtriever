@@ -5,9 +5,13 @@ Complete system architecture explaining all components and how they interact.
 ## Quick Navigation
 - [System Overview](#system-overview) - High-level design
 - [Core Components](#core-components) - Vault, Indexer, Store, Retriever
+- [Safety Architecture](#safety-architecture-v31---sprint-1) - Thread safety, transactions, schema migration
+- [Performance Architecture](#performance-architecture-v32---sprint-2) - Batch ops, manifest skip, logging
+- [Query Server Architecture](#query-server-architecture-exploration) - Unix socket, lazy imports, 30x speedup
+- [Advanced Features](#advanced-features-v10) - Overlap, reranking, FAISS, asymmetric retrieval
 - [Execution Modes](#execution-modes) - CLI, Watch, MCP, Python API
-- [Skills vs Non-Skills](#skills-vs-non-skills) - **Important:** Mneme is NOT a Claude Code skill
 - [Data Flow](#data-flow) - How data moves through the system
+- [Performance](#performance) - Real-world benchmarks
 - [Extension Points](#extension-points) - How to customize
 
 ---
@@ -16,43 +20,47 @@ Complete system architecture explaining all components and how they interact.
 
 Mneme is a **local-first hybrid retrieval system** for Obsidian-compatible vaults.
 
-### High-Level Architecture (Bidirectional)
+### High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           Mneme                                │
-│                                                                     │
-│  ┌──────────────┐      ┌──────────────┐      ┌─────────────────┐  │
-│  │   Vault      │──────▶│   Indexer    │─────▶│   Store         │  │
-│  │ (Filesystem) │      │  (Pipeline)  │      │   (SQLite)      │  │
-│  │ Source of    │      │  Extract     │      │  ┌────────────┐ │  │
-│  │ Truth        │      │  Chunk       │      │  │ documents  │ │  │
-│  └──────────────┘      │  Embed       │      │  │ chunks     │ │  │
-│                        │  Store       │      │  │ fts_chunks │ │  │
-│                        └──────────────┘      │  │ embeddings │ │  │
-│                                              │  │ links      │ │  │
-│                                              │  └────────────┘ │  │
-│                                              └────────┬────────┘  │
-│                                                       │           │
-│                                                       │           │
-│                                              ┌────────▼────────┐  │
-│                                              │   Retriever     │  │
-│   User Interfaces                            │   (Hybrid)      │  │
-│   ┌─────────┐   ┌──────────┐   ┌────────┐  │  • Lexical FTS5 │  │
-│   │   CLI   │   │  Python  │   │  MCP   │  │  • Vector cosine│  │
-│   │ mneme  │   API    │   │ Server │  │  • RRF merge    │  │
-│   └────┬────┘   └────┬─────┘   └───┬────┘  └────────┬────────┘  │
-│        │             │             │                  │           │
-│        │   Query     │    Query    │     Query        │           │
-│        └─────────────┴─────────────┴──────────────────┘           │
-│        ┌─────────────┬─────────────┬──────────────────┐           │
-│        │   Results   │   Results   │     Results      │           │
-│        ▼             ▼             ▼                  ▼           │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                            Mneme                                     │
+│                                                                      │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────────┐  │
+│  │   Vault      │──────▶│   Indexer    │─────▶│   Store          │  │
+│  │ (Filesystem) │      │  (Pipeline)  │      │  (SQLite+FAISS)  │  │
+│  │ Source of    │      │  Extract     │      │  ┌─────────────┐ │  │
+│  │ Truth        │      │  Chunk       │      │  │ documents   │ │  │
+│  └──────────────┘      │  Embed       │      │  │ chunks      │ │  │
+│                        │  Store       │      │  │ fts_chunks  │ │  │
+│                        └──────────────┘      │  │ embeddings  │ │  │
+│                              │               │  │ manifest    │ │  │
+│                              │               │  │ schema_ver  │ │  │
+│                         ┌────▼─────┐         │  └─────────────┘ │  │
+│                         │ Manifest │         └────────┬─────────┘  │
+│                         │  Check   │                  │            │
+│                         │ (skip    │         ┌────────▼─────────┐  │
+│                         │unchanged)│         │   Retriever      │  │
+│                         └──────────┘         │   (Hybrid)       │  │
+│                                              │  • Lexical FTS5  │  │
+│   User Interfaces                            │  • Vector cosine │  │
+│   ┌─────────┐   ┌──────────┐   ┌────────┐  │  • RRF merge     │  │
+│   │  CLI    │   │  Python  │   │  MCP   │  │  • Reranking     │  │
+│   │ mneme   │   │  API     │   │ Server │  └────────┬─────────┘  │
+│   └────┬────┘   └────┬─────┘   └───┬────┘           │            │
+│        │             │             │                  │            │
+│   ┌────▼────┐        │             │                  │            │
+│   │ Socket  │  Query │    Query    │     Query        │            │
+│   │ Detect  │────────┴─────────────┴──────────────────┘            │
+│   │(watcher)│  ┌─────────────┬─────────────┬───────────┐          │
+│   └─────────┘  │   Results   │   Results   │  Results  │          │
+│                ▼             ▼             ▼            ▼          │
+└──────────────────────────────────────────────────────────────────────┘
 
 KEY FLOWS:
-  ──▶  Indexing: Vault → Indexer → Store (write path)
-  ◀── Retrieval: User Interface → Retriever → Store → Results (read path)
+  ──▶  Indexing: Vault → Manifest Check → Indexer → Store (write path)
+  ◀── Retrieval: CLI → Socket Detect → Retriever → Store → Results
+  ◀── Retrieval: API/MCP → Retriever → Store → Results (direct path)
 ```
 
 **Design Principles:**
@@ -60,6 +68,8 @@ KEY FLOWS:
 2. **Local-only** - No data leaves machine (unless you choose Gemini/Gemini service account)
 3. **Pluggable** - Swap extractors, embedders, chunkers via Protocol classes
 4. **Obsidian-aware** - Parses `[[wikilinks]]`, `#tags`, YAML frontmatter
+5. **Thread-safe** (Sprint 1) - Connection pooling, FAISS locks, atomic transactions
+6. **Fast by default** (Sprint 2) - Batch writes, manifest skip, lazy imports, query socket
 
 ---
 
@@ -117,15 +127,25 @@ result = indexer._process_file(abs_path)  # → ProcessResult
 **Pipeline Phases:**
 ```
 Phase 0: Reconciliation (detect deleted files)
+    - Compare DB files against filesystem
+    - Batch delete removed files (Sprint 2: DELETE IN clause)
+
+Phase 0.5: Manifest Check (Sprint 2)
+    - Compare file mtime + size against manifest table
+    - Skip unchanged files entirely (no extraction needed)
+    - Incremental scan of 149-file vault: <1s
+
 Phase 1: Parallel extraction via _process_file()
     - ThreadPoolExecutor(extraction_workers)
     - Each worker: validate → extract → chunk → build metadata
     - Returns ProcessResult with chunks + image_tasks
+    - Thread-safe: no DB writes, no shared mutable state (Sprint 1)
 
 Phase 2: Batched embedding and storage
     - Collect chunks across files
     - Batch embed (embed_batch_size chunks)
-    - Batch write to SQLite
+    - Batch write to SQLite via executemany() (Sprint 2)
+    - Atomic per-file transaction: doc + chunks + embeddings + manifest (Sprint 1)
 
 Phase 3: Parallel image analysis
     - ThreadPoolExecutor(image_workers)
@@ -161,12 +181,28 @@ fts_chunks USING fts5(chunk_id, vault_id, rel_path, text)
 
 -- Vector embeddings
 embeddings(chunk_id, model_id, dims, vector BLOB, ...)
+
+-- Indexing manifest (Sprint 2)
+manifest(vault_id, rel_path, mtime, size, content_hash, status, ...)
+
+-- Schema version tracking (Sprint 1)
+schema_version(version INTEGER, applied_at TEXT)
 ```
+
+**Thread-Safe Access (Sprint 1):**
+- Thread-local connection pool (`threading.local()`) — each thread gets its own connection
+- No shared mutable connection state across workers
+
+**Batch Operations (Sprint 2):**
+- `upsert_chunks()` — `executemany()` for batch inserts (10-50x faster)
+- `upsert_embeddings()` — `executemany()` for batch inserts
+- `delete_document()` — `DELETE ... WHERE chunk_id IN (...)` (10x faster)
+- Atomic per-file transactions (document + chunks + embeddings + manifest in one commit)
 
 **Search capabilities:**
 - `lexical_search()` - FTS5 with BM25 ranking
-- `vector_search()` - Cosine similarity (brute-force for now)
-- Planned: FAISS for approximate nearest neighbors
+- `vector_search()` - Cosine similarity (brute-force) or FAISS approximate NN
+- FAISS auto-warning when brute-force used with >10K chunks
 
 ### 4. Retriever (Query Engine)
 
@@ -193,6 +229,252 @@ if use_rerank:
 # 4. Return top K
 return combined[:top_k]
 ```
+
+---
+
+## Safety Architecture (v3.1 - Sprint 1)
+
+Sprint 1 established the safety foundation for concurrent operations and crash recovery.
+
+### Thread-Safe Database Access
+
+```mermaid
+graph TD
+    subgraph "Thread Pool (8 workers)"
+        W1[Worker 1] --> TL1[Thread-Local Conn]
+        W2[Worker 2] --> TL2[Thread-Local Conn]
+        W3[Worker N] --> TL3[Thread-Local Conn]
+    end
+    subgraph "Watcher Threads"
+        WT[Watch Thread] --> TL4[Thread-Local Conn]
+    end
+    subgraph "Query Path"
+        QT[Query Thread] --> TL5[Thread-Local Conn]
+    end
+    TL1 --> DB[(SQLite DB)]
+    TL2 --> DB
+    TL3 --> DB
+    TL4 --> DB
+    TL5 --> DB
+```
+
+**Problem:** Single shared `sqlite3.Connection` across all threads caused corruption under parallel scan + watcher.
+
+**Solution:** Thread-local connection pool via `threading.local()`:
+```python
+# store/libsql_store.py
+class LibSQLStore:
+    def __init__(self, db_path):
+        self._conn_lock = threading.Lock()
+        self._connections = threading.local()
+
+    @property
+    def _conn(self):
+        """Thread-local connection - each thread gets its own."""
+        if not hasattr(self._connections, 'conn'):
+            self._connections.conn = sqlite3.connect(
+                str(self.db_path), check_same_thread=False
+            )
+        return self._connections.conn
+```
+
+### FAISS Thread Safety
+
+All FAISS index operations protected with `threading.Lock()`:
+```python
+self._faiss_lock = threading.Lock()
+
+def _add_to_faiss(self, vectors):
+    with self._faiss_lock:
+        self._faiss_index.add(vectors)
+
+def save_faiss_index(self):
+    with self._faiss_lock:
+        self._faiss_index.save(self._faiss_path)
+```
+
+### Transaction Boundaries
+
+```mermaid
+graph LR
+    subgraph "Atomic Per-File Transaction"
+        A[Upsert Document] --> B[Upsert Chunks]
+        B --> C[Upsert Embeddings]
+        C --> D[Update FTS5]
+        D --> E[Update Manifest]
+    end
+    E --> F[COMMIT]
+```
+
+Each file's complete indexing (document + chunks + embeddings + FTS + manifest) executes in a single SQLite transaction. Interrupted scans leave the database in a consistent state.
+
+### Schema Migration System
+
+**Code:** `store/schema_manager.py`
+
+Automatic schema versioning with sequential migrations:
+```python
+class SchemaManager:
+    """Tracks schema version and applies migrations automatically."""
+
+    def ensure_current(self):
+        current = self._get_version()
+        for version, migration_fn in self.migrations:
+            if version > current:
+                migration_fn(self._conn)
+                self._set_version(version)
+```
+
+New indexes and schema changes are applied automatically on startup without requiring manual re-indexing.
+
+### Global Embedding Model Cache
+
+The embedding model is loaded once and cached globally, avoiding redundant 2-3s model loads:
+```python
+# embeddings/sentence_transformers.py
+_MODEL_CACHE: dict[str, SentenceTransformer] = {}
+
+def _get_or_load_model(model_name, device):
+    key = f"{model_name}::{device}"
+    if key not in _MODEL_CACHE:
+        _MODEL_CACHE[key] = SentenceTransformer(model_name, device=device)
+    return _MODEL_CACHE[key]
+```
+
+### Frontmatter Resilience
+
+Files with invalid YAML frontmatter (e.g., Obsidian templates using `{{date}}` syntax) are indexed with empty metadata instead of crashing the scan.
+
+---
+
+## Performance Architecture (v3.2 - Sprint 2)
+
+Sprint 2 optimized the write path, incremental scanning, and query latency.
+
+### Batch Database Writes
+
+```mermaid
+graph LR
+    subgraph "Before (Sprint 1)"
+        A1[Chunk 1] -->|INSERT| DB1[(DB)]
+        A2[Chunk 2] -->|INSERT| DB1
+        A3[Chunk N] -->|INSERT| DB1
+    end
+    subgraph "After (Sprint 2)"
+        B1[Chunk 1..N] -->|executemany| DB2[(DB)]
+    end
+```
+
+**`upsert_chunks()`** and **`upsert_embeddings()`** now use `executemany()` for batch inserts:
+- Per-row loops replaced with single batch operations
+- 10-50x write speedup for large scans
+
+**`delete_document()`** uses batch `DELETE ... WHERE chunk_id IN (...)`:
+- Cascading deletes consolidated into single SQL operations
+- 10x delete speedup
+
+### Manifest-Based Incremental Scanning
+
+```mermaid
+flowchart TD
+    A[File Found] --> B{Check Manifest}
+    B -->|mtime + size match| C[Skip - Unchanged]
+    B -->|mtime or size differ| D[Extract + Index]
+    B -->|Not in manifest| D
+    D --> E[Update Manifest Entry]
+    C --> F[Increment skipped count]
+```
+
+Before extraction, each file's `mtime` and `size` are checked against the manifest table. Unchanged files are skipped entirely, avoiding the expensive extract/chunk/embed pipeline.
+
+**Result:** Incremental scan of 149-file vault completes in **<1s** (vs 182s full scan).
+
+### FAISS Optimizations
+
+- **Save frequency** reduced from every 1,000 to every 5,000 vectors (20-50% scan speedup)
+- **Explicit `save_faiss_index()`** called at end of scan (ensures no data loss)
+- **Auto-warning** when brute-force vector search is used with >10K chunks and FAISS is disabled
+
+### Watcher Manifest Interop
+
+The watcher's `_index_one()` now writes manifest entries, ensuring files indexed by the watcher are correctly skipped by subsequent incremental scans.
+
+### Logging Consistency
+
+All `print()` calls in indexer and retriever replaced with proper `logging.getLogger(__name__)` calls for consistent log routing through the logging framework.
+
+---
+
+## Query Server Architecture (Exploration)
+
+### The Cold-Start Problem
+
+Every `mneme query` CLI invocation must:
+1. Start Python interpreter (~0.5s)
+2. Import torch/numpy/sentence_transformers (~2s)
+3. Load embedding model into memory (~1s)
+4. Execute the actual query (~0.1s)
+
+**Total: ~3.5-5s** per query, even though compute is only ~0.1s.
+
+### Solution: Watcher-Integrated Query Server
+
+```mermaid
+sequenceDiagram
+    participant CLI as mneme query
+    participant Socket as Unix Socket
+    participant QS as Query Server
+    participant R as Retriever (warm)
+    participant E as Embedder (warm)
+
+    CLI->>Socket: Connect to query.sock
+    alt Socket Available
+        CLI->>QS: {"action":"query","query":"...","k":10}
+        QS->>R: hybrid_search(query, k)
+        R->>E: embed_query(query)
+        E-->>R: vector (cached model)
+        R-->>QS: results
+        QS-->>CLI: {"results":[...],"elapsed":0.07}
+        Note over CLI: Total: ~0.12s
+    else Socket Unavailable
+        CLI->>CLI: Fall back to cold-start
+        Note over CLI: Total: ~5s
+    end
+```
+
+**How it works:**
+1. When the watcher starts, it creates a `QueryServer` alongside the file watcher
+2. The `QueryServer` keeps a warm `MultiVaultRetriever` with the embedding model loaded
+3. It listens on `<index_dir>/query.sock` (unix domain socket)
+4. CLI queries detect the socket and route through it automatically
+5. Protocol: newline-delimited JSON request/response
+
+**Code:** `src/mneme/query_server.py`
+
+### Lazy Module Imports
+
+To eliminate the 2s import overhead even when the socket IS available:
+
+**`__init__.py`** uses `__getattr__` for lazy loading:
+```python
+def __getattr__(name: str):
+    """Lazy-load heavy modules to avoid importing torch/numpy on every CLI invocation."""
+    if name == "VaultConfig":
+        from .config import VaultConfig
+        return VaultConfig
+    # ... other lazy imports
+```
+
+**`cli.py`** moves heavy imports inside each command function:
+```python
+@app.command()
+def query(q: str, ...):
+    # Heavy imports only when actually needed
+    from .retrieval.retriever import Retriever, MultiVaultRetriever
+    ...
+```
+
+**Result:** `import mneme` dropped from **2.15s to 0.018s** (120x faster).
 
 ---
 
@@ -372,22 +654,29 @@ use_rerank = true
 mneme query "kubernetes deployment" --k 10 --rerank
 ```
 
-### 4. FAISS Index Support (Planned for Large Vaults)
+### 4. FAISS Index Support
 
 **Problem:** Brute-force vector search becomes slow at >10K chunks (100ms-1s latency).
 
 **Solution:** FAISS approximate nearest neighbor index for sub-linear search time.
 
-**Status:** Infrastructure complete, disabled by default. Enable when vault grows large.
+**Status:** Implemented and production-ready. Disabled by default for small vaults. Auto-warning logged when brute-force is used with >10K chunks.
 
 **Configuration:**
 ```toml
 [embeddings]
-use_faiss = false              # Enable for >10K chunks
+use_faiss = false              # Enable for >10K chunks (auto-warning if not)
 faiss_index_type = "IVF"       # "Flat" (exact), "IVF" (fast), "HNSW" (fastest)
 faiss_nlist = 100              # Clusters for IVF
 faiss_nprobe = 10              # Clusters to search (IVF)
 ```
+
+**Thread Safety (Sprint 1):** All FAISS operations (add, search, save) protected with `threading.Lock()`.
+
+**Optimizations (Sprint 2):**
+- Save frequency: every 5,000 vectors (was 1,000) — 20-50% scan speedup
+- Explicit `save_faiss_index()` at end of scan — ensures persistence
+- Auto-warning at >10K chunks when FAISS disabled
 
 **Performance Targets:**
 - Brute-force: ~100ms-1s for 10K chunks
@@ -416,7 +705,8 @@ faiss_nprobe = 10              # Clusters to search (IVF)
 **Why FAISS disabled by default?**
 - Small vaults (<10K chunks) see no benefit from approximate search
 - Adds complexity (training, index management)
-- Users can enable when scaling needs arise
+- Auto-warning now logs when brute-force is used with >10K chunks (Sprint 2)
+- Thread-safe FAISS operations ensure safe concurrent access (Sprint 1)
 
 ---
 
@@ -478,6 +768,23 @@ def on_deleted(event):
 - Real-time indexing as you work
 - Keep vault always up-to-date
 - Background daemon for productivity
+- **Fast CLI queries** via built-in query server (model stays warm)
+
+**Built-in Query Server:**
+
+When the watcher starts, it also launches a unix socket query server that keeps the embedding model warm in memory. CLI queries (`mneme query`) automatically detect and route through this socket, reducing query latency from ~5s (cold-start) to ~0.1s.
+
+```
+┌──────────────┐    unix socket    ┌──────────────────┐
+│ mneme query  │ ────────────────▶ │ Query Server     │
+│ (CLI client) │ ◀──────────────── │ (in watcher)     │
+└──────────────┘    JSON response  │ Retriever (warm) │
+                                   │ Embedder (warm)  │
+  Falls back to cold-start        └──────────────────┘
+  if socket unavailable
+```
+
+Socket path: `<index_dir>/query.sock`
 
 **File Lifecycle Handling:**
 
@@ -612,40 +919,28 @@ for result in results:
 
 ---
 
-## Skills vs Non-Skills
+## Deployment Modes
 
-### ❌ Mneme is NOT a Claude Code Skill
+Mneme operates as both a **standalone tool** and a **Claude Code skill**:
 
-**Important clarification:**
+**Standalone:**
+- CLI tool (`mneme` command)
+- Python library (import and use)
+- MCP server (for Claude Desktop)
+- Independent application with own lifecycle
 
-**Mneme is:**
-- ✅ A standalone CLI tool (`mneme` command)
-- ✅ A Python library (import and use)
-- ✅ An MCP server (for Claude integration)
-- ✅ Independent application with own lifecycle
+**Claude Code Skill (deployed at `~/.claude/skills/Mneme/`):**
+- Auto-installing wrapper (`Tools/mneme-wrapper.sh`)
+- Watcher management (`Tools/manage-watcher.sh`)
+- Workflow-based routing (SearchVault, Scan, ManageWatcher, etc.)
+- Answers vault content questions directly in Claude Code sessions
 
-**Mneme is NOT:**
-- ❌ A Claude Code skill (no `/mneme` slash command)
-- ❌ Dependent on Claude to run
-- ❌ Part of Claude Code's skill system
-
-### Relationship with Claude
-
-**Optional Integration via MCP:**
-- Claude can use Mneme as a tool (like `grep`, `git`, `npm`)
-- You run `mneme mcp` as a separate process
-- Claude Desktop connects to it via stdio
-- Mneme runs independently - works without Claude
-
-**Comparison:**
-
-| Aspect | Claude Code Skill | Mneme |
-|--------|-------------------|------------|
-| Invocation | `/skill-name` | `mneme command` |
-| Lifecycle | Managed by Claude | Independent process |
-| Distribution | `~/.claude/skills/` | `pip install mneme` |
-| Runtime | Claude agent subprocess | Standalone Python app |
-| MCP | Not applicable | Optional MCP server mode |
+| Aspect | Standalone | Claude Code Skill |
+|--------|-----------|-------------------|
+| Invocation | `mneme command` | Automatic via skill routing |
+| Installation | `pip install mneme` | Auto-installed by wrapper |
+| Lifecycle | User-managed | Skill-managed |
+| Query routing | Direct CLI | Through watcher socket when available |
 
 ---
 
@@ -938,8 +1233,8 @@ SQLite serves as a **hybrid database** storing both traditional relational data 
 │  │                                                           │ │
 │  │  • Storage: np.asarray(vec, dtype=np.float32).tobytes()  │ │
 │  │  • Retrieval: np.frombuffer(blob, dtype=np.float32)      │ │
-│  │  • Search: Brute-force cosine similarity (currently)      │ │
-│  │  • Future: FAISS index for approximate NN                 │ │
+│  │  • Search: Brute-force cosine similarity (<10K chunks)    │ │
+│  │  • FAISS: Approximate NN for larger vaults (thread-safe)  │ │
 │  │                                                           │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
@@ -961,8 +1256,8 @@ SQLite serves as a **hybrid database** storing both traditional relational data 
 3. **No external dependencies** - Works everywhere SQLite works
 4. **Future-proof** - Can add vector index extensions (e.g., libSQL vector search)
 
-**Current limitation:** Vector search is brute-force O(N) - loads all embeddings and computes cosine similarity in Python. For >10K chunks, consider:
-- FAISS index (approximate nearest neighbors)
+**Scaling options for >10K chunks:**
+- FAISS index (implemented, thread-safe, auto-warning if disabled)
 - libSQL vector extensions (when available)
 - Separate vector store (Qdrant, Milvus)
 
@@ -1093,21 +1388,62 @@ config.toml
 
 ## Performance
 
+### Real-World Benchmarks (bge-large-en-v1.5 on Apple M-series, MPS)
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Full scan** | 149 files, 3,106 chunks, 182s | Includes 7 images via Gemini |
+| **Incremental scan** | <1s (149/149 skipped) | Manifest-based skip |
+| **Query (cold-start)** | ~5s | Python + model load overhead |
+| **Query (via watcher socket)** | ~0.1-0.3s | 30x faster, model stays warm |
+| **Multi-query workflow (3 queries)** | 0.5s socket vs 16s cold-start | 30x speedup |
+| **Embedding** | ~81% of scan time | Primary bottleneck |
+
+### Query Latency Breakdown
+
+```
+Cold-Start Query (~5s total):
+  Python startup:     ~0.5s
+  Import torch/numpy: ~2.0s  (eliminated with lazy imports → 0.018s)
+  Load model:         ~1.5s  (eliminated with global cache)
+  Actual query:       ~0.1s
+
+Watcher Socket Query (~0.1-0.3s total):
+  CLI overhead:       ~0.05s  (lazy imports)
+  Socket roundtrip:   ~0.02s
+  Query compute:      ~0.07s  (model warm in memory)
+```
+
 ### Indexing Speed Factors
-- **Embedder device:** `mps` (Mac M1/M2) > `cuda` (NVIDIA) > `cpu`
+- **Embedder device:** `mps` (Mac M-series) > `cuda` (NVIDIA) > `cpu`
 - **Batch size:** Larger = faster (if you have RAM)
-- **Model size:** `all-MiniLM-L6-v2` (384d) faster than `bge-base` (768d)
-- **Image analysis:** `tesseract` (local) > `gemini-service-account` (API calls)
+- **Model size:** `all-MiniLM-L6-v2` (384d) faster than `bge-large` (1024d)
+- **Image analysis:** `tesseract` (local) > `gemini` (API calls)
+- **Batch writes (Sprint 2):** `executemany()` provides 10-50x write speedup
+- **Manifest skip (Sprint 2):** Unchanged files skipped entirely
 
 ### Query Speed Factors
-- **Vector search:** Brute-force (slow for >10K chunks)
-  - Future: FAISS for approximate NN
+- **Watcher socket:** ~0.1s (model warm, no startup overhead)
+- **Vector search:** Brute-force for <10K chunks, FAISS for larger
 - **k_vec/k_lex:** Lower = faster
-- **FTS5:** Very fast (built-in SQLite)
+- **FTS5:** Very fast (built-in SQLite, ~1-10ms)
 
 ### Storage
 - **~100MB per 1000 documents** (embeddings dominate)
 - Embedding size: `num_chunks × embedding_dim × 4 bytes`
+- Example: 3,106 chunks x 1024 dims x 4 bytes = ~12.7MB embeddings
+
+---
+
+## Architecture Evolution
+
+| Version | Sprint | Focus | Key Changes |
+|---------|--------|-------|-------------|
+| **3.0** | - | Rename | RAGtriever → Mneme, new package structure |
+| **3.1** | Sprint 1 | Safety | Thread-safe DB, FAISS locks, transactions, schema migration, model cache |
+| **3.1.1** | - | Fix | Frontmatter resilience for Obsidian templates |
+| **3.2** | Sprint 2 | Performance | Batch writes, manifest skip, FAISS optimizations, logging migration |
+| **Explore** | - | Query Speed | Watcher query server (30x), lazy imports (120x import speedup) |
 
 ---
 
@@ -1115,6 +1451,6 @@ config.toml
 
 - **Setup Guide:** [gemini_sa_setup.md](gemini_sa_setup.md)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)
-- **Improvements:** [../IMPROVEMENTS.md](../IMPROVEMENTS.md)
+- **Improvement Audit:** [../../docs/suggestions/improvement-audit.md](../../docs/suggestions/improvement-audit.md)
 - **User Guide:** [../README.md](../README.md)
 - **Code Details:** [../CLAUDE.md](../CLAUDE.md)
