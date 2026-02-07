@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -87,7 +88,7 @@ class Retriever:
                     model_name=self.cfg.rerank_model,
                     device=self.cfg.rerank_device
                 )
-                print(f"✓ Reranker initialized: {self.cfg.rerank_model}")
+                logging.getLogger(__name__).info(f"Reranker initialized: {self.cfg.rerank_model}")
 
     def search(self, query: str, k: int | None = None, filters: dict[str, Any] | None = None) -> list[SearchResult]:
         k = k or self.cfg.top_k
@@ -203,7 +204,7 @@ class MultiVaultRetriever:
                     model_name=cfg.rerank_model,
                     device=cfg.rerank_device
                 )
-                print(f"✓ Reranker initialized: {cfg.rerank_model}")
+                logging.getLogger(__name__).info(f"Reranker initialized: {cfg.rerank_model}")
 
         # Build vault_id lookup
         self._vault_ids: dict[str, str] = {}  # name -> vault_id

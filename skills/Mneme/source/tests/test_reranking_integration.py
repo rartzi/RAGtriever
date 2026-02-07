@@ -46,8 +46,8 @@ class TestRerankerIntegration:
             retriever = Retriever(config_with_rerank)
             assert retriever.reranker is not None
 
-    def test_reranker_initialization_message(self, minimal_config, capsys):
-        """Test that reranker prints initialization message."""
+    def test_reranker_initialization_message(self, minimal_config, caplog):
+        """Test that reranker logs initialization message."""
         config_with_rerank = dataclasses.replace(
             minimal_config,
             use_rerank=True,
@@ -55,11 +55,11 @@ class TestRerankerIntegration:
         )
 
         with patch('sentence_transformers.SentenceTransformer'), \
-             patch('mneme.retrieval.reranker.CrossEncoder'):
+             patch('mneme.retrieval.reranker.CrossEncoder'), \
+             caplog.at_level("INFO", logger="mneme.retrieval.retriever"):
             Retriever(config_with_rerank)
-            captured = capsys.readouterr()
-            assert "✓ Reranker initialized" in captured.out
-            assert "cross-encoder/test-model" in captured.out
+            assert "Reranker initialized" in caplog.text
+            assert "cross-encoder/test-model" in caplog.text
 
     def test_reranking_integrates_with_search(self, minimal_config):
         """Test that reranker is called during search when enabled."""

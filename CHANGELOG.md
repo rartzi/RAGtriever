@@ -5,6 +5,21 @@ All notable changes to Mneme (formerly RAGtriever) will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-02-07
+
+### Performance
+
+- **Batch SQLite writes**: `upsert_chunks()` and `upsert_embeddings()` now use `executemany()` for batch inserts, replacing per-row execute loops (10-50x write speedup for large scans)
+- **Batch deletion**: `delete_document()` uses `DELETE ... WHERE chunk_id IN (...)` instead of per-chunk loops (10x delete speedup)
+- **Manifest-based incremental skip**: Scan checks file mtime+size against manifest before extraction, skipping unchanged files entirely (incremental scan completes in <1s for unchanged vaults)
+- **FAISS save frequency**: Reduced FAISS index checkpoint frequency from every 1,000 to every 5,000 vectors, with explicit `save_faiss_index()` call at end of scan
+- **FAISS auto-warning**: Logs a warning when brute-force vector search is used with >10K chunks and FAISS is disabled
+
+### Fixed
+
+- **Watcher manifest interop**: `_index_one()` (used by watcher) now writes manifest entries, ensuring watcher-indexed files are correctly skipped by subsequent incremental scans
+- **Logging consistency**: Replaced all `print()` calls in indexer and retriever with proper `logging.getLogger(__name__)` calls for consistent log routing
+
 ## [3.1.1] - 2026-02-06
 
 ### Fixed

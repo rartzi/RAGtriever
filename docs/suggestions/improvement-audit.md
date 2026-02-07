@@ -15,8 +15,8 @@ However, four areas present significant improvement opportunities:
 | Area | Current Rating | Key Issue |
 |------|---------------|-----------|
 | **Scale** | 50K chunk ceiling | O(n) brute-force search, in-memory buffering |
-| **Performance** | Good for small vaults | Serial DB writes, model reload per query, FAISS save too frequent |
-| **Quality** | Good with caveats | Thread safety gaps, no transaction boundaries, edge case gaps |
+| **Performance** | Good for small vaults | Serial DB writes ✅fixed, model reload per query ✅fixed, FAISS save too frequent ✅fixed |
+| **Quality** | Good with caveats | Thread safety gaps ✅fixed, no transaction boundaries ✅fixed, edge case gaps |
 | **Architecture** | 7/10 | Config duplication, no schema migration, weak DI |
 
 **Total issues identified:** 50+ across all categories
@@ -183,20 +183,20 @@ Deleting a document cascades to 4+ separate DELETE queries per chunk. A 1000-chu
 
 ### Quick Wins (< 1 hour each)
 
-| # | Optimization | File | Expected Impact |
-|---|-------------|------|----------------|
-| P1 | Batch SQLite commits with `executemany()` | `indexer.py:809-815` | 10-50x write speedup |
-| P2 | Enable FAISS by default for >10K chunks | `config.py` | 100-1000x query speedup |
-| P3 | Reduce FAISS save from every 100 to 5000 vectors | `libsql_store.py:361-365` | 20-50% scan speedup |
-| P4 | Global embedding model cache | `sentence_transformers.py:44-80` | 100-500ms saved per query |
-| P5 | Filter backlink counts by result doc_ids | `retriever.py:106-112` | 5-30% query speedup |
-| P6 | FTS5 content deduplication (`content=chunks`) | `libsql_store.py:88-95` | 50% FTS5 size reduction |
+| # | Optimization | File | Expected Impact | Status |
+|---|-------------|------|----------------|--------|
+| P1 | Batch SQLite commits with `executemany()` | `libsql_store.py` | 10-50x write speedup | ✅ Sprint 2 |
+| P2 | Enable FAISS by default for >10K chunks | `config.py` | 100-1000x query speedup | ✅ Auto-warn added |
+| P3 | Reduce FAISS save from every 100 to 5000 vectors | `libsql_store.py` | 20-50% scan speedup | ✅ Sprint 2 |
+| P4 | Global embedding model cache | `sentence_transformers.py` | 100-500ms saved per query | ✅ Sprint 1 |
+| P5 | Filter backlink counts by result doc_ids | `retriever.py:106-112` | 5-30% query speedup | |
+| P6 | FTS5 content deduplication (`content=chunks`) | `libsql_store.py:88-95` | 50% FTS5 size reduction | |
 
 ### Medium-Effort Optimizations
 
-| # | Optimization | File | Expected Impact |
-|---|-------------|------|----------------|
-| P7 | Implement manifest-based file skipping (TODO exists) | `indexer.py:717` | 90% incremental scan speedup |
+| # | Optimization | File | Expected Impact | Status |
+|---|-------------|------|----------------|--------|
+| P7 | Implement manifest-based file skipping (TODO exists) | `indexer.py` | 90% incremental scan speedup | ✅ Sprint 2 |
 | P8 | Lazy-load reranker model on first use | `reranker.py:43` | 500ms-2s saved at init |
 | P9 | Ollama batch/concurrent embedding | `ollama.py:36-42` | 10-100x for Ollama users |
 | P10 | Move path_prefix filter to SQL WHERE clause | `libsql_store.py:398-420` | 5-20% filtered query speedup |
@@ -249,7 +249,7 @@ Test ratio is 1.16:1 (excellent), but critical scenarios are untested:
 
 | Issue | Fix |
 |-------|-----|
-| 14+ `print()` calls in `libsql_store.py` instead of `logger` | Replace with `logger.info()` |
+| 14+ `print()` calls in `libsql_store.py` instead of `logger` | ✅ Replaced with `logger.info()` (Sprint 2) |
 | No log rotation (FileHandler, not RotatingFileHandler) | Use `RotatingFileHandler(maxBytes=10MB)` |
 | `--verbose` enables ALL library debug logs | Selectively enable `mneme` loggers only |
 | Skipped files logged silently (`continue` without log) | Add `logger.debug()` with reason |
@@ -349,27 +349,29 @@ Minimal metrics. ScanStats has basic counts but no timing breakdown. No search p
 
 ## 6. Implementation Roadmap
 
-### Phase 1: Safety (Week 1-2) - Prevents Data Loss
+### Phase 1: Safety (Week 1-2) - Prevents Data Loss ✅ COMPLETED (Sprint 1, 2026-02-06)
 
-| Task | Effort | Impact | Files |
-|------|--------|--------|-------|
-| SQLite connection pooling | 4h | Prevents concurrent write corruption | `libsql_store.py` |
-| FAISS thread locking | 2h | Prevents vector index corruption | `libsql_store.py` |
-| Transaction boundaries in scan | 3h | Prevents interrupted scan data loss | `indexer.py` |
-| Atomic document + manifest upsert | 2h | Prevents stale manifest state | `libsql_store.py`, `indexer.py` |
+| Task | Effort | Impact | Files | Status |
+|------|--------|--------|-------|--------|
+| SQLite connection pooling | 4h | Prevents concurrent write corruption | `libsql_store.py` | ✅ Done |
+| FAISS thread locking | 2h | Prevents vector index corruption | `libsql_store.py` | ✅ Done |
+| Transaction boundaries in scan | 3h | Prevents interrupted scan data loss | `indexer.py` | ✅ Done |
+| Atomic document + manifest upsert | 2h | Prevents stale manifest state | `libsql_store.py`, `indexer.py` | ✅ Done |
 
 **Result:** Safe concurrent operations, crash recovery
 
-### Phase 2: Performance (Week 3-4) - 10-100x Speedup
+### Phase 2: Performance (Week 3-4) - 10-100x Speedup ✅ COMPLETED (Sprint 2, 2026-02-07)
 
-| Task | Effort | Impact | Files |
-|------|--------|--------|-------|
-| Batch SQLite writes (`executemany`) | 3h | 10-50x write speedup | `libsql_store.py` |
-| Enable FAISS by default for >10K | 1h | 100-1000x query speedup | `config.py` |
-| Reduce FAISS save frequency | 30m | 20-50% scan speedup | `libsql_store.py` |
-| Global model cache | 1h | 100-500ms per query saved | `sentence_transformers.py` |
-| Manifest-based incremental skip | 4h | 90% incremental scan speedup | `indexer.py` |
-| Batch deletion with IN clause | 2h | 10x delete speedup | `libsql_store.py` |
+| Task | Effort | Impact | Files | Status |
+|------|--------|--------|-------|--------|
+| Batch SQLite writes (`executemany`) | 3h | 10-50x write speedup | `libsql_store.py` | ✅ Done |
+| Enable FAISS by default for >10K | 1h | 100-1000x query speedup | `config.py` | ✅ Auto-warn added |
+| Reduce FAISS save frequency | 30m | 20-50% scan speedup | `libsql_store.py` | ✅ Done (5000) |
+| Global model cache | 1h | 100-500ms per query saved | `sentence_transformers.py` | ✅ Done (Sprint 1) |
+| Manifest-based incremental skip | 4h | 90% incremental scan speedup | `indexer.py` | ✅ Done |
+| Batch deletion with IN clause | 2h | 10x delete speedup | `libsql_store.py` | ✅ Done |
+
+**Also completed:** print→logger migration (indexer.py, retriever.py), watcher manifest interop fix.
 
 **Result:** Scales from 50K to 250K chunks
 
@@ -416,7 +418,7 @@ Minimal metrics. ScanStats has basic counts but no timing breakdown. No search p
 | Tier | Chunk Range | Requires | Effort |
 |------|------------|----------|--------|
 | **Current** | 0-50K | Nothing | Done |
-| **Tier 2** | 50K-250K | Phase 1+2 (Safety + Performance) | 2-4 weeks |
+| **Tier 2** | 50K-250K | Phase 1+2 (Safety + Performance) | ✅ Done (Sprint 1+2) |
 | **Tier 3** | 250K-1M | + Phase 5 (HNSW, streaming) | 4-6 weeks |
 | **Enterprise** | 1M+ | Sharded indexes, read replicas, tiered storage | 8-12 weeks |
 
