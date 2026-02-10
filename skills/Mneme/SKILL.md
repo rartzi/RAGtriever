@@ -33,17 +33,45 @@ skills/Mneme/
 └── source/               # Bundled source code
 ```
 
-## 🚨 CRITICAL: Always Use Agentic Search Process
+## Search Strategy: Know the Tradeoffs
 
-**ALL vault searches MUST follow the 5-step agentic process:**
+**Two approaches, each with tradeoffs:**
 
+| Approach | Speed | Coverage | Best For |
+|----------|-------|----------|----------|
+| **Quick Semantic** | Fast (~2s) | Matches query embedding only | Simple lookups, known topics |
+| **Agentic Search** | Slower (~30s) | Full vault exploration | Complex questions, unfamiliar topics |
+
+### Quick Semantic Search
+```bash
+mneme query "specific known term" --k 10
 ```
-Orient → Search → Refine → Connect → Synthesize
+**Pros:** Fast, efficient for targeted lookups
+**Cons:** Misses content with different vocabulary, unexpected locations, counter-narratives
+
+**Use when:** Looking up a specific person, project, or well-defined term you know exists
+
+### Agentic Search (Orient → Search → Refine → Connect)
+```bash
+mneme list-docs | grep -i "topic"     # Orient: what exists?
+mneme query "topic" --k 15            # Search: semantic matches
+mneme text-search "exact term"        # Refine: discovered vocabulary
+mneme backlinks --limit 10            # Connect: hub documents
 ```
+**Pros:** Discovers content in unexpected places, multiple perspectives, counter-narratives
+**Cons:** Takes longer, may be overkill for simple questions
 
-**Why?** Semantic search alone misses critical content. Example: Searching "OpenClaw impact" returned only positive articles, but Orient revealed a YouTube folder containing critical security warnings the semantic search completely missed.
+**Use when:**
+- Exploring unfamiliar topics
+- Questions asking for "insights" or "impact"
+- Need comprehensive/balanced view
+- Initial results seem incomplete or one-sided
 
-**Never skip Orient.** It takes 2 seconds and reveals content you'd otherwise miss.
+### The OpenClaw Lesson
+
+Semantic search for "OpenClaw impact AI landscape" returned only positive articles about 150K agents and autonomous economies. But `list-docs | grep -i claw` revealed a YouTube folder containing critical security warnings the semantic search completely missed.
+
+**Takeaway:** For questions requiring comprehensive coverage, Orient first. For simple lookups, semantic search is fine.
 
 ## Workflow Routing
 
@@ -201,21 +229,24 @@ When the watcher is running, `mneme query` automatically routes through the watc
 
 ## Tips for Claude Code Users
 
-1. **ALWAYS use the 5-step agentic process** - Orient → Search → Refine → Connect → Synthesize
-2. **NEVER skip Orient** - `list-docs | grep keyword` takes 2 seconds and reveals content semantic search misses
+1. **Match search depth to question complexity** - Simple lookups → semantic; comprehensive questions → agentic
+2. **Orient when exploring unfamiliar topics** - `list-docs | grep keyword` reveals content semantic search misses
 3. **ALWAYS cite sources** - Every response MUST end with a "Sources" section
 4. **Vault content != Mneme code** - Don't confuse vault search with codebase search
 5. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing
 6. **Use the portable wrapper** - `Tools/mneme-wrapper.sh` handles installation automatically
-7. **Check multiple perspectives** - If results seem one-sided, search other folders/content types
+7. **Check multiple perspectives** - If results seem one-sided, Orient to find other content types
 8. **Use backlinks for important topics** - Hub documents often contain authoritative information
 
-## The 5-Step Checklist (MANDATORY)
+## Decision Guide: When to Use What
 
-Before finalizing ANY vault answer:
+| Question Type | Approach | Example |
+|---------------|----------|---------|
+| Specific lookup | Quick semantic | "What's Alex Rivera's role?" |
+| Known document | Quick semantic | "Find the AWS deck" |
+| Comprehensive insights | Full agentic | "What are the impacts of X?" |
+| Unfamiliar topic | Full agentic | "What does the vault say about Y?" |
+| Comparing/contrasting | Full agentic | "How does A relate to B?" |
+| One-sided initial results | Expand to agentic | Add Orient + Refine steps |
 
-- [ ] **ORIENT** — Ran `list-docs | grep keyword` to see what's available
-- [ ] **SEARCH** — Ran semantic `query` for main results
-- [ ] **REFINE** — Used `text-search` for exact terms in discovered folders
-- [ ] **CONNECT** — Checked `backlinks` for hub documents if relevant
-- [ ] **CITE** — Listed ALL contributing sources in Sources section
+**Rule of thumb:** If unsure, start with semantic search. If results seem incomplete, one-sided, or miss obvious content → expand to agentic approach.

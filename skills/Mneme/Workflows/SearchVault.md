@@ -1,6 +1,6 @@
 # SearchVault Workflow
 
-Search and answer questions from indexed vault content using the **Agentic Search Process**.
+Search and answer questions from indexed vault content.
 
 ## Trigger Phrases
 - "what does the vault say about..."
@@ -8,23 +8,46 @@ Search and answer questions from indexed vault content using the **Agentic Searc
 - "search for..."
 - Any question that should be answered from vault content
 
-## 🚨 MANDATORY: Always Follow the Agentic Search Process
+## Choose Your Approach
 
-**Never skip steps.** Semantic search alone misses critical content (as proven by the OpenClaw security example where semantic search found only positive articles while Orient revealed critical security warnings in a different folder).
+**Match search depth to question complexity:**
 
-```
-Orient → Search → Refine → Connect → Synthesize
-   ↑                                      |
-   └────── if gaps remain ─────────────────┘
-```
+| Question Type | Approach | Steps |
+|---------------|----------|-------|
+| Simple lookup ("find X", "what is Y's role") | Quick semantic | Search → Cite |
+| Comprehensive ("insights about", "impact of") | Full agentic | Orient → Search → Refine → Connect → Cite |
+| Initially incomplete results | Expand | Add Orient + Refine to find what's missing |
+
+## Understanding the Tradeoffs
+
+### Quick Semantic Search
+- ✅ **Fast** (~2 seconds)
+- ✅ Good for known topics, specific lookups
+- ❌ Misses content with different vocabulary
+- ❌ Misses content in unexpected folders
+- ❌ May return one-sided perspective
+
+### Full Agentic Search
+- ✅ Discovers content in unexpected places
+- ✅ Finds counter-narratives and multiple perspectives
+- ✅ Uses document vocabulary, not just query terms
+- ❌ Takes longer (~30 seconds)
+- ❌ Overkill for simple lookups
+
+### The OpenClaw Lesson
+
+Semantic search for "OpenClaw impact AI landscape" returned only positive articles. But `list-docs | grep -i claw` revealed a YouTube folder containing **critical security warnings** the semantic search completely missed.
+
+**Takeaway:** For comprehensive questions, Orient first. For simple lookups, semantic is fine.
 
 ---
 
 ## Procedure
 
-### Step 1: ORIENT — Understand What's Available (MANDATORY)
+### Step 1: ORIENT — Understand What's Available
 
-Before any semantic search, understand the vault structure:
+**When to use:** Unfamiliar topics, comprehensive questions, or when you need full coverage.
+**Skip when:** Simple lookups for known content.
 
 ```bash
 # Quick orientation - see what folders/content types exist
@@ -34,7 +57,7 @@ mneme list-docs --config config.toml | head -50
 mneme list-docs --config config.toml | grep -i "keyword" | head -30
 ```
 
-**Why this matters:** Semantic search returns what matches the query embedding. Orient reveals content that exists but uses different vocabulary or lives in unexpected locations (YouTube transcripts, images, subfolders you didn't know existed).
+**Why it helps:** Semantic search only returns what matches the query embedding. Orient reveals content that exists but uses different vocabulary or lives in unexpected locations (YouTube transcripts, images, subfolders).
 
 **Output:** Note any surprising folders or file types that might contain relevant content.
 
@@ -173,12 +196,25 @@ Run additional cycles when:
 
 ---
 
-## Quick Reference: The 5-Step Checklist
+## Quick Reference: Decision Checklist
 
-Before finalizing any vault answer, verify:
+Before finalizing any vault answer:
 
-- [ ] **Oriented** — Ran `list-docs` to see what's available
+**For simple lookups:**
+- [ ] Ran semantic `query` for results
+- [ ] Results directly answer the question
+- [ ] Cited sources
+
+**For comprehensive questions (expand if initial results seem incomplete):**
+- [ ] **Oriented** — Ran `list-docs | grep keyword` to see what content types exist
 - [ ] **Searched** — Ran semantic `query` for main results
-- [ ] **Refined** — Used `text-search` for exact terms/names if needed
+- [ ] **Refined** — Used `text-search` in folders discovered during Orient
 - [ ] **Connected** — Checked `backlinks` for hub documents if relevant
+- [ ] **Balanced** — Results include multiple perspectives (if applicable)
 - [ ] **Cited** — Listed ALL sources in Sources section
+
+**Signs you need to expand to agentic:**
+- Results seem one-sided (all positive or all negative)
+- Results all come from one folder/content type
+- Important aspects of the question aren't addressed
+- You know content exists that wasn't returned
