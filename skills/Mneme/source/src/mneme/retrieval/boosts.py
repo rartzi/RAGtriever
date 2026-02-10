@@ -130,14 +130,12 @@ class BoostAdjuster:
         return boosted
 
     def _extract_doc_id(self, result: SearchResult) -> str:
-        """Extract doc_id from result metadata or construct from source_ref."""
-        # Try metadata first
-        if "doc_id" in result.metadata:
-            return str(result.metadata["doc_id"])
-        # Fallback: construct from vault_id + rel_path
-        # Note: This won't match the hashed doc_id in the store, but provides
-        # a consistent key for backlink lookups when doc_id isn't in metadata
-        return f"{result.source_ref.vault_id}:{result.source_ref.rel_path}"
+        """Extract doc_id (rel_path) from result for backlink lookups.
+
+        Note: Returns rel_path, not the hashed doc_id, since get_backlink_counts()
+        is keyed by rel_path for efficient lookups.
+        """
+        return result.source_ref.rel_path
 
     def _extract_mtime(self, result: SearchResult) -> datetime | None:
         """Extract modification time from result metadata."""

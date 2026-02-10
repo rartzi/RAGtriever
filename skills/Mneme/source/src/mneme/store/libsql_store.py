@@ -805,21 +805,21 @@ class LibSqlStore:
         if doc_ids:
             placeholders = ",".join("?" * len(doc_ids))
             query = f"""
-                SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
+                SELECT d.rel_path, COUNT(DISTINCT l.src_rel_path) as backlink_count
                 FROM links l
                 JOIN documents d ON {join_cond}
                 WHERE d.deleted = 0 AND d.rel_path IN ({placeholders})
-                GROUP BY d.doc_id
+                GROUP BY d.rel_path
             """
             params = list(doc_ids)
         else:
             query = f"""
-                SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
+                SELECT d.rel_path, COUNT(DISTINCT l.src_rel_path) as backlink_count
                 FROM links l
                 JOIN documents d ON {join_cond}
                 WHERE d.deleted = 0
-                GROUP BY d.doc_id
+                GROUP BY d.rel_path
             """
 
         cursor = self._get_conn().execute(query, params)
-        return {row["doc_id"]: row["backlink_count"] for row in cursor.fetchall()}
+        return {row["rel_path"]: row["backlink_count"] for row in cursor.fetchall()}

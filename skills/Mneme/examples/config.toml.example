@@ -106,6 +106,21 @@ circuit_reset = 60        # Auto-reset breaker after N seconds (default: 60)
 # timeout = 60000  # Request timeout in milliseconds (default: 60s, uses [image_analysis].timeout if not set)
 # endpoint_path = "vertex-ai-express"  # Path suffix appended to URL (default: vertex-ai-express)
 
+# Agentic Search (v3.4.0+)
+# Mneme supports iterative, multi-step search for complex questions beyond simple semantic search.
+# These tools enable exploration, exact phrase matching, and link graph traversal:
+#
+# Available via MCP tools (Claude Desktop) and CLI commands:
+#   - vault_list_docs / list-docs:     Browse vault structure by path prefix
+#   - vault_text_search / text-search: Exact phrase matching (FTS5 full-text search)
+#   - vault_backlinks / backlinks:     Find incoming links to documents
+#
+# Workflow: Orient → Search → Refine → Connect → Read → Synthesize
+# See skills/Mneme/Workflows/AgenticSearch.md for the complete 6-step pattern
+#
+# Multi-vault: All commands support --vaults filter for targeting specific vaults
+# Query server: All actions available via unix socket (query, list_docs, text_search, backlinks, ping)
+
 [retrieval]
 k_vec = 40
 k_lex = 40
