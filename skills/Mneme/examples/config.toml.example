@@ -53,6 +53,11 @@ query_prefix = "Represent this sentence for searching relevant passages: "
 #   - Keep false for <5K chunks (brute-force is fast enough)
 #   - Enable for >10K chunks (significant speedup)
 # Install with: pip install faiss-cpu (or faiss-gpu for CUDA)
+# Contextual embeddings: prepend "Document: <title>\nSection: <heading>\n\n"
+# to embedding input for better retrieval (Anthropic research: 35-67% fewer failures)
+# Default: false (requires --full re-scan when enabled)
+use_contextual_embeddings = false
+
 use_faiss = false  # Default: false (enable when vault grows large)
 faiss_index_type = "IVF"  # "Flat" (exact), "IVF" (fast), "HNSW" (fastest)
 faiss_nlist = 100  # Number of clusters (IVF only)

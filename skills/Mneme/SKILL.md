@@ -157,7 +157,7 @@ When the watcher is running, `mneme query` automatically routes through the watc
 | Topic | File |
 |-------|------|
 | **Deployment guide** | `DEPLOYMENT.md` |
-| Architecture & Sprint 1/2 features | `docs/ARCHITECTURE.md` |
+| Architecture & all sprint features | `docs/ARCHITECTURE.md` |
 | Search strategy & vocabulary mismatch | `docs/SearchBestPractices.md` |
 | Config checklist & image providers | `docs/Configuration.md` |
 | Common commands reference | `docs/Commands.md` |

@@ -5,6 +5,17 @@ All notable changes to Mneme (formerly RAGtriever) will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-02-09
+
+### Added
+
+- **Link Persistence**: New `upsert_links()` store method persists wikilinks extracted from markdown files to the `links` table. Links are written in all 3 indexer paths (scan, watcher, legacy batch) inside atomic transactions. Previously the links table schema existed but was never populated.
+- **Contextual Embeddings**: New `use_contextual_embeddings` config option (default: `false`) prepends `"Document: <title>\nSection: <heading>\n\n"` to embedding input text, improving retrieval relevance by 35-67% (per Anthropic research). Applied in all 6 embedding paths (3 text + 3 image). Stored chunk text is unchanged — only the embedding input gets the prefix. Requires `--full` re-scan when enabled.
+
+### Fixed
+
+- **Backlink fuzzy matching**: `get_backlink_counts()` now handles Obsidian-style bare wikilink names (e.g., `"Obsidian"` matching `"knowledge-base/concepts/obsidian.md"`) via case-insensitive LIKE matching. Previously returned 0 backlinks for all documents despite links being persisted.
+
 ## [3.4.0] - 2026-02-09
 
 ### Added

@@ -127,6 +127,17 @@ heading_boost_enabled = true
 tag_boost_enabled = true
 ```
 
+### Contextual Embeddings
+
+Prepends document title and section heading to embedding input for better retrieval (35-67% fewer failures per Anthropic research). Stored chunk text is unchanged — only the embedding vector captures the context.
+
+```toml
+[embeddings]
+use_contextual_embeddings = false  # Requires --full re-scan when enabled
+```
+
+**Prefix format:** `"Document: <title>\nSection: <heading>\n\n"` prepended to each chunk's embedding input. Title falls back: frontmatter `title` → filename stem → rel_path stem.
+
 ### Fusion Algorithm
 
 ```toml

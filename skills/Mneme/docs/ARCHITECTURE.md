@@ -143,9 +143,11 @@ Phase 1: Parallel extraction via _process_file()
 
 Phase 2: Batched embedding and storage
     - Collect chunks across files
+    - Contextual prefix prepended to embedding input (if enabled)
     - Batch embed (embed_batch_size chunks)
     - Batch write to SQLite via executemany() (Sprint 2)
-    - Atomic per-file transaction: doc + chunks + embeddings + manifest (Sprint 1)
+    - Persist wikilinks via upsert_links() (v3.5)
+    - Atomic per-file transaction: doc + chunks + embeddings + links + manifest
 
 Phase 3: Parallel image analysis
     - ThreadPoolExecutor(image_workers)
@@ -196,8 +198,9 @@ schema_version(version INTEGER, applied_at TEXT)
 **Batch Operations (Sprint 2):**
 - `upsert_chunks()` — `executemany()` for batch inserts (10-50x faster)
 - `upsert_embeddings()` — `executemany()` for batch inserts
+- `upsert_links()` — delete-then-insert per document with `executemany()` for batch link persistence
 - `delete_document()` — `DELETE ... WHERE chunk_id IN (...)` (10x faster)
-- Atomic per-file transactions (document + chunks + embeddings + manifest in one commit)
+- Atomic per-file transactions (document + chunks + embeddings + links + manifest in one commit)
 
 **Search capabilities:**
 - `lexical_search()` - FTS5 with BM25 ranking
@@ -475,6 +478,47 @@ def query(q: str, ...):
 ```
 
 **Result:** `import mneme` dropped from **2.15s to 0.018s** (120x faster).
+
+---
+
+## Link Persistence & Contextual Embeddings (v3.5)
+
+### Link Persistence
+
+Wikilinks extracted from markdown files (`[[target]]`) are now persisted to the `links` table via `upsert_links()`. This enables the backlink boost, graph tools, and the AgenticSearch "Connect" step to work on real data.
+
+**Write paths:** Links are persisted in all 3 indexer write paths:
+1. **Scan** (`_batch_embed_and_store_results`) — inside the same `BEGIN IMMEDIATE` transaction as doc/chunk/embedding writes
+2. **Watcher** (`_index_one`) — on each file change event
+3. **Legacy batch** (`_batch_embed_and_store`) — for backward compatibility
+
+**Pattern:** Delete-then-insert per document with `executemany()` for batch performance.
+
+**Backlink fuzzy matching:** `get_backlink_counts()` handles Obsidian-style bare wikilink names (e.g., `"Obsidian"` → matches `"knowledge-base/concepts/obsidian.md"`) via case-insensitive LIKE matching:
+```sql
+l.dst_target = d.rel_path
+OR LOWER(d.rel_path) LIKE '%/' || LOWER(l.dst_target) || '.md'
+OR LOWER(d.rel_path) = LOWER(l.dst_target) || '.md'
+```
+
+### Contextual Embeddings
+
+When `use_contextual_embeddings = true`, a document context prefix is prepended to each chunk's embedding input:
+
+```
+Document: <title>
+Section: <heading>
+
+<chunk text>
+```
+
+**Title resolution:** frontmatter `title` → filename stem → rel_path stem.
+
+**Key design:** Stored chunk text is unchanged — only the embedding input gets the prefix. This means the prefix improves vector search relevance without polluting lexical search or displayed text.
+
+**Applied in 6 embedding paths:** 3 text paths (scan, watcher, legacy) + 3 image paths (parallel images, embedded images, image references).
+
+**Impact:** Per Anthropic research, contextual embeddings reduce retrieval failure rates by 35-67%.
 
 ---
 
@@ -1414,8 +1458,9 @@ config.toml
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Full scan** | 149 files, 3,106 chunks, 182s | Includes 7 images via Gemini |
-| **Incremental scan** | <1s (149/149 skipped) | Manifest-based skip |
+| **Full scan (4 vaults)** | 697 files, 8,530 chunks, 1,793 links, 864s | Includes 7 images via Gemini |
+| **Full scan (single vault)** | 149 files, 2,916 chunks, 228s | my-thoughts vault with contextual embeddings |
+| **Incremental scan** | <1s (all skipped) | Manifest-based skip |
 | **Query (cold-start)** | ~5s | Python + model load overhead |
 | **Query (via watcher socket)** | ~0.1-0.3s | 30x faster, model stays warm |
 | **Multi-query workflow (3 queries)** | 0.5s socket vs 16s cold-start | 30x speedup |
@@ -1465,8 +1510,10 @@ Watcher Socket Query (~0.1-0.3s total):
 | **3.1** | Sprint 1 | Safety | Thread-safe DB, FAISS locks, transactions, schema migration, model cache |
 | **3.1.1** | - | Fix | Frontmatter resilience for Obsidian templates |
 | **3.2** | Sprint 2 | Performance | Batch writes, manifest skip, FAISS optimizations, logging migration |
+| **3.3** | Sprint 3 | Retrieval Quality | Backlink boost filtering, path prefix push-down, lazy reranker, chunk dedup |
+| **3.4** | Phase 1 | Agentic Search | 3 new MCP tools, 3 CLI commands, query server dispatch, AgenticSearch workflow |
+| **3.5** | - | Link + Context | Link persistence (`upsert_links`), contextual embeddings, backlink fuzzy matching |
 | **Explore** | - | Query Speed | Watcher query server (30x), lazy imports (120x import speedup) |
-| **Explore** | Phase 1 | Agentic Search | 3 new MCP tools, 3 CLI commands, query server dispatch, AgenticSearch workflow |
 
 ---
 
