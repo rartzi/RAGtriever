@@ -406,6 +406,187 @@ def status(config: str = typer.Option("config.toml"),
         typer.echo(f"Indexed files: {status_info.get('indexed_files', 0)}")
         typer.echo(f"Indexed chunks: {status_info.get('indexed_chunks', 0)}")
 
+@app.command(name="list-docs")
+def list_docs(
+    config: str = typer.Option("config.toml"),
+    path: str = typer.Option("", help="Path prefix filter (e.g. 'projects/')"),
+    vaults: list[str] = typer.Option(None, help="Vault names (multi-vault only, default: all)"),
+    no_socket: bool = typer.Option(False, "--no-socket", help="Skip watcher query server"),
+):
+    """List indexed documents in the vault(s)."""
+    cfg = _multi_cfg(config)
+
+    # Try routing through watcher's query server (single-vault only)
+    if not no_socket and not isinstance(cfg, MultiVaultConfig):
+        from .query_server import request_via_socket, get_socket_path
+        socket_path = get_socket_path(cfg.index_dir)
+        request = {"action": "list_docs"}
+        if path:
+            request["path"] = path
+        resp = request_via_socket(socket_path, request)
+        if resp is not None and "error" in resp:
+            typer.echo(f"Watcher error: {resp['error']}", err=True)
+        elif resp is not None:
+            for f in resp["files"]:
+                typer.echo(f)
+            typer.echo(f"\n{resp['count']} files", err=True)
+            return
+
+    # Fall back to cold-start
+    from .hashing import blake2b_hex
+    from .store.libsql_store import LibSqlStore
+
+    db_path = cfg.index_dir / "vaultrag.sqlite"
+    store = LibSqlStore(db_path)
+    store.init()
+
+    if isinstance(cfg, MultiVaultConfig):
+        all_files: list[str] = []
+        for v in cfg.vaults:
+            if vaults and v.name not in vaults:
+                continue
+            vid = blake2b_hex(str(v.root).encode("utf-8"))[:12]
+            if path:
+                vfiles = store.get_files_under_path(vid, path)
+            else:
+                vfiles = list(store.get_indexed_files(vid))
+            for f in sorted(vfiles):
+                typer.echo(f"[{v.name}] {f}")
+            all_files.extend(vfiles)
+        typer.echo(f"\n{len(all_files)} files total", err=True)
+    else:
+        vault_id = blake2b_hex(str(cfg.vault_root).encode("utf-8"))[:12]
+        if path:
+            files = sorted(store.get_files_under_path(vault_id, path))
+        else:
+            files = sorted(store.get_indexed_files(vault_id))
+        for f in files:
+            typer.echo(f)
+        typer.echo(f"\n{len(files)} files", err=True)
+
+
+@app.command(name="text-search")
+def text_search(
+    q: str,
+    config: str = typer.Option("config.toml"),
+    k: int = typer.Option(20),
+    path: str = typer.Option("", help="Path prefix filter"),
+    vaults: list[str] = typer.Option(None, help="Vault names (multi-vault only, default: all)"),
+    no_socket: bool = typer.Option(False, "--no-socket", help="Skip watcher query server"),
+):
+    """Search vault(s) using lexical (BM25) text search only."""
+    cfg = _multi_cfg(config)
+
+    # Try routing through watcher's query server (single-vault only)
+    if not no_socket and not isinstance(cfg, MultiVaultConfig):
+        from .query_server import request_via_socket, get_socket_path
+        socket_path = get_socket_path(cfg.index_dir)
+        request: dict = {"action": "text_search", "query": q, "k": k}
+        if path:
+            request["path"] = path
+        resp = request_via_socket(socket_path, request)
+        if resp is not None and "error" in resp:
+            typer.echo(f"Watcher error: {resp['error']}", err=True)
+        elif resp is not None:
+            typer.echo(json.dumps(resp["results"], indent=2))
+            elapsed = resp.get("elapsed", 0)
+            typer.echo(f"  (via watcher, {elapsed:.3f}s compute)", err=True)
+            return
+
+    # Fall back to cold-start
+    from .hashing import blake2b_hex
+    from .store.libsql_store import LibSqlStore
+    from typing import Any
+
+    db_path = cfg.index_dir / "vaultrag.sqlite"
+    store = LibSqlStore(db_path)
+    store.init()
+
+    filters: dict[str, Any] = {}
+    if path:
+        filters["path_prefix"] = path
+
+    if isinstance(cfg, MultiVaultConfig):
+        vault_ids = []
+        for v in cfg.vaults:
+            if vaults and v.name not in vaults:
+                continue
+            vault_ids.append(blake2b_hex(str(v.root).encode("utf-8"))[:12])
+        filters["vault_ids"] = vault_ids
+    else:
+        filters["vault_id"] = blake2b_hex(str(cfg.vault_root).encode("utf-8"))[:12]
+
+    results = store.lexical_search(q, k, filters)
+    output = [
+        {
+            "chunk_id": r.chunk_id,
+            "score": r.score,
+            "snippet": r.snippet,
+            "source_ref": r.source_ref.__dict__,
+            "metadata": r.metadata,
+        } for r in results
+    ]
+    typer.echo(json.dumps(output, indent=2))
+
+
+@app.command()
+def backlinks(
+    config: str = typer.Option("config.toml"),
+    paths: list[str] = typer.Option(None, help="Specific rel_paths to check"),
+    limit: int = typer.Option(20, help="Max results"),
+    no_socket: bool = typer.Option(False, "--no-socket", help="Skip watcher query server"),
+):
+    """Show backlink counts for documents in the vault(s)."""
+    cfg = _multi_cfg(config)
+
+    # Try routing through watcher's query server (single-vault only)
+    if not no_socket and not isinstance(cfg, MultiVaultConfig):
+        from .query_server import request_via_socket, get_socket_path
+        socket_path = get_socket_path(cfg.index_dir)
+        request: dict = {"action": "backlinks", "limit": limit}
+        if paths:
+            request["paths"] = paths
+        resp = request_via_socket(socket_path, request)
+        if resp is not None and "error" in resp:
+            typer.echo(f"Watcher error: {resp['error']}", err=True)
+        elif resp is not None:
+            for path_name, count in resp["backlinks"].items():
+                typer.echo(f"  {count:3d}  {path_name}")
+            typer.echo(f"\n{resp['count']} documents with backlinks", err=True)
+            return
+
+    # Fall back to cold-start
+    from .store.libsql_store import LibSqlStore
+
+    db_path = cfg.index_dir / "vaultrag.sqlite"
+    store = LibSqlStore(db_path)
+    store.init()
+
+    counts = store.get_backlink_counts(doc_ids=paths)
+
+    # Map doc_id (hash) back to rel_path
+    conn = store._get_conn()
+    if counts:
+        placeholders = ",".join("?" * len(counts))
+        rows = conn.execute(
+            f"SELECT doc_id, rel_path FROM documents WHERE doc_id IN ({placeholders}) AND deleted=0",
+            list(counts.keys()),
+        ).fetchall()
+        id_to_path = {r["doc_id"]: r["rel_path"] for r in rows}
+    else:
+        id_to_path = {}
+
+    backlinks_map = {
+        id_to_path.get(did, did): count
+        for did, count in counts.items()
+    }
+    sorted_backlinks = sorted(backlinks_map.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+    for path_name, count in sorted_backlinks:
+        typer.echo(f"  {count:3d}  {path_name}")
+    typer.echo(f"\n{len(sorted_backlinks)} documents with backlinks", err=True)
+
+
 @app.command()
 def mcp(config: str = typer.Option("config.toml")):
     """Run MCP server (stdio)."""

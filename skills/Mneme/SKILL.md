@@ -20,7 +20,7 @@ skills/Mneme/
 ├── Tools/                # Portable scripts
 │   ├── mneme-wrapper.sh  # Auto-installing CLI wrapper
 │   └── manage-watcher.sh # Watcher management
-├── Workflows/            # Execution procedures (6 workflows)
+├── Workflows/            # Execution procedures (7 workflows)
 ├── docs/                 # Reference documentation
 │   ├── ARCHITECTURE.md   # System architecture + Sprint 1/2 features
 │   ├── Commands.md       # CLI command reference
@@ -38,6 +38,7 @@ skills/Mneme/
 | Workflow | Trigger | File |
 |----------|---------|------|
 | **SearchVault** | "what does the vault say about", "find in vault", answering content questions | `Workflows/SearchVault.md` |
+| **AgenticSearch** | "deep search", "thorough search", multi-hop or comparative questions, incomplete initial results | `Workflows/AgenticSearch.md` |
 | **SetupVault** | "setup mneme", "initialize vault", "create index" | `Workflows/SetupVault.md` |
 | **ConfigureImageAnalysis** | "configure images", "setup gemini", "image analysis" | `Workflows/ConfigureImageAnalysis.md` |
 | **ManageWatcher** | "start watcher", "stop watcher", "watcher status" | `Workflows/ManageWatcher.md` |
@@ -68,6 +69,15 @@ User: "Is the watcher running?"
 -> Invokes ManageWatcher workflow
 -> Uses Tools/manage-watcher.sh to check status
 -> Returns status and recent activity
+```
+
+**Example 4: Deep multi-hop search**
+```
+User: "How do agentic workflows relate to RAG in my notes?"
+-> Invokes AgenticSearch workflow
+-> Runs: list-docs, query, text-search, backlinks iteratively
+-> Follows wikilink graph to discover connected documents
+-> Returns synthesized answer with sources from multiple documents
 ```
 
 ## Quick Reference
@@ -105,6 +115,22 @@ mneme status
 
 # Watcher management (also starts query server for fast CLI queries)
 ~/.claude/skills/Mneme/Tools/manage-watcher.sh status|start|stop|health
+```
+
+### Agentic Search Commands
+
+```bash
+# List indexed documents (orient phase)
+mneme list-docs --config config.toml
+mneme list-docs --path "projects/" --config config.toml
+
+# BM25 text search (exact phrase matching, bypasses semantic search)
+mneme text-search "exact phrase" --config config.toml
+mneme text-search "term" --path "notes/" --k 20 --config config.toml
+
+# Backlink analysis (find hub documents)
+mneme backlinks --config config.toml --limit 10
+mneme backlinks --paths "projects/alpha.md" --config config.toml
 ```
 
 **IMPORTANT:** All scan and watch operations MUST include logging for audit purposes.
@@ -146,3 +172,4 @@ When the watcher is running, `mneme query` automatically routes through the watc
 3. **Vault content != Mneme code** - Don't confuse vault search with codebase search
 4. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing
 5. **Use the portable wrapper** - `Tools/mneme-wrapper.sh` handles installation automatically
+6. **Use AgenticSearch for complex questions** - When simple query doesn't fully answer, iterate with list-docs, text-search, and backlinks
