@@ -33,12 +33,24 @@ skills/Mneme/
 └── source/               # Bundled source code
 ```
 
+## 🚨 CRITICAL: Always Use Agentic Search Process
+
+**ALL vault searches MUST follow the 5-step agentic process:**
+
+```
+Orient → Search → Refine → Connect → Synthesize
+```
+
+**Why?** Semantic search alone misses critical content. Example: Searching "OpenClaw impact" returned only positive articles, but Orient revealed a YouTube folder containing critical security warnings the semantic search completely missed.
+
+**Never skip Orient.** It takes 2 seconds and reveals content you'd otherwise miss.
+
 ## Workflow Routing
 
 | Workflow | Trigger | File |
 |----------|---------|------|
-| **SearchVault** | "what does the vault say about", "find in vault", answering content questions | `Workflows/SearchVault.md` |
-| **AgenticSearch** | "deep search", "thorough search", multi-hop or comparative questions, incomplete initial results | `Workflows/AgenticSearch.md` |
+| **SearchVault** | ANY vault content question — always uses full agentic process | `Workflows/SearchVault.md` |
+| **AgenticSearch** | Reference doc for the 6-step deep search pattern | `Workflows/AgenticSearch.md` |
 | **SetupVault** | "setup mneme", "initialize vault", "create index" | `Workflows/SetupVault.md` |
 | **ConfigureImageAnalysis** | "configure images", "setup gemini", "image analysis" | `Workflows/ConfigureImageAnalysis.md` |
 | **ManageWatcher** | "start watcher", "stop watcher", "watcher status" | `Workflows/ManageWatcher.md` |
@@ -47,12 +59,32 @@ skills/Mneme/
 
 ## Examples
 
-**Example 1: Answer a vault question**
+**Example 1: Answer a vault question (CORRECT - uses agentic process)**
 ```
-User: "What types of agentic workflows exist?"
--> Invokes SearchVault workflow
--> Runs: mneme query "agentic workflows" --k 15
--> Returns answer with Sources section citing file paths
+User: "What is OpenClaw's impact on AI?"
+-> Invokes SearchVault workflow with FULL agentic process:
+
+Step 1 - ORIENT:
+   mneme list-docs --config config.toml | grep -i "claw\|openclaw"
+   -> Discovers: files in obsidian/, substack/, AND youtube/ folders!
+
+Step 2 - SEARCH:
+   mneme query "OpenClaw impact AI" --k 15
+   -> Returns positive articles about agent economies
+
+Step 3 - REFINE:
+   mneme text-search "OpenClaw" --path "youtube/" --config config.toml
+   -> Discovers CRITICAL security article semantic search missed!
+
+Step 4 - CONNECT:
+   mneme backlinks --config config.toml --limit 10
+   -> Finds hub documents
+
+Step 5 - SYNTHESIZE:
+   -> Combines BOTH positive and negative perspectives
+   -> Cites ALL sources including the YouTube transcript
+
+-> Returns balanced answer with complete Sources section
 ```
 
 **Example 2: Setup new vault**
@@ -71,13 +103,15 @@ User: "Is the watcher running?"
 -> Returns status and recent activity
 ```
 
-**Example 4: Deep multi-hop search**
+**Example 4: WRONG approach (don't do this)**
 ```
-User: "How do agentic workflows relate to RAG in my notes?"
--> Invokes AgenticSearch workflow
--> Runs: list-docs, query, text-search, backlinks iteratively
--> Follows wikilink graph to discover connected documents
--> Returns synthesized answer with sources from multiple documents
+User: "What insights exist about topic X?"
+-> WRONG: Just runs mneme query "topic X" --k 15
+-> WRONG: Returns answer from only semantic matches
+-> WRONG: Misses content in unexpected folders
+-> WRONG: Provides incomplete or biased view
+
+ALWAYS use the 5-step process even for "simple" questions!
 ```
 
 ## Quick Reference
@@ -167,9 +201,21 @@ When the watcher is running, `mneme query` automatically routes through the watc
 
 ## Tips for Claude Code Users
 
-1. **ALWAYS search vault content first** - Use `mneme query` when user asks questions
-2. **ALWAYS cite sources** - Every response MUST end with a "Sources" section
-3. **Vault content != Mneme code** - Don't confuse vault search with codebase search
-4. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing
-5. **Use the portable wrapper** - `Tools/mneme-wrapper.sh` handles installation automatically
-6. **Use AgenticSearch for complex questions** - When simple query doesn't fully answer, iterate with list-docs, text-search, and backlinks
+1. **ALWAYS use the 5-step agentic process** - Orient → Search → Refine → Connect → Synthesize
+2. **NEVER skip Orient** - `list-docs | grep keyword` takes 2 seconds and reveals content semantic search misses
+3. **ALWAYS cite sources** - Every response MUST end with a "Sources" section
+4. **Vault content != Mneme code** - Don't confuse vault search with codebase search
+5. **Use --help to discover options** - Run `mneme <command> --help` instead of guessing
+6. **Use the portable wrapper** - `Tools/mneme-wrapper.sh` handles installation automatically
+7. **Check multiple perspectives** - If results seem one-sided, search other folders/content types
+8. **Use backlinks for important topics** - Hub documents often contain authoritative information
+
+## The 5-Step Checklist (MANDATORY)
+
+Before finalizing ANY vault answer:
+
+- [ ] **ORIENT** — Ran `list-docs | grep keyword` to see what's available
+- [ ] **SEARCH** — Ran semantic `query` for main results
+- [ ] **REFINE** — Used `text-search` for exact terms in discovered folders
+- [ ] **CONNECT** — Checked `backlinks` for hub documents if relevant
+- [ ] **CITE** — Listed ALL contributing sources in Sources section
