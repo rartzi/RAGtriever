@@ -275,6 +275,51 @@ mneme query "search term" --no-socket
 mneme query "project status" --json
 ```
 
+### list-docs Command
+
+List indexed documents in the vault.
+
+```bash
+# List all files
+mneme list-docs
+
+# Filter by path
+mneme list-docs --path "projects/"
+
+# Filter by vault (multi-vault)
+mneme list-docs --vaults my-thoughts
+```
+
+### text-search Command
+
+Search using BM25 lexical matching only (bypasses semantic search). Best for exact phrases.
+
+```bash
+# Exact phrase search
+mneme text-search "orchestration patterns"
+
+# With path filter
+mneme text-search "agent loop" --path "notes/" --k 10
+
+# Force cold-start
+mneme text-search "exact phrase" --no-socket
+```
+
+### backlinks Command
+
+Show most-linked documents (hub analysis).
+
+```bash
+# Top 20 most-linked documents
+mneme backlinks
+
+# Top 10
+mneme backlinks --limit 10
+
+# Check specific documents
+mneme backlinks --paths "projects/alpha.md"
+```
+
 ### mcp Command
 
 Start the MCP server for AI agent integration.
@@ -389,6 +434,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 | `vault_neighbors` | Get linked notes (outlinks/backlinks) |
 | `vault_status` | Index statistics |
 | `vault_list` | List configured vaults |
+| `vault_list_docs` | List indexed documents (with optional path filter) |
+| `vault_text_search` | BM25 lexical search only (exact phrase matching) |
+| `vault_backlinks` | Get backlink counts (find hub documents) |
 
 ### Example Queries
 
@@ -413,6 +461,7 @@ ln -s $(pwd)/skills/Mneme ~/.claude/skills/Mneme
 The skill follows the PAI (Personal AI Infrastructure) standard with workflow-based routing:
 
 - **SearchVault** - Search and answer questions from vault content with source citations
+- **AgenticSearch** - Iterative multi-step search for complex, multi-hop questions
 - **SetupVault** - Initial vault setup and configuration
 - **ConfigureImageAnalysis** - Configure image analysis providers (Tesseract/Gemini)
 - **ManageWatcher** - Start/stop/status for the watcher service

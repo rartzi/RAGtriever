@@ -51,6 +51,9 @@ pytest tests/test_markdown_parsing.py::test_parse_wikilinks
 cd ../../..
 ./skills/Mneme/Tools/mneme-wrapper.sh scan --config config.toml --full
 ./skills/Mneme/Tools/mneme-wrapper.sh query "search term" --k 10
+./skills/Mneme/Tools/mneme-wrapper.sh list-docs --config config.toml
+./skills/Mneme/Tools/mneme-wrapper.sh text-search "exact phrase" --config config.toml
+./skills/Mneme/Tools/mneme-wrapper.sh backlinks --config config.toml --limit 10
 ./skills/Mneme/Tools/manage-watcher.sh start
 ```
 
@@ -62,7 +65,7 @@ cd ../../..
 
 | Module | Purpose |
 |--------|---------|
-| `cli.py` | CLI commands (scan, query, watch, mcp) |
+| `cli.py` | CLI commands (scan, query, list-docs, text-search, backlinks, watch, mcp) |
 | `config.py` | Configuration management |
 | `query_server.py` | Unix socket query server (runs inside watcher) |
 | `extractors/` | File extractors (markdown, pdf, pptx, xlsx, images) |

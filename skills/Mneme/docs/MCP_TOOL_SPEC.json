@@ -162,6 +162,147 @@
       }
     },
     {
+      "name": "vault.list_docs",
+      "description": "List indexed documents in the vault, optionally filtered by path prefix.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Optional path prefix filter (e.g. 'projects/')"
+          },
+          "vaults": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter to specific vault names (multi-vault only)"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "count": {
+            "type": "integer"
+          },
+          "path_filter": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "vault.text_search",
+      "description": "BM25 lexical search only (bypasses semantic search). Best for exact phrases and known vocabulary.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "k": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 50
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional path prefix filter"
+          },
+          "vaults": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter to specific vault names (multi-vault only)"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "chunk_id": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "snippet": {
+                  "type": "string"
+                },
+                "source_ref": {
+                  "$ref": "#/definitions/source_ref"
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "chunk_id",
+                "score",
+                "snippet",
+                "source_ref"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "vault.backlinks",
+      "description": "Get backlink counts for documents. Returns most-linked documents (hub analysis) or counts for specific paths.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Specific document paths to check (optional, returns all if omitted)"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Max documents to return when paths not specified"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "backlinks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Map of document path to backlink count"
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
       "name": "vault.status",
       "description": "Return indexing status (counts, last scan, errors).",
       "input_schema": {

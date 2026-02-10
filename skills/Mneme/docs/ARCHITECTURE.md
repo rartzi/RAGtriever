@@ -725,8 +725,13 @@ mneme init --vault /path/to/vault --index ~/.mneme/indexes/myvault
 # Index vault
 mneme scan --config config.toml --full
 
-# Query
+# Query (hybrid semantic + lexical)
 mneme query --config config.toml "search term" --k 10
+
+# Agentic search tools
+mneme list-docs --config config.toml              # List indexed files
+mneme text-search "exact phrase" --config config.toml  # BM25 lexical only
+mneme backlinks --config config.toml --limit 10    # Hub documents
 
 # Continuous indexing
 mneme watch --config config.toml
@@ -785,6 +790,20 @@ When the watcher starts, it also launches a unix socket query server that keeps 
 ```
 
 Socket path: `<index_dir>/query.sock`
+
+**Query Server Actions:**
+
+The query server supports multiple action types via newline-delimited JSON:
+
+| Action | Purpose | Example |
+|--------|---------|---------|
+| `ping` | Health check | `{"action":"ping"}` |
+| `query` | Hybrid search (semantic + lexical + boosts) | `{"action":"query","query":"...","k":10}` |
+| `list_docs` | List indexed documents | `{"action":"list_docs","path":"projects/"}` |
+| `text_search` | BM25 lexical search only | `{"action":"text_search","query":"...","k":20}` |
+| `backlinks` | Backlink counts | `{"action":"backlinks","limit":10}` |
+
+The CLI commands (`list-docs`, `text-search`, `backlinks`) automatically route through the query server socket when available, falling back to cold-start.
 
 **File Lifecycle Handling:**
 
@@ -857,7 +876,10 @@ nohup mneme watch --config config.toml &
   "vault_open": "Retrieve full document/chunk content",
   "vault_neighbors": "Find related chunks via [[wikilinks]]",
   "vault_status": "Get indexing status and statistics",
-  "vault_list": "List configured vaults"
+  "vault_list": "List configured vaults",
+  "vault_list_docs": "List indexed documents (with optional path filter)",
+  "vault_text_search": "BM25 lexical search only (exact phrase matching)",
+  "vault_backlinks": "Get backlink counts (find hub documents)"
 }
 ```
 
@@ -1444,6 +1466,7 @@ Watcher Socket Query (~0.1-0.3s total):
 | **3.1.1** | - | Fix | Frontmatter resilience for Obsidian templates |
 | **3.2** | Sprint 2 | Performance | Batch writes, manifest skip, FAISS optimizations, logging migration |
 | **Explore** | - | Query Speed | Watcher query server (30x), lazy imports (120x import speedup) |
+| **Explore** | Phase 1 | Agentic Search | 3 new MCP tools, 3 CLI commands, query server dispatch, AgenticSearch workflow |
 
 ---
 
