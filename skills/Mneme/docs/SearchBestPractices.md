@@ -104,6 +104,27 @@ Keep it brief - one clarifying question, then search:
 
 **Don't over-ask** - gather context, then execute.
 
+## When to Use AgenticSearch
+
+For complex questions that span multiple topics or documents, use the **AgenticSearch** workflow instead of a single query. This iterative approach combines multiple tools:
+
+| Tool | When | Example |
+|------|------|---------|
+| `mneme list-docs` | Orient: understand vault structure | See what folders/files exist |
+| `mneme query` | Broad hybrid search | Find initial results across topics |
+| `mneme text-search` | Exact phrase matching (BM25 only) | Refine with discovered vocabulary |
+| `mneme backlinks` | Find hub documents | Most-linked documents are often key |
+
+**Use AgenticSearch when:**
+- A single query doesn't fully answer the question
+- The question spans multiple topics or documents ("how does X relate to Y?")
+- You need to follow links between documents
+- Comparing or synthesizing information across sources
+
+**Iterative pattern:** Search broad → note vocabulary in results → text-search exact phrases → repeat until answered.
+
+See `Workflows/AgenticSearch.md` for the full 6-step procedure.
+
 ## Question Types to Search For
 
 - "What ideas do we have?" -> Search vault for ideas

@@ -62,6 +62,7 @@ class VaultConfig:
     offline_mode: bool = True  # Set HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE
     use_query_prefix: bool = True  # Asymmetric retrieval (BGE pattern)
     query_prefix: str = "Represent this sentence for searching relevant passages: "
+    use_contextual_embeddings: bool = False  # Prepend doc title + section to embedding input
 
     # FAISS (for large-scale vector search)
     use_faiss: bool = False  # Enable for vaults >10K chunks
@@ -322,6 +323,7 @@ class VaultConfig:
             offline_mode=offline_mode,
             use_query_prefix=bool(emb.get("use_query_prefix", True)),
             query_prefix=emb.get("query_prefix", "Represent this sentence for searching relevant passages: "),
+            use_contextual_embeddings=bool(emb.get("use_contextual_embeddings", False)),
             use_faiss=use_faiss,
             faiss_index_type=faiss_index_type,
             faiss_nlist=faiss_nlist,
@@ -413,6 +415,7 @@ class MultiVaultConfig:
     offline_mode: bool = True
     use_query_prefix: bool = True
     query_prefix: str = "Represent this sentence for searching relevant passages: "
+    use_contextual_embeddings: bool = False  # Prepend doc title + section to embedding input
 
     # FAISS
     use_faiss: bool = False
@@ -691,6 +694,7 @@ class MultiVaultConfig:
             offline_mode=offline_mode,
             use_query_prefix=bool(emb.get("use_query_prefix", True)),
             query_prefix=emb.get("query_prefix", "Represent this sentence for searching relevant passages: "),
+            use_contextual_embeddings=bool(emb.get("use_contextual_embeddings", False)),
             use_faiss=bool(emb.get("use_faiss", False)),
             faiss_index_type=emb.get("faiss_index_type", "IVF"),
             faiss_nlist=int(emb.get("faiss_nlist", 100)),

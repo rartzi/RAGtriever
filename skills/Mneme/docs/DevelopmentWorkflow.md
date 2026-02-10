@@ -85,6 +85,15 @@ mneme scan --config config.toml --full --log-file logs/scan_$(date +%Y%m%d_%H%M%
 - **docs/troubleshooting.md**: Comprehensive troubleshooting guide
 - **IMPROVEMENTS.md**: Planned features
 
+## Test Baseline
+
+Current test suite: **384 passed**, 30 skipped, 5 deselected (as of v3.5.0).
+
+```bash
+# Run full test suite (from repo root)
+skills/Mneme/source/.venv/bin/python -m pytest skills/Mneme/source/tests/ -m "not manual" --tb=short -q
+```
+
 ## Notes
 
 - Mneme is a standalone tool, not a Claude Code skill itself

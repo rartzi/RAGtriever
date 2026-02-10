@@ -53,6 +53,9 @@ mneme --help
 mneme scan --help
 mneme watch --help
 mneme query --help
+mneme list-docs --help
+mneme text-search --help
+mneme backlinks --help
 mneme init --help
 mneme mcp --help
 mneme status --help
@@ -136,6 +139,53 @@ mneme query --config config.toml "search term" --k 10
 
 # JSON output
 mneme query "project status" --json
+```
+
+## Agentic Search Tools
+
+These commands support the iterative AgenticSearch workflow for complex, multi-hop questions.
+
+### List Indexed Documents
+
+```bash
+# List all indexed files
+mneme list-docs --config config.toml
+
+# Filter by path prefix
+mneme list-docs --path "projects/" --config config.toml
+
+# Filter by vault (multi-vault only)
+mneme list-docs --vaults my-thoughts --config config.toml
+```
+
+### BM25 Text Search
+
+Lexical-only search (bypasses semantic search) for exact phrase matching.
+
+```bash
+# Search for exact phrase
+mneme text-search "orchestration patterns" --config config.toml
+
+# With path filter and result limit
+mneme text-search "agent loop" --path "notes/" --k 10 --config config.toml
+
+# Force cold-start (bypass watcher socket)
+mneme text-search "exact phrase" --no-socket --config config.toml
+```
+
+### Backlink Analysis
+
+Find hub documents (most linked-to) in the vault.
+
+```bash
+# Top 10 most-linked documents
+mneme backlinks --config config.toml --limit 10
+
+# Check specific documents
+mneme backlinks --paths "projects/alpha.md" --config config.toml
+
+# Force cold-start
+mneme backlinks --no-socket --config config.toml
 ```
 
 ## Watcher Management

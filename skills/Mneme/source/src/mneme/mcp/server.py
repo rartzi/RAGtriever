@@ -5,7 +5,10 @@ import sys
 
 from ..config import VaultConfig, MultiVaultConfig
 from ..retrieval.retriever import Retriever, MultiVaultRetriever
-from .tools import tool_search, tool_open, tool_neighbors, tool_status, tool_list_vaults
+from .tools import (
+    tool_search, tool_open, tool_neighbors, tool_status, tool_list_vaults,
+    tool_list_docs, tool_text_search, tool_backlinks,
+)
 
 TOOL_MAP = {
     "vault_search": tool_search,
@@ -13,6 +16,9 @@ TOOL_MAP = {
     "vault_neighbors": tool_neighbors,
     "vault_status": tool_status,
     "vault_list": tool_list_vaults,
+    "vault_list_docs": tool_list_docs,
+    "vault_text_search": tool_text_search,
+    "vault_backlinks": tool_backlinks,
 }
 
 def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
@@ -105,6 +111,40 @@ def run_stdio_server(cfg: VaultConfig | MultiVaultConfig) -> None:
                                 "name": "vault_list",
                                 "description": "List configured vaults",
                                 "inputSchema": {"type": "object", "properties": {}}
+                            },
+                            {
+                                "name": "vault_list_docs",
+                                "description": "List indexed documents in the vault, optionally filtered by path prefix",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "path": {"type": "string", "description": "Path prefix filter (e.g. 'projects/')"}
+                                    }
+                                }
+                            },
+                            {
+                                "name": "vault_text_search",
+                                "description": "Search vault using lexical (BM25) text search only — bypasses semantic search for exact phrase matching",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "query": {"type": "string", "description": "Search query"},
+                                        "k": {"type": "integer", "description": "Number of results (default: 20)"},
+                                        "path": {"type": "string", "description": "Path prefix filter"}
+                                    },
+                                    "required": ["query"]
+                                }
+                            },
+                            {
+                                "name": "vault_backlinks",
+                                "description": "Get backlink counts showing which documents are most linked-to in the vault",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "paths": {"type": "array", "items": {"type": "string"}, "description": "Optional list of rel_paths to check"},
+                                        "limit": {"type": "integer", "description": "Max results (default: 20)"}
+                                    }
+                                }
                             }
                         ]
                     }

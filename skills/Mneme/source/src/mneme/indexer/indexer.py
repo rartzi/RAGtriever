@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 import numpy as np
@@ -33,6 +34,29 @@ from .change_detector import ChangeDetector
 from .reconciler import Reconciler
 
 logger = logging.getLogger(__name__)
+
+
+def _build_contextual_prefix(chunk_metadata: dict[str, Any]) -> str:
+    """Build 'Document: X\\nSection: Y\\n\\n' prefix for embedding enrichment.
+
+    Title fallback chain: frontmatter title → file_name stem → rel_path stem.
+    Returns empty string if no title can be determined.
+    """
+    frontmatter = chunk_metadata.get("frontmatter", {})
+    doc_title = frontmatter.get("title", "") if isinstance(frontmatter, dict) else ""
+    if not doc_title:
+        file_name = chunk_metadata.get("file_name", "")
+        doc_title = Path(file_name).stem if file_name else ""
+    if not doc_title:
+        rel_path = chunk_metadata.get("rel_path", "")
+        doc_title = Path(rel_path).stem if rel_path else ""
+    if not doc_title:
+        return ""
+    parts = [f"Document: {doc_title}"]
+    heading = chunk_metadata.get("heading", "")
+    if heading:
+        parts.append(f"Section: {heading}")
+    return "\n".join(parts) + "\n\n"
 
 
 class BatchCollector:
@@ -765,9 +789,11 @@ class Indexer:
                 )
                 chunk_map[chunk_data.chunk_id] = (chunk, chunk_data.text)
 
+        use_ctx = self.cfg.use_contextual_embeddings
         for chunk, text in chunk_map.values():
             all_chunks.append(chunk)
-            all_texts.append(text)
+            embed_text = _build_contextual_prefix(chunk.metadata) + text if use_ctx else text
+            all_texts.append(embed_text)
             all_chunk_ids.append(chunk.chunk_id)
 
         # Batch write documents
@@ -789,6 +815,11 @@ class Indexer:
                 vectors = self.embedder.embed_texts(batch_texts)
                 self.store.upsert_embeddings(batch_ids, model_id=self.embedder.model_id, vectors=vectors)
                 embeddings_created += len(batch_ids)
+
+        # Persist outgoing links
+        for result in results:
+            if result.links:
+                self.store.upsert_links(result.vault_id, result.rel_path, result.links)
 
         return len(all_chunks), embeddings_created
 
@@ -847,9 +878,11 @@ class Indexer:
                 chunk_map[chunk_data.chunk_id] = (chunk, chunk_data.text)
 
         # Build deduplicated lists (preserves insertion order in Python 3.7+)
+        use_ctx = self.cfg.use_contextual_embeddings
         for chunk, text in chunk_map.values():
             all_chunks.append(chunk)
-            all_texts.append(text)
+            embed_text = _build_contextual_prefix(chunk.metadata) + text if use_ctx else text
+            all_texts.append(embed_text)
             all_chunk_ids.append(chunk.chunk_id)
 
         # Compute embeddings OUTSIDE transaction (CPU-bound, no DB lock)
@@ -889,6 +922,13 @@ class Indexer:
                     mtime=result.mtime,
                     size=result.size,
                 )
+
+            # Persist outgoing links (atomic with doc/chunk/embedding writes)
+            for result in results:
+                if result.links:
+                    self.store.upsert_links(
+                        result.vault_id, result.rel_path, result.links, _commit=False
+                    )
 
             self.store.commit_transaction()
         except Exception:
@@ -1066,10 +1106,19 @@ class Indexer:
 
             self.store.upsert_chunks(chunks)
 
+            # Apply contextual prefix if enabled
+            if self.cfg.use_contextual_embeddings:
+                embed_texts = [
+                    _build_contextual_prefix(c.metadata) + t
+                    for c, t in zip(chunks, texts)
+                ]
+            else:
+                embed_texts = texts
+
             # Batch embed
             batch_size = self.cfg.embed_batch_size
-            for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i + batch_size]
+            for i in range(0, len(embed_texts), batch_size):
+                batch_texts = embed_texts[i:i + batch_size]
                 batch_ids = ids[i:i + batch_size]
 
                 vectors = self.embedder.embed_texts(batch_texts)
@@ -1383,8 +1432,9 @@ class Indexer:
 
         # Persist outgoing links (Obsidian-aware)
         if type_label == "markdown":
-            links = extracted.metadata.get("wikilinks", [])
-            # TODO: store links in `links` table and maintain backlinks
+            wikilinks = extracted.metadata.get("wikilinks", [])
+            link_tuples = [(target, "wikilink") for target in wikilinks]
+            self.store.upsert_links(self.vault_id, rel, link_tuples)
 
         # Pre-compute enriched metadata fields (shared across all chunks from this file)
         full_path = str(abs_path)
@@ -1442,7 +1492,14 @@ class Indexer:
 
         # Embed and store vectors
         if ids:
-            vecs = self.embedder.embed_texts(texts)
+            if self.cfg.use_contextual_embeddings:
+                embed_texts = [
+                    _build_contextual_prefix(c.metadata) + t
+                    for c, t in zip(chunks, texts)
+                ]
+            else:
+                embed_texts = texts
+            vecs = self.embedder.embed_texts(embed_texts)
             self.store.upsert_embeddings(ids, model_id=self.embedder.model_id, vectors=vecs)
 
         # Process embedded images from PDF/PPTX
@@ -1625,8 +1682,12 @@ class Indexer:
                 # Store chunk
                 self.store.upsert_chunks([chunk])
 
-                # Embed and store
-                embedding = self.embedder.embed_texts([chunk.text])
+                # Embed and store (with optional contextual prefix)
+                if self.cfg.use_contextual_embeddings:
+                    embed_text = _build_contextual_prefix(meta) + text_norm
+                else:
+                    embed_text = text_norm
+                embedding = self.embedder.embed_texts([embed_text])
                 self.store.upsert_embeddings([chunk.chunk_id], self.embedder.model_id, embedding)
 
                 logger.debug(f"Indexed embedded image: {anchor_ref} from {parent_path}")
@@ -1728,8 +1789,12 @@ class Indexer:
                 # Store chunk
                 self.store.upsert_chunks([chunk])
 
-                # Embed and store
-                embedding = self.embedder.embed_texts([chunk.text])
+                # Embed and store (with optional contextual prefix)
+                if self.cfg.use_contextual_embeddings:
+                    embed_text = _build_contextual_prefix(meta) + text_norm
+                else:
+                    embed_text = text_norm
+                embedding = self.embedder.embed_texts([embed_text])
                 self.store.upsert_embeddings([chunk.chunk_id], self.embedder.model_id, embedding)
 
                 logger.debug(f"Indexed image reference: {anchor_ref} from {parent_path}")
@@ -1813,6 +1878,7 @@ class MultiVaultIndexer:
             preserve_heading_metadata=self.cfg.preserve_heading_metadata,
             use_query_prefix=self.cfg.use_query_prefix,
             query_prefix=self.cfg.query_prefix,
+            use_contextual_embeddings=self.cfg.use_contextual_embeddings,
         )
 
     def get_vault_names(self) -> list[str]:

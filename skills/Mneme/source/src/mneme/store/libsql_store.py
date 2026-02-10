@@ -495,6 +495,35 @@ class LibSqlStore:
             (vault_id, rel_path, mtime, size, file_hash, None if status == "ok" else status),
         )
 
+    def upsert_links(
+        self,
+        vault_id: str,
+        src_rel_path: str,
+        links: list[tuple[str, str]],
+        *,
+        _commit: bool = True,
+    ) -> None:
+        """Write outgoing links for a document (delete-then-insert).
+
+        Args:
+            vault_id: Vault identifier
+            src_rel_path: Source document relative path
+            links: List of (dst_target, link_type) tuples
+            _commit: Whether to commit (False when inside a transaction)
+        """
+        cur = self._get_conn().cursor()
+        cur.execute(
+            "DELETE FROM links WHERE vault_id=? AND src_rel_path=?",
+            (vault_id, src_rel_path),
+        )
+        if links:
+            cur.executemany(
+                "INSERT INTO links (vault_id, src_rel_path, dst_target, link_type) VALUES (?,?,?,?)",
+                [(vault_id, src_rel_path, dst, lt) for dst, lt in links],
+            )
+        if _commit:
+            self._get_conn().commit()
+
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         vault_id = filters.get("vault_id")
         vault_ids = filters.get("vault_ids")  # Support list of vault_ids for multi-vault
@@ -749,6 +778,10 @@ class LibSqlStore:
     def get_backlink_counts(self, doc_ids: list[str] | None = None) -> dict[str, int]:
         """Get count of incoming links (backlinks) for documents.
 
+        Handles Obsidian-style wikilinks where dst_target is a bare name
+        (e.g., "Obsidian") while rel_path is a full path (e.g., "concepts/obsidian.md").
+        Matching: exact rel_path OR path ends with '/target.md' (case-insensitive).
+
         Args:
             doc_ids: Optional list of doc_ids (rel_paths) to filter.
                      If provided, filters in SQL for efficiency.
@@ -759,22 +792,31 @@ class LibSqlStore:
         """
         params: list[Any] = []
 
+        # Join condition handles both exact paths and bare wikilink names
+        join_cond = """(
+            l.vault_id = d.vault_id
+            AND (
+                l.dst_target = d.rel_path
+                OR LOWER(d.rel_path) LIKE '%/' || LOWER(l.dst_target) || '.md'
+                OR LOWER(d.rel_path) = LOWER(l.dst_target) || '.md'
+            )
+        )"""
+
         if doc_ids:
-            # Filter in SQL to avoid scanning all links
             placeholders = ",".join("?" * len(doc_ids))
             query = f"""
                 SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
                 FROM links l
-                JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
+                JOIN documents d ON {join_cond}
                 WHERE d.deleted = 0 AND d.rel_path IN ({placeholders})
                 GROUP BY d.doc_id
             """
             params = list(doc_ids)
         else:
-            query = """
+            query = f"""
                 SELECT d.doc_id, COUNT(DISTINCT l.src_rel_path) as backlink_count
                 FROM links l
-                JOIN documents d ON l.dst_target = d.rel_path AND l.vault_id = d.vault_id
+                JOIN documents d ON {join_cond}
                 WHERE d.deleted = 0
                 GROUP BY d.doc_id
             """

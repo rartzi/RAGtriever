@@ -40,6 +40,9 @@ class Store(Protocol):
     def upsert_embeddings(self, chunk_ids: Sequence[str], model_id: str, vectors: np.ndarray) -> None:
         ...
 
+    def upsert_links(self, vault_id: str, src_rel_path: str, links: list[tuple[str, str]]) -> None:
+        ...
+
     def lexical_search(self, query: str, k: int, filters: dict[str, Any]) -> list[SearchResult]:
         ...
 

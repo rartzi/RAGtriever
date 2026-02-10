@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import socket
 import threading
 import time
 from pathlib import Path
 from typing import Any
+
+from .hashing import blake2b_hex
 
 logger = logging.getLogger(__name__)
 
@@ -117,15 +118,24 @@ class QueryServer:
             conn.close()
 
     def _handle_request(self, request: dict) -> dict:
-        """Process a query request and return results."""
+        """Process a request and return results."""
         action = request.get("action", "query")
 
         if action == "ping":
             return {"status": "ok", "source": "watcher"}
-
-        if action != "query":
+        elif action == "query":
+            return self._handle_query(request)
+        elif action == "list_docs":
+            return self._handle_list_docs(request)
+        elif action == "text_search":
+            return self._handle_text_search(request)
+        elif action == "backlinks":
+            return self._handle_backlinks(request)
+        else:
             return {"error": f"Unknown action: {action}", "source": "watcher"}
 
+    def _handle_query(self, request: dict) -> dict:
+        """Process a query request and return results."""
         query = request.get("query", "")
         k = request.get("k", 10)
         filters = request.get("filters") or {}
@@ -160,11 +170,97 @@ class QueryServer:
 
         return {"results": results, "elapsed": round(elapsed, 3), "source": "watcher"}
 
+    def _handle_list_docs(self, request: dict) -> dict:
+        """List indexed documents."""
 
-def query_via_socket(socket_path: Path, query: str, k: int = 10,
-                     filters: dict | None = None,
-                     vault_names: list[str] | None = None) -> dict | None:
-    """Send a query to a running watcher's query server.
+        path_prefix = request.get("path", "")
+        t0 = time.monotonic()
+
+        vault_id = blake2b_hex(str(self.retriever.cfg.vault_root).encode("utf-8"))[:12]
+        if path_prefix:
+            files = sorted(self.retriever.store.get_files_under_path(vault_id, path_prefix))
+        else:
+            files = sorted(self.retriever.store.get_indexed_files(vault_id))
+
+        elapsed = time.monotonic() - t0
+        return {
+            "files": files,
+            "count": len(files),
+            "path_filter": path_prefix or None,
+            "elapsed": round(elapsed, 3),
+            "source": "watcher",
+        }
+
+    def _handle_text_search(self, request: dict) -> dict:
+        """Lexical (BM25) text search."""
+
+        query = request.get("query", "")
+        k = request.get("k", 20)
+        path_prefix = request.get("path", "")
+
+        filters: dict[str, Any] = {}
+        vault_id = blake2b_hex(str(self.retriever.cfg.vault_root).encode("utf-8"))[:12]
+        filters["vault_id"] = vault_id
+        if path_prefix:
+            filters["path_prefix"] = path_prefix
+
+        t0 = time.monotonic()
+        results = self.retriever.store.lexical_search(query, k, filters)
+        elapsed = time.monotonic() - t0
+
+        return {
+            "results": [
+                {
+                    "chunk_id": r.chunk_id,
+                    "score": r.score,
+                    "snippet": r.snippet,
+                    "source_ref": r.source_ref.__dict__,
+                    "metadata": r.metadata,
+                } for r in results
+            ],
+            "elapsed": round(elapsed, 3),
+            "source": "watcher",
+        }
+
+    def _handle_backlinks(self, request: dict) -> dict:
+        """Get backlink counts."""
+        paths = request.get("paths")
+        limit = request.get("limit", 20)
+
+        t0 = time.monotonic()
+        counts = self.retriever.store.get_backlink_counts(doc_ids=paths)
+
+        # Map doc_id (hash) back to rel_path
+        conn = self.retriever.store._get_conn()
+        if counts:
+            placeholders = ",".join("?" * len(counts))
+            rows = conn.execute(
+                f"SELECT doc_id, rel_path FROM documents WHERE doc_id IN ({placeholders}) AND deleted=0",
+                list(counts.keys()),
+            ).fetchall()
+            id_to_path = {r["doc_id"]: r["rel_path"] for r in rows}
+        else:
+            id_to_path = {}
+
+        backlinks = {
+            id_to_path.get(did, did): count
+            for did, count in counts.items()
+        }
+        sorted_backlinks = dict(
+            sorted(backlinks.items(), key=lambda x: x[1], reverse=True)[:limit]
+        )
+
+        elapsed = time.monotonic() - t0
+        return {
+            "backlinks": sorted_backlinks,
+            "count": len(sorted_backlinks),
+            "elapsed": round(elapsed, 3),
+            "source": "watcher",
+        }
+
+
+def request_via_socket(socket_path: Path, request: dict) -> dict | None:
+    """Send a generic request to a running watcher's query server.
 
     Returns the response dict, or None if the socket is unavailable.
     """
@@ -176,13 +272,6 @@ def query_via_socket(socket_path: Path, query: str, k: int = 10,
         sock.settimeout(30.0)
         sock.connect(str(socket_path))
 
-        request = {
-            "action": "query",
-            "query": query,
-            "k": k,
-            "filters": filters or {},
-            "vault_names": vault_names,
-        }
         sock.sendall((json.dumps(request) + "\n").encode("utf-8"))
 
         # Read response
@@ -205,3 +294,19 @@ def query_via_socket(socket_path: Path, query: str, k: int = 10,
     except (ConnectionRefusedError, FileNotFoundError, OSError):
         # Socket exists but watcher is dead — stale socket
         return None
+
+
+def query_via_socket(socket_path: Path, query: str, k: int = 10,
+                     filters: dict | None = None,
+                     vault_names: list[str] | None = None) -> dict | None:
+    """Send a query to a running watcher's query server.
+
+    Returns the response dict, or None if the socket is unavailable.
+    """
+    return request_via_socket(socket_path, {
+        "action": "query",
+        "query": query,
+        "k": k,
+        "filters": filters or {},
+        "vault_names": vault_names,
+    })
